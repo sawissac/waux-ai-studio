@@ -112,6 +112,18 @@
   --font-display: var(--font-poppins);
 }
 
+:root {
+  /* Motion tokens — every animation references these, no magic numbers.
+     Enter = standard ease; exit = accelerate ease + ~30% shorter. */
+  --motion-duration-instant: 80ms;
+  --motion-duration-fast: 150ms;
+  --motion-duration-base: 220ms;
+  --motion-duration-slow: 320ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -126,5 +138,19 @@
   h5,
   h6 {
     @apply font-display;
+  }
+}
+
+/* Accessibility — honour reduced-motion: drop transforms/slides, keep only
+   short opacity changes. Motion is feedback, never a gate. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--motion-duration-fast) !important;
+    transition-property: opacity !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -48,7 +48,7 @@ Rule: `page.tsx` is a thin shell that mounts one feature. No markup, no fetching
 ### Current routes
 
 - `app/layout.tsx` — root layout (fonts + `@/styles/globals.css`)
-- `app/page.tsx` — home page `/`
+- `app/page.tsx` — home page `/` (thin shell, mounts `ToolBuilder` feature)
 - `app/favicon.ico`
 
 No route groups or API routes yet.
@@ -67,17 +67,43 @@ No route groups or API routes yet.
 | File                            | Goes in                                            |
 | ------------------------------- | -------------------------------------------------- |
 | Feature entry component         | `src/features/<FeatureName>/<FeatureName>.tsx`     |
+| Feature barrel (public surface) | `src/features/<FeatureName>/index.ts`              |
 | Feature sub-component (private) | `src/features/<FeatureName>/components/<Name>.tsx` |
 
-Rule: folder name == entry file name (PascalCase). Sub-components NOT shared across features.
+Rule: folder name == entry file name (PascalCase). Each feature exposes an
+`index.ts` barrel; cross-feature imports go through the barrel
+(`@/features/<Name>`), never into another feature's internal files. Truly
+private parts may stay in a local `components/` folder; a part reused by more
+than one feature is promoted to its own feature folder.
 
 ### Current features
 
-None yet.
+The Tool Builder is split into a thin **orchestrator feature** plus one feature
+per UI panel. Each feature is UI-only; the shared domain (slice, hook, types,
+catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
+
+- `ToolBuilder/` — orchestrator. Composes the panel features into the
+  three-panel workspace; mounted by `app/page.tsx`. Holds no domain of its own.
+  - `index.ts` — barrel: re-exports the `ToolBuilder` component
+  - `ToolBuilder.tsx` — entry component; composes the panel features
+- `Topbar/` — tool name + count header
+- `ToolsPanel/` — left tools list + search
+- `BuilderPanel/` — center node-chain builder; composes `NodeCard` + `PreviewPane` features
+- `NodeCard/` — single node row; composes the `NodeEditor` feature
+- `NodeEditor/` — node config form (shared by `NodeCard` and `ToolBuilder`)
+- `PalettePanel/` — right "Select Inputs" node palette
+- `PreviewPane/` — live preview renderer
+
+Tool Builder shared domain (consumed by the features above):
+`@/stores/slices/toolBuilderSlice` (state), `@/hooks/useToolBuilder` (state/actions
+access point), `@/types/tool-builder` (types + `isRenderNode`),
+`@/constants/tool-builder` (node catalog, `createNode()`, `uuid()`),
+`@/lib/tool-builder-runtime` (pure preview helpers).
 
 > **Example usage** (target convention):
 >
 > - `src/features/AuthLogin/AuthLogin.tsx` — entry component
+> - `src/features/AuthLogin/index.ts` — barrel re-exporting the public surface
 > - `src/features/AuthLogin/components/AuthLoginForm.tsx` — feature-private sub-component
 
 ---
@@ -118,10 +144,13 @@ Rule: one slice per state concern. File name `<feature><Concern>Slice.ts`.
 
 ### Current store
 
-- `store.ts` — `makeStore()` factory (per-request store) + `RootState`/`AppDispatch`/`AppStore` types
+- `store.ts` — `makeStore()` factory (per-request store) + `RootState`/`AppDispatch`/`AppStore` types. Registers each slice in its `reducer` map.
 - `hooks.ts` — typed `useAppDispatch`, `useAppSelector`, `useAppStore`
 - `slices/appConfigSlice.ts` — global `appConfig` (theme, locale, sidebarCollapsed, hydrated). Mounted via `StoreProvider` in `src/app/layout.tsx`
+- `slices/toolBuilderSlice.ts` — Tool Builder state (tools, selection, editor placement, search). Mounted at `state.toolBuilder`; never read directly — go through `@/hooks/useToolBuilder`
 
+> **Slice ownership**: all state slices live in `src/stores/slices/`. Components never read slices directly — they go through a hook in `src/hooks/` (see the hooks rule). Tool Builder's state is shared by every panel feature, so its slice + access hook are shared, not co-located in one feature.
+>
 > **Example usage** (target convention): `src/stores/slices/authLoginSlice.ts`
 
 ---
@@ -155,7 +184,7 @@ Rule: feature-only hooks stay inside feature folder, not here. Query/mutation ho
 
 ### Current hooks
 
-None yet.
+- `useToolBuilder.ts` — single access point for Tool Builder state + actions (reads `state.toolBuilder`, returns derived values + bound dispatchers). All panel features use it; components never touch the slice or `useAppSelector` directly.
 
 > **Example usage** (target convention):
 >
@@ -174,6 +203,10 @@ None yet.
 | Other pure helper       | `src/lib/<name>.ts` |
 
 Rule: no React imports unless wrapper hook. No business logic.
+
+### Current lib
+
+- `tool-builder-runtime.ts` — pure preview helpers (`resolveBinding`, `initialStateMap`, `runChain`, `nodeSubtitle`). No React, no Redux.
 
 ---
 
@@ -203,7 +236,11 @@ None yet.
 | Backend API paths       | `src/constants/backend-api.ts`    |
 | Static enums / catalogs | `src/constants/<name>.ts`         |
 
-Rule: never hardcode route strings in JSX — use `Routes.X`.
+Rule: never hardcode route strings in JSX — use `Routes.X`. Use `.tsx` only when the catalog stores component/icon references.
+
+### Current constants
+
+- `tool-builder.tsx` — node catalog (`NODE_META`, `ACCENT_CLASSES`, `PALETTE_GROUPS`), the `createNode()` factory, and `uuid()`. `.tsx` because entries reference lucide icon components.
 
 ---
 
@@ -217,6 +254,10 @@ Rule: never hardcode route strings in JSX — use `Routes.X`.
 | Environment declarations | `src/types/env.d.ts`           |
 
 Rule: feature-only types co-locate with component.
+
+### Current types
+
+- `tool-builder.ts` — Tool Builder domain types (`Tool`, `ToolNode` union, `StateNode`, `StateBinding`, `EditorPlacement`, …) + `isRenderNode` guard / `RENDER_NODE_TYPES`.
 
 ---
 

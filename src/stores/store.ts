@@ -1,6 +1,7 @@
 import { configureStore } from "@reduxjs/toolkit";
 
 import { appConfigReducer } from "@/stores/slices/appConfigSlice";
+import { toolBuilderReducer } from "@/stores/slices/toolBuilderSlice";
 
 /**
  * Create a fresh Redux store instance.
@@ -13,6 +14,7 @@ export const makeStore = () =>
   configureStore({
     reducer: {
       appConfig: appConfigReducer,
+      toolBuilder: toolBuilderReducer,
     },
   });
 
