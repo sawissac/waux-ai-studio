@@ -84,7 +84,7 @@ export function ToolBuilder() {
               id="inspector"
               defaultSize="400px"
               minSize="300px"
-              maxSize="560px"
+              maxSize="60%"
               className="min-h-0"
             >
               <aside className="h-full min-h-0">

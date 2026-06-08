@@ -47,4 +47,4 @@ function ResizableHandle({
   );
 }
 
-export { ResizableGroup, ResizableHandle,ResizablePanel };
+export { ResizableGroup, ResizableHandle, ResizablePanel };

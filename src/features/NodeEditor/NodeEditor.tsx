@@ -1,17 +1,41 @@
 "use client";
 
-import { ChevronLeft, Copy, Plus, Trash2, X } from "lucide-react";
+import {
+  ChevronLeft,
+  Copy,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useState } from "react";
 
+import { CodeEditor } from "@/components/ui/code-editor";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ModelCombobox } from "@/components/ui/model-combobox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ACCENT_CLASSES, NODE_META, uuid } from "@/constants/tool-builder";
+import { useProviderModels } from "@/hooks/useProviderModels";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { cn } from "@/lib/utils";
 import type {
+  AiNode,
   EditorPlacement,
   StateEntry,
   StateNode,
   TextareaNode,
   TextRunNode,
-  TextRunResetNode,
   ToolNode,
 } from "@/types/tool-builder";
 
@@ -20,81 +44,123 @@ const inputCls =
 
 const labelCls = "text-[11px] font-medium text-muted-foreground";
 
+/** Inline switch row: label + description on the left, toggle on the right. */
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-md border bg-muted/30 px-2.5 py-2">
+      <div className="flex min-w-0 flex-col">
+        <span className="text-xs font-medium">{label}</span>
+        <span className="text-[11px] text-muted-foreground">{description}</span>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "relative mt-0.5 inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-[var(--motion-duration-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+          checked ? "bg-primary border-primary" : "bg-muted border-border",
+        )}
+      >
+        <span
+          className={cn(
+            "inline-block size-4 transform rounded-full bg-background shadow-sm transition-transform duration-[var(--motion-duration-fast)]",
+            checked ? "translate-x-4" : "translate-x-0.5",
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
 /** A labelled vertical field group. */
 function Field({
   label,
   children,
+  className,
 }: {
   label: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={cn("flex flex-col gap-1.5", className)}>
       <label className={labelCls}>{label}</label>
       {children}
     </div>
   );
 }
 
-/** Binding-mode toggle + target selector shared by all input editors. */
-function BindingControl({
-  node,
+/** State-slot selector. Reusable across input + AI nodes. */
+function StateSelect({
+  value,
+  onChange,
 }: {
-  node: TextRunResetNode | TextRunNode | TextareaNode;
+  value: string;
+  onChange: (next: string) => void;
 }) {
+  const { stateNode } = useToolBuilder();
+  const states = stateNode?.states ?? [];
+  return (
+    <Select
+      value={value || undefined}
+      onValueChange={onChange}
+      disabled={states.length === 0}
+    >
+      <SelectTrigger className="h-8 w-full">
+        <SelectValue
+          placeholder={states.length === 0 ? "— no state —" : "Pick state…"}
+        />
+      </SelectTrigger>
+      <SelectContent>
+        {states.map((s) => (
+          <SelectItem key={s.id} value={s.name}>
+            {s.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** Target selector shared by all input editors. */
+function BindingControl({ node }: { node: TextRunNode | TextareaNode }) {
   const { stateNode, updateNode } = useToolBuilder();
   const states = stateNode?.states ?? [];
-  const { mode, value } = node.binding;
+  const { value } = node.binding;
 
   return (
     <Field label="State binding">
-      <div className="inline-flex rounded-md border p-0.5 text-xs">
-        {(["name", "index"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => updateNode(node.id, { binding: { mode: m, value } })}
-            className={cn(
-              "rounded px-2.5 py-1 capitalize transition-colors duration-[var(--motion-duration-fast)]",
-              mode === m
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            By {m}
-          </button>
-        ))}
-      </div>
-      {mode === "name" ? (
-        <div className="relative">
-          <select
-            value={value}
-            onChange={(e) =>
-              updateNode(node.id, {
-                binding: { mode, value: e.target.value },
-              })
-            }
-            className={cn(inputCls, "appearance-none pr-8")}
-          >
-            {states.length === 0 && <option value="">— no state —</option>}
-            {states.map((s) => (
-              <option key={s.id} value={s.name}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : (
-        <input
-          type="number"
-          min={0}
-          value={value}
-          onChange={(e) =>
-            updateNode(node.id, { binding: { mode, value: e.target.value } })
-          }
-          className={cn(inputCls, "font-mono")}
-        />
-      )}
+      <Select
+        value={value || undefined}
+        onValueChange={(v) =>
+          updateNode(node.id, { binding: { mode: "name", value: v } })
+        }
+        disabled={states.length === 0}
+      >
+        <SelectTrigger className="h-8 w-full">
+          <SelectValue
+            placeholder={states.length === 0 ? "— no state —" : "Pick state…"}
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {states.map((s) => (
+            <SelectItem key={s.id} value={s.name}>
+              {s.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <p className="text-[11px] text-muted-foreground">
         Which state this node reads from / writes to.
       </p>
@@ -104,56 +170,88 @@ function BindingControl({
 
 /** State Control editor — manage the shared state slots. */
 function StateEditor({ node }: { node: StateNode }) {
-  const { updateNode } = useToolBuilder();
+  const { updateNode, renameStateSlot } = useToolBuilder();
   const setStates = (states: StateEntry[]) => updateNode(node.id, { states });
 
+  const [showDefaultFor, setShowDefaultFor] = useState<string | null>(null);
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="rounded-md bg-foreground px-1.5 py-0.5 font-medium text-background">
-          Available State [{node.states.length}]
-        </span>
-        <span>Other nodes bind to these by name or index.</span>
-      </div>
-      <div className="flex flex-col gap-2">
-        {node.states.map((s, i) => (
-          <div key={s.id} className="flex items-center gap-2">
-            <span className="w-4 shrink-0 text-center font-mono text-xs text-muted-foreground">
-              {i}
-            </span>
-            <input
-              value={s.name}
-              onChange={(e) =>
-                setStates(
-                  node.states.map((x) =>
-                    x.id === s.id ? { ...x, name: e.target.value } : x,
-                  ),
-                )
-              }
-              className={cn(inputCls, "font-mono")}
-            />
-            <input
-              value={s.value}
-              placeholder="default value"
-              onChange={(e) =>
-                setStates(
-                  node.states.map((x) =>
-                    x.id === s.id ? { ...x, value: e.target.value } : x,
-                  ),
-                )
-              }
-              className={inputCls}
-            />
-            <button
-              type="button"
-              aria-label="Remove state"
-              onClick={() =>
-                setStates(node.states.filter((x) => x.id !== s.id))
-              }
-              className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:bg-destructive/10 hover:text-destructive active:scale-95"
-            >
-              <X size={13} />
-            </button>
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
+        {node.states.map((s) => (
+          <div key={s.id} className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              {/* variable name */}
+              <div className="flex-1 truncate rounded-md border border-transparent px-2.5 py-1.5 font-mono text-sm">
+                {s.name || (
+                  <span className="text-muted-foreground italic">unnamed</span>
+                )}
+              </div>
+              {/* options dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Variable options"
+                    className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-95"
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      const newName = window.prompt(
+                        "Rename state variable:",
+                        s.name,
+                      );
+                      if (
+                        newName !== null &&
+                        newName.trim() !== "" &&
+                        newName !== s.name
+                      ) {
+                        renameStateSlot(s.id, s.name, newName.trim());
+                      }
+                    }}
+                  >
+                    Rename variable
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      setShowDefaultFor(showDefaultFor === s.id ? null : s.id)
+                    }
+                  >
+                    Set default value
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() =>
+                      setStates(node.states.filter((x) => x.id !== s.id))
+                    }
+                  >
+                    Remove variable
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            {/* collapsible default value row */}
+            {showDefaultFor === s.id && (
+              <div className="animate-in fade-in slide-in-from-top-1 duration-[var(--motion-duration-fast)]">
+                <input
+                  value={s.value}
+                  placeholder="default value"
+                  autoFocus
+                  onChange={(e) =>
+                    setStates(
+                      node.states.map((x) =>
+                        x.id === s.id ? { ...x, value: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  className={inputCls}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -162,7 +260,7 @@ function StateEditor({ node }: { node: StateNode }) {
         onClick={() =>
           setStates([...node.states, { id: uuid(), name: "", value: "" }])
         }
-        className="inline-flex w-fit items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-[0.98]"
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-[0.98]"
       >
         <Plus size={14} /> Add state
       </button>
@@ -170,39 +268,111 @@ function StateEditor({ node }: { node: StateNode }) {
   );
 }
 
-/** Mono code/markup textarea used by the Code and Canvas editors. */
-function CodeArea({
-  value,
-  onChange,
-  rows,
+/** AI node editor — provider, model, system, prompt, output binding, key. */
+function AiEditor({
+  node,
+  placement,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  rows: number;
+  node: AiNode;
+  placement: EditorPlacement;
 }) {
+  const { updateNode } = useToolBuilder();
+  const models = useProviderModels(node.provider);
+  const isPanel = placement === "panel";
   return (
-    <textarea
-      spellCheck={false}
-      rows={rows}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full resize-y rounded-lg border bg-muted/40 p-3 font-mono text-xs leading-relaxed outline-none transition-[box-shadow,border-color] duration-[var(--motion-duration-fast)] focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-    />
+    <div className={cn("flex flex-col gap-4", isPanel && "flex-1 min-h-0")}>
+      <Field label="Provider">
+        <Select
+          value={node.provider}
+          onValueChange={(v) =>
+            updateNode(node.id, { provider: v as AiNode["provider"] })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="gemini">Gemini</SelectItem>
+            <SelectItem value="openrouter">OpenRouter</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Model">
+        <ModelCombobox
+          value={node.model}
+          onChange={(v) => updateNode(node.id, { model: v })}
+          options={models}
+          placeholder={
+            node.provider === "openrouter"
+              ? "openrouter/auto"
+              : "gemini-2.5-flash"
+          }
+          size="sm"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Pick from list or type any model id.
+        </p>
+      </Field>
+      <Field label="System instruction (optional)">
+        <textarea
+          value={node.systemInstruction}
+          onChange={(e) =>
+            updateNode(node.id, { systemInstruction: e.target.value })
+          }
+          rows={2}
+          className={cn(inputCls, "h-auto resize-y py-2")}
+        />
+      </Field>
+      <Field label="Prompt" className={isPanel ? "flex-1 min-h-0" : undefined}>
+        <textarea
+          value={node.prompt}
+          onChange={(e) => updateNode(node.id, { prompt: e.target.value })}
+          rows={isPanel ? 8 : 5}
+          className={cn(inputCls, "h-auto min-h-24 resize-y py-2 font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Use <code className="font-mono">{"{{stateName}}"}</code> to
+          interpolate state.
+        </p>
+      </Field>
+      <Field label="Output state">
+        <StateSelect
+          value={node.output.value}
+          onChange={(v) =>
+            updateNode(node.id, { output: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Model reply writes here.
+        </p>
+      </Field>
+    </div>
   );
 }
 
 /** Per-type editor body. */
-function EditorBody({ node }: { node: ToolNode }) {
+function EditorBody({
+  node,
+  placement,
+}: {
+  node: ToolNode;
+  placement: EditorPlacement;
+}) {
   const { updateNode } = useToolBuilder();
 
   switch (node.type) {
     case "state":
       return <StateEditor node={node} />;
-    case "code":
+    case "ai":
+      return <AiEditor node={node} placement={placement} />;
+    case "code": {
+      const isPanel = placement === "panel";
       return (
-        <Field label="Code">
-          <CodeArea
-            rows={12}
+        <Field label="Code" className={isPanel ? "flex-1 min-h-0" : undefined}>
+          <CodeEditor
+            language="javascript"
+            height={isPanel ? "100%" : 320}
+            className={isPanel ? "flex-1 min-h-0" : undefined}
             value={node.code}
             onChange={(code) => updateNode(node.id, { code })}
           />
@@ -211,9 +381,11 @@ function EditorBody({ node }: { node: ToolNode }) {
           </p>
         </Field>
       );
-    case "canvas":
+    }
+    case "canvas": {
+      const isPanel = placement === "panel";
       return (
-        <div className="flex flex-col gap-4">
+        <div className={cn("flex flex-col gap-4", isPanel && "flex-1 min-h-0")}>
           <Field label="Element ID">
             <div className="flex items-center gap-2">
               <code className="flex-1 truncate rounded-md border bg-muted/40 px-2.5 py-1.5 font-mono text-xs">
@@ -233,9 +405,14 @@ function EditorBody({ node }: { node: ToolNode }) {
               Auto-generated UUID. Target this div from your JS.
             </p>
           </Field>
-          <Field label="HTML / JS">
-            <CodeArea
-              rows={8}
+          <Field
+            label="HTML / JS"
+            className={isPanel ? "flex-1 min-h-0" : undefined}
+          >
+            <CodeEditor
+              language="html"
+              height={isPanel ? "100%" : 300}
+              className={isPanel ? "flex-1 min-h-0" : undefined}
               value={node.html}
               onChange={(html) => updateNode(node.id, { html })}
             />
@@ -245,48 +422,7 @@ function EditorBody({ node }: { node: ToolNode }) {
           </Field>
         </div>
       );
-    case "text_run_reset":
-      return (
-        <div className="flex flex-col gap-4">
-          <Field label="Field label">
-            <input
-              value={node.fieldLabel}
-              onChange={(e) =>
-                updateNode(node.id, { fieldLabel: e.target.value })
-              }
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Placeholder">
-            <input
-              value={node.placeholder}
-              onChange={(e) =>
-                updateNode(node.id, { placeholder: e.target.value })
-              }
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Button text">
-            <input
-              value={node.buttonText}
-              onChange={(e) =>
-                updateNode(node.id, { buttonText: e.target.value })
-              }
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Reset button text">
-            <input
-              value={node.resetText}
-              onChange={(e) =>
-                updateNode(node.id, { resetText: e.target.value })
-              }
-              className={inputCls}
-            />
-          </Field>
-          <BindingControl node={node} />
-        </div>
-      );
+    }
     case "text_run":
       return (
         <div className="flex flex-col gap-4">
@@ -308,15 +444,40 @@ function EditorBody({ node }: { node: ToolNode }) {
               className={inputCls}
             />
           </Field>
-          <Field label="Button text">
-            <input
-              value={node.buttonText}
-              onChange={(e) =>
-                updateNode(node.id, { buttonText: e.target.value })
-              }
-              className={inputCls}
-            />
-          </Field>
+          <ToggleRow
+            label="Run button"
+            description="Show a run button and submit on Enter."
+            checked={node.runEnabled}
+            onChange={(next) => updateNode(node.id, { runEnabled: next })}
+          />
+          {node.runEnabled && (
+            <Field label="Run button text">
+              <input
+                value={node.buttonText}
+                onChange={(e) =>
+                  updateNode(node.id, { buttonText: e.target.value })
+                }
+                className={inputCls}
+              />
+            </Field>
+          )}
+          <ToggleRow
+            label="Reset button"
+            description="Clear the field after each run and show a reset button."
+            checked={node.resetEnabled}
+            onChange={(next) => updateNode(node.id, { resetEnabled: next })}
+          />
+          {node.resetEnabled && (
+            <Field label="Reset button text">
+              <input
+                value={node.resetText}
+                onChange={(e) =>
+                  updateNode(node.id, { resetText: e.target.value })
+                }
+                className={inputCls}
+              />
+            </Field>
+          )}
           <BindingControl node={node} />
         </div>
       );
@@ -366,7 +527,12 @@ export function NodeEditor({
   const Icon = meta.icon;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div
+      className={cn(
+        "flex flex-col gap-3",
+        placement === "panel" && "h-full min-h-0",
+      )}
+    >
       <div className="flex items-center gap-2">
         {placement === "panel" && (
           <button
@@ -413,7 +579,7 @@ export function NodeEditor({
       </div>
       <p className="text-xs text-muted-foreground">{meta.blurb}</p>
       <hr className="border-border" />
-      <EditorBody node={node} />
+      <EditorBody node={node} placement={placement} />
     </div>
   );
 }

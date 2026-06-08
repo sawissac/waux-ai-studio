@@ -13,7 +13,7 @@ import {
   Database,
   FormInput,
   type LucideIcon,
-  Workflow,
+  Sparkles,
 } from "lucide-react";
 
 import type { NodeAccent, ToolNode, ToolNodeType } from "@/types/tool-builder";
@@ -41,6 +41,7 @@ export const ACCENT_CLASSES: Record<NodeAccent, string> = {
   amber: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300",
   emerald:
     "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300",
+  pink: "bg-pink-100 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300",
 };
 
 /** Per-type metadata, keyed by node type. */
@@ -54,19 +55,11 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     icon: Database,
     slug: "@state",
   },
-  text_run_reset: {
-    type: "text_run_reset",
-    label: "Text input run & reset",
-    blurb: "Single-line field that triggers a run, then clears itself.",
-    accent: "blue",
-    group: "Inputs",
-    icon: Workflow,
-    slug: "@text_run_reset",
-  },
   text_run: {
     type: "text_run",
-    label: "Text input run only",
-    blurb: "Single-line field that triggers a run and keeps its value.",
+    label: "Text input",
+    blurb:
+      "Single-line field that triggers a run. Toggle run & reset to clear after running.",
     accent: "blue",
     group: "Inputs",
     icon: FormInput,
@@ -99,14 +92,24 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     icon: Columns3,
     slug: "@canvas",
   },
+  ai: {
+    type: "ai",
+    label: "AI",
+    blurb:
+      "Ask Gemini or OpenRouter. Interpolate state via {{name}} in the prompt; reply writes to bound state.",
+    accent: "pink",
+    group: "Logic",
+    icon: Sparkles,
+    slug: "@ai",
+  },
 };
 
 /** Palette order: groups, and node types within each group. */
 export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
   [
     { group: "Data", types: ["state"] },
-    { group: "Inputs", types: ["text_run_reset", "text_run", "textarea"] },
-    { group: "Logic", types: ["code"] },
+    { group: "Inputs", types: ["text_run", "textarea"] },
+    { group: "Logic", types: ["code", "ai"] },
     { group: "Output", types: ["canvas"] },
   ];
 
@@ -117,11 +120,22 @@ export const uuid = (): string =>
     : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
 
 const DEFAULT_CODE = `// runs when an input above triggers
-function run(state) {
+async function run(state) {
   const email = state.get("email");
   if (!email) return;
   const log = state.get("message") || "";
   state.set("message", log + "Subscribed: " + email + "\\n");
+}
+
+// optional: runs live as inputs change
+async function change(state) {
+  // e.g. state.set("message", state.get("email") || "");
+}
+
+// optional: runs when a reset button is clicked
+async function reset(state) {
+  state.set("email", "");
+  state.set("message", "");
 }`;
 
 /**
@@ -135,16 +149,6 @@ export function createNode(type: ToolNodeType): ToolNode {
   switch (type) {
     case "state":
       return { id, type, states: [{ id: uuid(), name: "value", value: "" }] };
-    case "text_run_reset":
-      return {
-        id,
-        type,
-        fieldLabel: "Field",
-        placeholder: "Type here…",
-        buttonText: "Run",
-        resetText: "Reset",
-        binding: { mode: "name", value: "value" },
-      };
     case "text_run":
       return {
         id,
@@ -153,6 +157,9 @@ export function createNode(type: ToolNodeType): ToolNode {
         placeholder: "Type here…",
         buttonText: "Run",
         binding: { mode: "name", value: "value" },
+        runEnabled: true,
+        resetEnabled: false,
+        resetText: "Reset",
       };
     case "textarea":
       return {
@@ -173,5 +180,15 @@ export function createNode(type: ToolNodeType): ToolNode {
         html: `<div id="${elementId}">\n  <h4>Canvas output</h4>\n  <p>Drawn from JS into a plain &lt;div&gt;.</p>\n</div>`,
       };
     }
+    case "ai":
+      return {
+        id,
+        type,
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        systemInstruction: "",
+        prompt: "Summarize: {{value}}",
+        output: { mode: "name", value: "value" },
+      };
   }
 }

@@ -30,54 +30,9 @@ export interface ToolBuilderState {
   search: string;
 }
 
-/** Build the seeded "Newsletter signup" demo tool. */
-function seedNewsletter(): Tool {
-  return {
-    id: "newsletter",
-    name: "Newsletter signup",
-    nodes: [
-      {
-        id: "n-state",
-        type: "state",
-        states: [
-          { id: uuid(), name: "email", value: "" },
-          { id: uuid(), name: "message", value: "" },
-        ],
-      },
-      {
-        id: "n-email",
-        type: "text_run_reset",
-        fieldLabel: "Email",
-        placeholder: "you@example.com",
-        buttonText: "Subscribe",
-        resetText: "Reset",
-        binding: { mode: "name", value: "email" },
-      },
-      {
-        id: "n-code",
-        type: "code",
-        code: `// runs when an input above triggers
-function run(state) {
-  const email = state.get("email");
-  if (!email) return;
-  const log = state.get("message") || "";
-  state.set("message", log + "Subscribed: " + email + "\\n");
-}`,
-      },
-      {
-        id: "n-message",
-        type: "textarea",
-        fieldLabel: "Message",
-        placeholder: "Write a message…",
-        binding: { mode: "name", value: "message" },
-      },
-    ],
-  };
-}
-
 const initialState: ToolBuilderState = {
-  tools: [seedNewsletter(), { id: "tool-1", name: "Tool name 1", nodes: [] }],
-  selectedToolId: "newsletter",
+  tools: [],
+  selectedToolId: null,
   selectedNodeId: null,
   editorPlacement: "panel",
   search: "",
@@ -161,6 +116,39 @@ const toolBuilderSlice = createSlice({
       state.selectedNodeId =
         state.selectedNodeId === action.payload ? null : action.payload;
     },
+    /** Rename a state slot and cascade the name change to all bindings that used it. */
+    renameStateSlot(
+      state,
+      action: PayloadAction<{ id: string; oldName: string; newName: string }>,
+    ) {
+      const tool = state.tools.find((t) => t.id === state.selectedToolId);
+      if (!tool) {return;}
+
+      const { id, oldName, newName } = action.payload;
+
+      // 1. Update the state node
+      const stateNode = tool.nodes.find((n) => n.type === "state");
+      if (stateNode?.type === "state") {
+        const slot = stateNode.states.find((s) => s.id === id);
+        if (slot) {
+          slot.name = newName;
+        }
+      }
+
+      // 2. Cascade rename to all name-based bindings that matched oldName
+      if (oldName.trim().length > 0) {
+        for (const node of tool.nodes) {
+          if ("binding" in node && node.binding) {
+            if (
+              node.binding.mode === "name" &&
+              node.binding.value === oldName
+            ) {
+              node.binding.value = newName;
+            }
+          }
+        }
+      }
+    },
     /** Clear node selection — returns the right panel to the palette. */
     clearNodeSelection(state) {
       state.selectedNodeId = null;
@@ -172,6 +160,47 @@ const toolBuilderSlice = createSlice({
     /** Set the tools-list search query. */
     setSearch(state, action: PayloadAction<string>) {
       state.search = action.payload;
+    },
+    /** Reorder tools list. */
+    reorderTools(
+      state,
+      action: PayloadAction<{ activeId: string; overId: string }>,
+    ) {
+      const { activeId, overId } = action.payload;
+      if (activeId === overId) {
+        return;
+      }
+
+      const oldIndex = state.tools.findIndex((t) => t.id === activeId);
+      const newIndex = state.tools.findIndex((t) => t.id === overId);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const [removed] = state.tools.splice(oldIndex, 1);
+        state.tools.splice(newIndex, 0, removed);
+      }
+    },
+    /** Reorder nodes in the open tool. */
+    reorderNodes(
+      state,
+      action: PayloadAction<{ activeId: string; overId: string }>,
+    ) {
+      const tool = state.tools.find((t) => t.id === state.selectedToolId);
+      if (!tool) {
+        return;
+      }
+
+      const { activeId, overId } = action.payload;
+      if (activeId === overId) {
+        return;
+      }
+
+      const oldIndex = tool.nodes.findIndex((n) => n.id === activeId);
+      const newIndex = tool.nodes.findIndex((n) => n.id === overId);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const [removed] = tool.nodes.splice(oldIndex, 1);
+        tool.nodes.splice(newIndex, 0, removed);
+      }
     },
   },
 });
@@ -185,9 +214,12 @@ export const {
   deleteNode,
   updateNode,
   selectNode,
+  renameStateSlot,
   clearNodeSelection,
   setEditorPlacement,
   setSearch,
+  reorderTools,
+  reorderNodes,
 } = toolBuilderSlice.actions;
 
 export const toolBuilderReducer = toolBuilderSlice.reducer;

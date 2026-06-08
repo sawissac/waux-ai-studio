@@ -19,11 +19,8 @@ export function PalettePanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <span className="text-sm font-semibold">Select Inputs</span>
-        <span className="ml-auto rounded-md border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-          click to add
-        </span>
       </div>
       <div className="flex-1 overflow-auto p-3">
         <div className="flex flex-col gap-4">

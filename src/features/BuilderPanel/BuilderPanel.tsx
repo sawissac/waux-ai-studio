@@ -1,14 +1,28 @@
 "use client";
 
-import { Boxes, FlaskConical, Plus } from "lucide-react";
+import {
+  closestCenter,
+  DndContext,
+  DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { FlaskConical, Plus } from "lucide-react";
 
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NodeCard } from "@/features/NodeCard";
 import { PreviewPane } from "@/features/PreviewPane";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
-import { cn } from "@/lib/utils";
 import type { EditorPlacement, Tool } from "@/types/tool-builder";
 
-const PLACEMENTS: EditorPlacement[] = ["panel", "inline", "popover"];
+const PLACEMENTS: EditorPlacement[] = ["panel", "inline"];
 
 /**
  * Center panel — the node chain plus the live preview.
@@ -29,38 +43,54 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
     deleteNode,
     clearNodeSelection,
     setEditorPlacement,
+    reorderNodes,
   } = useToolBuilder();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      reorderNodes(active.id as string, over.id as string);
+    }
+  }
 
   const empty = tool.nodes.length === 0;
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <span className="text-sm font-semibold">Builder</span>
         <span className="truncate font-mono text-xs text-muted-foreground">
           {tool.name}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <div className="hidden items-center rounded-md border p-0.5 text-[11px] sm:flex">
-            {PLACEMENTS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setEditorPlacement(p)}
-                className={cn(
-                  "rounded px-2 py-1 capitalize transition-colors duration-[var(--motion-duration-fast)]",
-                  editorPlacement === p
-                    ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-          <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-            <Boxes size={12} /> {tool.nodes.length} nodes
-          </span>
+          <Tabs
+            value={editorPlacement}
+            onValueChange={(val) => setEditorPlacement(val as EditorPlacement)}
+            className="hidden sm:block"
+          >
+            <TabsList className="h-7">
+              {PLACEMENTS.map((p) => (
+                <TabsTrigger
+                  key={p}
+                  value={p}
+                  className="text-[11px] capitalize"
+                >
+                  {p}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
       </div>
 
@@ -79,26 +109,44 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
             </div>
           ) : (
             <div className="flex flex-col">
-              {tool.nodes.map((node, i) => (
-                <div key={node.id} className="flex flex-col">
-                  {i > 0 && (
-                    <span className="mx-auto h-5 w-px bg-border" aria-hidden />
-                  )}
-                  <NodeCard
-                    node={node}
-                    stateNode={stateNode}
-                    selected={node.id === selectedNodeId}
-                    placement={editorPlacement}
-                    onSelect={() => selectNode(node.id)}
-                    onDelete={() => deleteNode(node.id)}
-                  />
-                </div>
-              ))}
-              <span className="mx-auto h-5 w-px bg-border" aria-hidden />
+              <DndContext
+                id="builder-dnd"
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={tool.nodes.map((n) => n.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {tool.nodes.map((node, i) => (
+                    <div key={node.id} className="flex flex-col">
+                      {i > 0 && (
+                        <span
+                          className="mx-auto h-5 w-0 border-l border-dashed border-border"
+                          aria-hidden
+                        />
+                      )}
+                      <NodeCard
+                        node={node}
+                        stateNode={stateNode}
+                        selected={node.id === selectedNodeId}
+                        placement={editorPlacement}
+                        onSelect={() => selectNode(node.id)}
+                        onDelete={() => deleteNode(node.id)}
+                      />
+                    </div>
+                  ))}
+                </SortableContext>
+              </DndContext>
+              <span
+                className="mx-auto h-5 w-0 border-l border-dashed border-border"
+                aria-hidden
+              />
               <button
                 type="button"
                 onClick={clearNodeSelection}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed py-2.5 text-sm font-medium text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:border-foreground/30 hover:text-foreground active:scale-[0.99]"
+                className="inline-flex h-14 items-center justify-center gap-1.5 rounded-xl border border-dashed text-sm font-medium text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:border-foreground/30 hover:text-foreground active:scale-[0.99]"
               >
                 <Plus size={15} /> Add input
               </button>

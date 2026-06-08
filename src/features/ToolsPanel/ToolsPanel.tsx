@@ -1,5 +1,21 @@
 "use client";
 
+import {
+  closestCenter,
+  DndContext,
+  DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -9,8 +25,135 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AiKeysButton } from "@/features/AiKeysButton";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { cn } from "@/lib/utils";
+import type { Tool } from "@/types/tool-builder";
+
+function SortableToolItem({
+  t,
+  selected,
+  renaming,
+  selectTool,
+  beginRename,
+  deleteTool,
+  draftName,
+  setDraftName,
+  commitRename,
+  setRenamingId,
+  inputRef,
+}: {
+  t: Tool;
+  selected: boolean;
+  renaming: boolean;
+  selectTool: (id: string) => void;
+  beginRename: (id: string, name: string) => void;
+  deleteTool: (id: string) => void;
+  draftName: string;
+  setDraftName: (val: string) => void;
+  commitRename: () => void;
+  setRenamingId: (id: string | null) => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: t.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      onClick={() => !renaming && selectTool(t.id)}
+      onDoubleClick={() => !renaming && beginRename(t.id, t.name)}
+      onKeyDown={(e) => {
+        if (renaming) {
+          return;
+        }
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectTool(t.id);
+        }
+      }}
+      className={cn(
+        "group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 transition-colors duration-[var(--motion-duration-fast)]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 relative",
+        selected ? "bg-accent" : "hover:bg-accent/50",
+      )}
+      {...attributes}
+      {...listeners}
+    >
+      <span
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          selected ? "bg-foreground" : "bg-muted-foreground/40",
+        )}
+      />
+      {renaming ? (
+        <input
+          ref={inputRef}
+          value={draftName}
+          autoFocus
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setDraftName(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitRename();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setRenamingId(null);
+            }
+          }}
+          className="flex-1 rounded-sm border bg-background px-1.5 py-0.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+        />
+      ) : (
+        <span className="flex-1 truncate text-sm font-medium">{t.name}</span>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Tool options"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            className={cn(
+              "grid size-7 place-items-center rounded-md text-muted-foreground transition-[opacity,background-color] duration-[var(--motion-duration-fast)] hover:bg-background active:scale-95",
+              "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100",
+            )}
+          >
+            <MoreHorizontal size={15} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem onSelect={() => beginRename(t.id, t.name)}>
+            <Pencil />
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => deleteTool(t.id)}
+          >
+            <Trash2 />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
 
 /**
  * Left panel — the tools list with search, a per-row options menu, and a
@@ -27,6 +170,7 @@ export function ToolsPanel() {
     addTool,
     renameTool,
     deleteTool,
+    reorderTools,
   } = useToolBuilder();
 
   /** Id of the tool currently being renamed inline, or null. */
@@ -35,7 +179,9 @@ export function ToolsPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (renamingId) {inputRef.current?.select();}
+    if (renamingId) {
+      inputRef.current?.select();
+    }
   }, [renamingId]);
 
   function beginRename(id: string, current: string) {
@@ -46,23 +192,46 @@ export function ToolsPanel() {
   function commitRename() {
     if (renamingId) {
       const name = draftName.trim();
-      if (name) {renameTool(renamingId, name);}
+      if (name) {
+        renameTool(renamingId, name);
+      }
     }
     setRenamingId(null);
   }
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      reorderTools(active.id as string, over.id as string);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <span className="text-sm font-semibold">Tools</span>
-        <button
-          type="button"
-          aria-label="New tool"
-          onClick={addTool}
-          className="ml-auto grid size-8 place-items-center rounded-md border transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-95"
-        >
-          <Plus size={15} />
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <AiKeysButton />
+          <button
+            type="button"
+            aria-label="New tool"
+            onClick={addTool}
+            className="grid size-8 place-items-center rounded-md border transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-95"
+          >
+            <Plus size={15} />
+          </button>
+        </div>
       </div>
 
       <div className="border-b px-3 py-2.5">
@@ -86,94 +255,36 @@ export function ToolsPanel() {
             No tools match “{search}”.
           </div>
         ) : (
-          <div className="flex flex-col gap-1">
-            {filteredTools.map((t) => {
-              const selected = t.id === selectedToolId;
-              const renaming = t.id === renamingId;
-              return (
-                <div
-                  key={t.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => !renaming && selectTool(t.id)}
-                  onDoubleClick={() => !renaming && beginRename(t.id, t.name)}
-                  onKeyDown={(e) => {
-                    if (renaming) {return;}
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      selectTool(t.id);
-                    }
-                  }}
-                  className={cn(
-                    "group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 transition-colors duration-[var(--motion-duration-fast)]",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                    selected ? "bg-accent" : "hover:bg-accent/50",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "size-1.5 shrink-0 rounded-full",
-                      selected ? "bg-foreground" : "bg-muted-foreground/40",
-                    )}
+          <DndContext
+            id="tools-dnd"
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredTools.map((t) => t.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="flex flex-col gap-1">
+                {filteredTools.map((t) => (
+                  <SortableToolItem
+                    key={t.id}
+                    t={t}
+                    selected={t.id === selectedToolId}
+                    renaming={t.id === renamingId}
+                    selectTool={selectTool}
+                    beginRename={beginRename}
+                    deleteTool={deleteTool}
+                    draftName={draftName}
+                    setDraftName={setDraftName}
+                    commitRename={commitRename}
+                    setRenamingId={setRenamingId}
+                    inputRef={inputRef}
                   />
-                  {renaming ? (
-                    <input
-                      ref={inputRef}
-                      value={draftName}
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => setDraftName(e.target.value)}
-                      onBlur={commitRename}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          commitRename();
-                        } else if (e.key === "Escape") {
-                          e.preventDefault();
-                          setRenamingId(null);
-                        }
-                      }}
-                      className="flex-1 rounded-sm border bg-background px-1.5 py-0.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-                    />
-                  ) : (
-                    <span className="flex-1 truncate text-sm font-medium">
-                      {t.name}
-                    </span>
-                  )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="Tool options"
-                        onClick={(e) => e.stopPropagation()}
-                        className={cn(
-                          "grid size-7 place-items-center rounded-md text-muted-foreground transition-[opacity,background-color] duration-[var(--motion-duration-fast)] hover:bg-background active:scale-95",
-                          "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100",
-                        )}
-                      >
-                        <MoreHorizontal size={15} />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem
-                        onSelect={() => beginRename(t.id, t.name)}
-                      >
-                        <Pencil />
-                        Rename
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => deleteTool(t.id)}
-                      >
-                        <Trash2 />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              );
-            })}
-          </div>
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 

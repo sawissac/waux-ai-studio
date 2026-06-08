@@ -1,22 +1,19 @@
 "use client";
 
-import { Eye } from "lucide-react";
+import { AlertTriangle, Eye, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useDebouncedCallback } from "use-debounce";
 
 import {
+  changeChain,
   initialStateMap,
+  resetChain,
   resolveBinding,
   runChain,
   type StateMap,
 } from "@/lib/tool-builder-runtime";
-import { cn } from "@/lib/utils";
 import type { StateNode, Tool } from "@/types/tool-builder";
 import { isRenderNode } from "@/types/tool-builder";
-
-const fieldInput =
-  "h-9 flex-1 rounded-md border bg-background px-3 text-sm outline-none transition-[box-shadow,border-color] duration-[var(--motion-duration-fast)] focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40";
-const btnBase =
-  "h-9 shrink-0 rounded-md px-3.5 text-sm font-medium transition-[transform,background-color] duration-[var(--motion-duration-instant)] active:scale-[0.97]";
 
 /**
  * Live preview — what the end user of the tool sees, fully interactive.
@@ -41,12 +38,22 @@ export function PreviewPane({
     initialStateMap(stateNode),
   );
   const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
 
   // Full reset when switching tools.
   useEffect(() => {
     setRuntime(initialStateMap(stateNode));
     setInputs({});
   }, [tool.id]);
+
+  const debouncedChange = useDebouncedCallback(
+    async (startingState: StateMap) => {
+      const nextState = await changeChain(tool, startingState);
+      setRuntime(nextState);
+    },
+    300,
+  );
 
   // Back-fill defaults for newly-added state slots without wiping live values.
   const stateKey = (stateNode?.states ?? [])
@@ -64,9 +71,21 @@ export function PreviewPane({
     });
   }, [stateKey]);
 
-  /** Write `value` to `name`, then run the code chain. */
-  const trigger = (name: string, value: string) =>
-    setRuntime((prev) => runChain(tool, { ...prev, [name]: value }));
+  /** Write `value` to `name`, then run the code + AI chain. */
+  const trigger = async (name: string, value: string) => {
+    const startingState = { ...runtime, [name]: value };
+    setRuntime(startingState);
+    setRunError(null);
+    setRunning(true);
+    try {
+      const nextState = await runChain(tool, startingState, stateNode, (msg) =>
+        setRunError(msg),
+      );
+      setRuntime(nextState);
+    } finally {
+      setRunning(false);
+    }
+  };
 
   const setInput = (id: string, v: string) =>
     setInputs((prev) => ({ ...prev, [id]: v }));
@@ -74,107 +93,137 @@ export function PreviewPane({
   const renderNodes = tool.nodes.filter(isRenderNode);
 
   return (
-    <div className="mt-4">
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-        <Eye size={13} /> Preview
-        <span className="text-[11px] font-normal text-muted-foreground/70">
-          live — what the end user sees
+    <div className="mt-10 font-display">
+      <div className="mb-4 flex items-center gap-2 border-b border-border/50 pb-3 text-sm font-semibold text-foreground">
+        <Eye size={15} className="text-muted-foreground" />
+        Live Preview
+        <span className="text-xs font-normal text-muted-foreground/50">
+          interactive end-user view
         </span>
       </div>
-      <div className="rounded-xl border bg-muted/30 p-4">
-        {renderNodes.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-            <Eye size={20} />
-            <div>Add an input node to render a preview.</div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {renderNodes.map((node) => {
-              if (node.type === "canvas") {
-                return (
-                  <div
-                    key={node.id}
-                    className="rounded-lg border bg-background p-3 [&_h4]:mb-1 [&_h4]:font-semibold [&_p]:text-sm [&_p]:text-muted-foreground"
-                    dangerouslySetInnerHTML={{ __html: node.html }}
-                  />
-                );
-              }
+      {running && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <Loader2 size={13} className="animate-spin" />
+          Running chain…
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <AlertTriangle size={13} className="mt-px shrink-0" />
+          <span className="min-w-0 wrap-break-word">{runError}</span>
+        </div>
+      )}
+      <div className="w-full pt-2">
+        <div className="w-full">
+          {renderNodes.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/50 py-12 text-center text-sm text-muted-foreground">
+              <Eye size={24} className="opacity-20" />
+              <div>Add an input node to render a preview.</div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6">
+              {renderNodes.map((node) => {
+                if (node.type === "canvas") {
+                  return (
+                    <div
+                      key={node.id}
+                      className="rounded-xl border border-border/50 bg-background/50 p-4 shadow-sm backdrop-blur-sm [&_h4]:mb-1 [&_h4]:font-semibold [&_p]:text-sm [&_p]:text-muted-foreground"
+                      dangerouslySetInnerHTML={{ __html: node.html }}
+                    />
+                  );
+                }
 
-              const name = resolveBinding(node.binding, stateNode);
+                const name = resolveBinding(node.binding, stateNode);
 
-              if (node.type === "textarea") {
+                if (node.type === "textarea") {
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      <label className="text-sm font-semibold">
+                        {node.fieldLabel}
+                      </label>
+                      <textarea
+                        rows={4}
+                        placeholder={node.placeholder}
+                        value={runtime[name] ?? ""}
+                        onChange={(e) => {
+                          const nextState = {
+                            ...runtime,
+                            [name]: e.target.value,
+                          };
+                          setRuntime(nextState);
+                          debouncedChange(nextState);
+                        }}
+                        className="w-full resize-y rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                      />
+                    </div>
+                  );
+                }
+
+                // text_run
+                const value = inputs[node.id] ?? "";
+                const submit = () => {
+                  trigger(name, value);
+                  if (node.resetEnabled) {
+                    setInput(node.id, "");
+                  }
+                };
+
                 return (
-                  <div key={node.id} className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium">
+                  <div key={node.id} className="flex flex-col gap-2">
+                    <label className="text-sm font-semibold">
                       {node.fieldLabel}
                     </label>
-                    <textarea
-                      rows={4}
-                      placeholder={node.placeholder}
-                      value={runtime[name] ?? ""}
-                      onChange={(e) =>
-                        setRuntime((prev) => ({
-                          ...prev,
-                          [name]: e.target.value,
-                        }))
-                      }
-                      className="w-full resize-y rounded-md border bg-background p-3 text-sm outline-none transition-[box-shadow,border-color] duration-[var(--motion-duration-fast)] focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-                    />
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <input
+                        value={value}
+                        placeholder={node.placeholder}
+                        onChange={(e) => {
+                          const newVal = e.target.value;
+                          setInput(node.id, newVal);
+                          const nextState = { ...runtime, [name]: newVal };
+                          setRuntime(nextState);
+                          debouncedChange(nextState);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && node.runEnabled) {
+                            submit();
+                          }
+                        }}
+                        className="h-10 flex-1 min-w-[200px] rounded-lg border border-input bg-transparent px-3.5 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                      {node.runEnabled && (
+                        <button
+                          type="button"
+                          onClick={submit}
+                          className="h-10 shrink-0 inline-flex items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                        >
+                          {node.buttonText}
+                        </button>
+                      )}
+                      {node.resetEnabled && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setInput(node.id, "");
+                            const startingState = { ...runtime };
+                            const nextState = await resetChain(
+                              tool,
+                              startingState,
+                            );
+                            setRuntime(nextState);
+                          }}
+                          className="h-10 shrink-0 inline-flex items-center justify-center rounded-lg border border-input bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                        >
+                          {node.resetText}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
-              }
-
-              // text_run_reset | text_run
-              const value = inputs[node.id] ?? "";
-              const submit = () => {
-                trigger(name, value);
-                if (node.type === "text_run_reset") {
-                  setInput(node.id, "");
-                }
-              };
-
-              return (
-                <div key={node.id} className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium">
-                    {node.fieldLabel}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={value}
-                      placeholder={node.placeholder}
-                      onChange={(e) => setInput(node.id, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          submit();
-                        }
-                      }}
-                      className={fieldInput}
-                    />
-                    <button
-                      type="button"
-                      onClick={submit}
-                      className={cn(
-                        btnBase,
-                        "bg-foreground text-background hover:bg-foreground/90",
-                      )}
-                    >
-                      {node.buttonText}
-                    </button>
-                    {node.type === "text_run_reset" && (
-                      <button
-                        type="button"
-                        onClick={() => setInput(node.id, "")}
-                        className={cn(btnBase, "border hover:bg-accent")}
-                      >
-                        {node.resetText}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -8,16 +8,19 @@
  */
 
 /** Icon/colour accent applied to a node type across the UI. */
-export type NodeAccent = "violet" | "blue" | "amber" | "emerald";
+export type NodeAccent = "violet" | "blue" | "amber" | "emerald" | "pink";
 
 /** Discriminator for every node kind the builder supports. */
 export type ToolNodeType =
   | "state"
-  | "text_run_reset"
   | "text_run"
   | "textarea"
   | "code"
-  | "canvas";
+  | "canvas"
+  | "ai";
+
+/** AI providers supported by the AI node. */
+export type AiProvider = "gemini" | "openrouter";
 
 /** A single named slot in the shared state store. */
 export interface StateEntry {
@@ -52,23 +55,20 @@ export interface StateNode extends BaseNode {
   states: StateEntry[];
 }
 
-/** Single-line field that triggers a run, then clears itself. */
-export interface TextRunResetNode extends BaseNode {
-  type: "text_run_reset";
-  fieldLabel: string;
-  placeholder: string;
-  buttonText: string;
-  resetText: string;
-  binding: StateBinding;
-}
-
-/** Single-line field that triggers a run and keeps its value. */
+/**
+ * Single-line field. When `runEnabled` is true a run button (and Enter
+ * keypress) trigger the code chain. When `resetEnabled` is true the field
+ * clears itself after a run and a reset button is rendered.
+ */
 export interface TextRunNode extends BaseNode {
   type: "text_run";
   fieldLabel: string;
   placeholder: string;
   buttonText: string;
   binding: StateBinding;
+  runEnabled: boolean;
+  resetEnabled: boolean;
+  resetText: string;
 }
 
 /** Multi-line, two-way bound text field (e.g. a message body). */
@@ -93,14 +93,31 @@ export interface CanvasNode extends BaseNode {
   html: string;
 }
 
+/**
+ * Call a Gemini / OpenRouter model with a prompt template (supports
+ * `{{stateName}}` interpolation) and write the reply into `output` state.
+ */
+export interface AiNode extends BaseNode {
+  type: "ai";
+  provider: AiProvider;
+  /** Model id (e.g. `gemini-2.5-flash`, `openrouter/auto`). */
+  model: string;
+  /** Optional system instruction. Supports `{{state}}` interpolation. */
+  systemInstruction: string;
+  /** Prompt body. Supports `{{state}}` interpolation. */
+  prompt: string;
+  /** State slot the model reply is written into. */
+  output: StateBinding;
+}
+
 /** Union of every concrete node kind. */
 export type ToolNode =
   | StateNode
-  | TextRunResetNode
   | TextRunNode
   | TextareaNode
   | CodeNode
-  | CanvasNode;
+  | CanvasNode
+  | AiNode;
 
 /** A named, ordered chain of nodes. */
 export interface Tool {
@@ -110,18 +127,14 @@ export interface Tool {
 }
 
 /** Where a selected node's editor is surfaced. */
-export type EditorPlacement = "panel" | "inline" | "popover";
+export type EditorPlacement = "panel" | "inline";
 
 /** Nodes that produce visible output in the preview. */
-export type RenderNode =
-  | TextRunResetNode
-  | TextRunNode
-  | TextareaNode
-  | CanvasNode;
+export type RenderNode = TextRunNode | TextareaNode | CanvasNode;
 
 /** Node kinds that produce visible output in the preview. */
 export const RENDER_NODE_TYPES: ReadonlySet<ToolNodeType> =
-  new Set<ToolNodeType>(["text_run_reset", "text_run", "textarea", "canvas"]);
+  new Set<ToolNodeType>(["text_run", "textarea", "canvas"]);
 
 /** Type guard: does this node render in the preview? */
 export const isRenderNode = (n: ToolNode): n is RenderNode =>

@@ -1,5 +1,7 @@
 "use client";
 
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Trash2 } from "lucide-react";
 
 import { ACCENT_CLASSES, NODE_META } from "@/constants/tool-builder";
@@ -11,13 +13,12 @@ import type {
   StateNode,
   ToolNode,
 } from "@/types/tool-builder";
-import { RENDER_NODE_TYPES } from "@/types/tool-builder";
 
 /**
  * One node in the builder chain.
  *
- * Shows the node's icon, title, resolved state subtitle and a "renders" tag
- * for output nodes. When selected, surfaces its editor inline or in a popover
+ * Shows the node's icon, title, and resolved state subtitle.
+ * When selected with `inline` placement, surfaces its editor inline
  * (the `panel` placement is rendered by the right panel instead).
  *
  * @param props.node - Node to render.
@@ -45,13 +46,27 @@ export function NodeCard({
   const meta = NODE_META[node.type];
   const Icon = meta.icon;
   const subtitle = nodeSubtitle(node, stateNode);
-  const renders = RENDER_NODE_TYPES.has(node.type);
 
   const showInline = selected && placement === "inline";
-  const showPopover = selected && placement === "popover";
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: node.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : showInline ? 20 : 1,
+  };
 
   return (
-    <div className="relative">
+    <div className="relative font-display" ref={setNodeRef} style={style}>
       <div
         role="button"
         tabIndex={0}
@@ -63,13 +78,17 @@ export function NodeCard({
           }
         }}
         className={cn(
-          "group flex items-center gap-2.5 rounded-xl border bg-card p-2.5 shadow-sm transition-[border-color,box-shadow,transform] duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-standard)]",
-          "cursor-pointer hover:border-foreground/20 active:scale-[0.995]",
+          "group flex items-center gap-2.5 rounded-xl border border-dashed bg-card p-2.5 h-14 transition-[border-color,box-shadow,transform] duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-standard)]",
+          "hover:border-foreground/20 active:scale-[0.995]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
           selected && "border-foreground/40 ring-2 ring-foreground/10",
         )}
       >
-        <span className="hidden shrink-0 cursor-grab text-muted-foreground/60 sm:block">
+        <span
+          className="hidden shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 sm:block"
+          {...attributes}
+          {...listeners}
+        >
           <GripVertical size={14} />
         </span>
         <span
@@ -83,16 +102,16 @@ export function NodeCard({
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">@{meta.label}</div>
           {subtitle && (
-            <div className="truncate font-mono text-[11px] text-muted-foreground">
-              {subtitle}
+            <div className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+              <span>{subtitle.label}</span>
+              {subtitle.value !== undefined && (
+                <span className="rounded bg-muted px-1 py-px font-mono text-[10px]">
+                  {subtitle.value}
+                </span>
+              )}
             </div>
           )}
         </div>
-        {renders && (
-          <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-            renders
-          </span>
-        )}
         <button
           type="button"
           aria-label="Delete node"
@@ -109,15 +128,6 @@ export function NodeCard({
       {showInline && (
         <div className="mt-2 rounded-xl border bg-card p-3 shadow-sm duration-[var(--motion-duration-base)] animate-in fade-in slide-in-from-top-1">
           <NodeEditor node={node} placement="inline" />
-        </div>
-      )}
-
-      {showPopover && (
-        <div className="absolute left-1/2 top-[calc(100%+10px)] z-20 w-[360px] max-w-[88vw] -translate-x-1/2 duration-[var(--motion-duration-base)] animate-in fade-in zoom-in-95 slide-in-from-top-1">
-          <span className="absolute -top-1.5 left-1/2 size-3 -translate-x-1/2 rotate-45 border-l border-t bg-card" />
-          <div className="relative max-h-[60vh] overflow-auto rounded-xl border bg-card p-3 shadow-xl">
-            <NodeEditor node={node} placement="popover" />
-          </div>
         </div>
       )}
     </div>

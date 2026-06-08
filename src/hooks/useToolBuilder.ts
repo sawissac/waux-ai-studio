@@ -9,7 +9,10 @@ import {
   clearNodeSelection,
   deleteNode,
   deleteTool,
+  renameStateSlot,
   renameTool,
+  reorderNodes,
+  reorderTools,
   selectNode,
   selectTool,
   setEditorPlacement,
@@ -86,8 +89,14 @@ export function useToolBuilder() {
     updateNode: (id: string, changes: Partial<ToolNode>) =>
       dispatch(updateNode({ id, changes })),
     selectNode: (id: string) => dispatch(selectNode(id)),
+    renameStateSlot: (id: string, oldName: string, newName: string) =>
+      dispatch(renameStateSlot({ id, oldName, newName })),
     clearNodeSelection: () => dispatch(clearNodeSelection()),
     setEditorPlacement: (p: EditorPlacement) => dispatch(setEditorPlacement(p)),
     setSearch: (q: string) => dispatch(setSearch(q)),
+    reorderTools: (activeId: string, overId: string) =>
+      dispatch(reorderTools({ activeId, overId })),
+    reorderNodes: (activeId: string, overId: string) =>
+      dispatch(reorderNodes({ activeId, overId })),
   };
 }
