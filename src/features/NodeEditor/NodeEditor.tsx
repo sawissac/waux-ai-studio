@@ -10,7 +10,15 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { CodeEditor } from "@/components/ui/code-editor";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -174,6 +182,11 @@ function StateEditor({ node }: { node: StateNode }) {
   const setStates = (states: StateEntry[]) => updateNode(node.id, { states });
 
   const [showDefaultFor, setShowDefaultFor] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   return (
     <div className="flex flex-col gap-2">
@@ -187,6 +200,15 @@ function StateEditor({ node }: { node: StateNode }) {
                   <span className="text-muted-foreground italic">unnamed</span>
                 )}
               </div>
+              {/* copy button */}
+              <button
+                type="button"
+                aria-label="Copy variable name"
+                onClick={() => navigator.clipboard.writeText(s.name)}
+                className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-95"
+              >
+                <Copy size={14} />
+              </button>
               {/* options dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -201,17 +223,8 @@ function StateEditor({ node }: { node: StateNode }) {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
                     onSelect={() => {
-                      const newName = window.prompt(
-                        "Rename state variable:",
-                        s.name,
-                      );
-                      if (
-                        newName !== null &&
-                        newName.trim() !== "" &&
-                        newName !== s.name
-                      ) {
-                        renameStateSlot(s.id, s.name, newName.trim());
-                      }
+                      setRenameTarget({ id: s.id, name: s.name });
+                      setRenameValue(s.name);
                     }}
                   >
                     Rename variable
@@ -257,13 +270,61 @@ function StateEditor({ node }: { node: StateNode }) {
       </div>
       <button
         type="button"
-        onClick={() =>
-          setStates([...node.states, { id: uuid(), name: "", value: "" }])
-        }
+        onClick={() => {
+          const n = node.states.filter((s) => /^state\d+$/.test(s.name)).length;
+          setStates([
+            ...node.states,
+            { id: uuid(), name: `state${n + 1}`, value: "" },
+          ]);
+        }}
         className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-[0.98]"
       >
         <Plus size={14} /> Add state
       </button>
+
+      <Dialog
+        open={renameTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {setRenameTarget(null);}
+        }}
+      >
+        <DialogContent showCloseButton={false} className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename variable</DialogTitle>
+          </DialogHeader>
+          <input
+            className={inputCls}
+            value={renameValue}
+            autoFocus
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const v = renameValue.trim();
+                if (renameTarget && v && v !== renameTarget.name) {
+                  renameStateSlot(renameTarget.id, renameTarget.name, v);
+                }
+                setRenameTarget(null);
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const v = renameValue.trim();
+                if (renameTarget && v && v !== renameTarget.name) {
+                  renameStateSlot(renameTarget.id, renameTarget.name, v);
+                }
+                setRenameTarget(null);
+              }}
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -368,18 +429,34 @@ function EditorBody({
     case "code": {
       const isPanel = placement === "panel";
       return (
-        <Field label="Code" className={isPanel ? "flex-1 min-h-0" : undefined}>
-          <CodeEditor
-            language="javascript"
-            height={isPanel ? "100%" : 320}
+        <div className={cn("flex flex-col gap-4", isPanel && "flex-1 min-h-0")}>
+          <Field label="Description">
+            <input
+              value={node.description ?? ""}
+              placeholder="What this code block does"
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field
+            label="Code"
             className={isPanel ? "flex-1 min-h-0" : undefined}
-            value={node.code}
-            onChange={(code) => updateNode(node.id, { code })}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            Runs top-to-bottom in the chain; reads &amp; writes state directly.
-          </p>
-        </Field>
+          >
+            <CodeEditor
+              language="javascript"
+              height={isPanel ? "100%" : 320}
+              className={isPanel ? "flex-1 min-h-0" : undefined}
+              value={node.code}
+              onChange={(code) => updateNode(node.id, { code })}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Runs top-to-bottom in the chain; reads &amp; writes state
+              directly.
+            </p>
+          </Field>
+        </div>
       );
     }
     case "canvas": {
@@ -431,6 +508,16 @@ function EditorBody({
               value={node.fieldLabel}
               onChange={(e) =>
                 updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Description">
+            <input
+              value={node.description ?? ""}
+              placeholder="Optional helper text shown below the label"
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
               }
               className={inputCls}
             />
@@ -489,6 +576,16 @@ function EditorBody({
               value={node.fieldLabel}
               onChange={(e) =>
                 updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Description">
+            <input
+              value={node.description ?? ""}
+              placeholder="Optional helper text shown below the label"
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
               }
               className={inputCls}
             />

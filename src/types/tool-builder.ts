@@ -63,6 +63,7 @@ export interface StateNode extends BaseNode {
 export interface TextRunNode extends BaseNode {
   type: "text_run";
   fieldLabel: string;
+  description: string;
   placeholder: string;
   buttonText: string;
   binding: StateBinding;
@@ -75,6 +76,7 @@ export interface TextRunNode extends BaseNode {
 export interface TextareaNode extends BaseNode {
   type: "textarea";
   fieldLabel: string;
+  description: string;
   placeholder: string;
   binding: StateBinding;
 }
@@ -82,6 +84,7 @@ export interface TextareaNode extends BaseNode {
 /** Custom logic block. Body defines `function run(state) { ... }`. */
 export interface CodeNode extends BaseNode {
   type: "code";
+  description: string;
   code: string;
 }
 

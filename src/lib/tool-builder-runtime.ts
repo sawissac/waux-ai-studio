@@ -45,8 +45,7 @@ export function initialStateMap(stateNode: StateNode | null): StateMap {
   return map;
 }
 
-const AsyncFunction = Object.getPrototypeOf(async function () {})
-  .constructor;
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
 /** Replace `{{name}}` tokens in `template` with values from `state`. */
 function interpolate(template: string, state: StateMap): string {
@@ -67,7 +66,9 @@ async function runAiNode(
     ? interpolate(node.systemInstruction, state)
     : undefined;
   const outName = resolveBinding(node.output, stateNode);
-  if (!outName) {return;}
+  if (!outName) {
+    return;
+  }
 
   const opts = {
     prompt: promptText,
@@ -244,7 +245,7 @@ export function nodeSubtitle(
     case "canvas":
       return { label: "ID", value: node.elementId };
     case "code":
-      return null;
+      return node.description ? { label: node.description } : null;
     case "ai":
       return {
         label: node.provider === "openrouter" ? "OpenRouter" : "Gemini",

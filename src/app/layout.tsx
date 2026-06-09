@@ -2,7 +2,9 @@ import "@/styles/globals.css";
 
 import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
+import { Toaster } from "sonner";
 
+import { QueryProvider } from "@/providers/QueryProvider";
 import { StoreProvider } from "@/providers/StoreProvider";
 
 const inter = Inter({
@@ -36,7 +38,10 @@ export default function RootLayout({
       suppressHydrationWarning={true}
     >
       <body className="flex min-h-full flex-col" suppressHydrationWarning>
-        <StoreProvider>{children}</StoreProvider>
+        <StoreProvider>
+          <QueryProvider>{children}</QueryProvider>
+        </StoreProvider>
+        <Toaster />
       </body>
     </html>
   );

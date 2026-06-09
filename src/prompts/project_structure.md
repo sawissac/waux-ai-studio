@@ -1,6 +1,6 @@
 # Project Structure — File Placement Rules
 
-Last updated: 2026-06-07
+Last updated: 2026-06-08
 
 Where each file type lives. Next.js 16 App Router + TypeScript.
 
@@ -51,7 +51,8 @@ Rule: `page.tsx` is a thin shell that mounts one feature. No markup, no fetching
 - `app/page.tsx` — home page `/` (thin shell, mounts `ToolBuilder` feature)
 - `app/favicon.ico`
 
-No route groups or API routes yet.
+- `app/(full-frame-public)/login/page.tsx` — `/login` route (thin shell, mounts `AuthLogin` feature)
+- `app/(full-frame-public)/[toolId]/page.tsx` — `/<uuid>` share route (thin shell, mounts `SharedToolView` feature; public, no auth required)
 
 > **Example usage** (target convention, not yet present):
 >
@@ -82,8 +83,12 @@ The Tool Builder is split into a thin **orchestrator feature** plus one feature
 per UI panel. Each feature is UI-only; the shared domain (slice, hook, types,
 catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
 
+- `AuthLogin/` — login + sign-up form. Server actions (`signIn`, `signUp`,
+  `signOut`) live in `AuthLogin/actions.ts` (exported via barrel). Mounted by
+  `app/(full-frame-public)/login/page.tsx`.
 - `ToolBuilder/` — orchestrator. Composes the panel features into the
-  three-panel workspace; mounted by `app/page.tsx`. Holds no domain of its own.
+  three-panel workspace; mounted by `app/page.tsx`. Calls `useToolsSync` on
+  mount to hydrate the Redux slice from Supabase.
   - `index.ts` — barrel: re-exports the `ToolBuilder` component
   - `ToolBuilder.tsx` — entry component; composes the panel features
 - `Topbar/` — tool name + count header
@@ -93,6 +98,7 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
 - `NodeEditor/` — node config form (shared by `NodeCard` and `ToolBuilder`)
 - `PalettePanel/` — right "Select Inputs" node palette
 - `PreviewPane/` — live preview renderer
+- `SharedToolView/` — public share view. Fetches a shared tool via `/api/shared/[toolId]` and renders only `PreviewPane`. No builder UI. Mounted by `app/(full-frame-public)/[toolId]/page.tsx`.
 
 Tool Builder shared domain (consumed by the features above):
 `@/stores/slices/toolBuilderSlice` (state), `@/hooks/useToolBuilder` (state/actions
@@ -147,7 +153,7 @@ Rule: one slice per state concern. File name `<feature><Concern>Slice.ts`.
 - `store.ts` — `makeStore()` factory (per-request store) + `RootState`/`AppDispatch`/`AppStore` types. Registers each slice in its `reducer` map.
 - `hooks.ts` — typed `useAppDispatch`, `useAppSelector`, `useAppStore`
 - `slices/appConfigSlice.ts` — global `appConfig` (theme, locale, sidebarCollapsed, hydrated). Mounted via `StoreProvider` in `src/app/layout.tsx`
-- `slices/toolBuilderSlice.ts` — Tool Builder state (tools, selection, editor placement, search). Mounted at `state.toolBuilder`; never read directly — go through `@/hooks/useToolBuilder`
+- `slices/toolBuilderSlice.ts` — Tool Builder state (tools, selection, editor placement, search, loadState). Mounted at `state.toolBuilder`; never read directly — go through `@/hooks/useToolBuilder`. Exports `hydrateTools` + `setLoadState` for the sync hook.
 
 > **Slice ownership**: all state slices live in `src/stores/slices/`. Components never read slices directly — they go through a hook in `src/hooks/` (see the hooks rule). Tool Builder's state is shared by every panel feature, so its slice + access hook are shared, not co-located in one feature.
 >
@@ -169,6 +175,7 @@ Rule: all `"use client"`. Composed in `src/app/layout.tsx`.
 ### Current providers
 
 - `StoreProvider.tsx` — Redux store provider (per-request store via `useRef`)
+- `QueryProvider.tsx` — TanStack Query provider (ref-stable `QueryClient`)
 
 ---
 
@@ -185,6 +192,8 @@ Rule: feature-only hooks stay inside feature folder, not here. Query/mutation ho
 ### Current hooks
 
 - `useToolBuilder.ts` — single access point for Tool Builder state + actions (reads `state.toolBuilder`, returns derived values + bound dispatchers). All panel features use it; components never touch the slice or `useAppSelector` directly.
+- `useAuth.ts` — returns `{ user, loading }` for the signed-in Supabase user; subscribes to `onAuthStateChange`.
+- `useToolsSync.ts` — fetches tools + nodes from Supabase via TanStack Query and dispatches `hydrateTools` into the Redux slice on mount. Called once at the top of `ToolBuilder`.
 
 > **Example usage** (target convention):
 >
@@ -207,6 +216,8 @@ Rule: no React imports unless wrapper hook. No business logic.
 ### Current lib
 
 - `tool-builder-runtime.ts` — pure preview helpers (`resolveBinding`, `initialStateMap`, `runChain`, `nodeSubtitle`). No React, no Redux.
+- `supabase/client.ts` — browser Supabase client factory (`createClient()`). Use in `"use client"` components/hooks.
+- `supabase/server.ts` — async server Supabase client factory (`await createClient()`). Use in Server Components, Server Functions, Route Handlers.
 
 ---
 
@@ -300,19 +311,20 @@ Rule: feature-only types co-locate with component.
 
 ## Project root
 
-| File                 | Purpose                       |
-| -------------------- | ----------------------------- |
-| `next.config.ts`     | Next config                   |
-| `tsconfig.json`      | TS config (`@/*` → `./src/*`) |
-| `components.json`    | shadcn/ui config              |
-| `eslint.config.mjs`  | ESLint flat config            |
-| `postcss.config.mjs` | PostCSS / Tailwind v4         |
-| `package.json`       | Deps + scripts                |
-| `Dockerfile`         | Container build               |
-| `docker-compose.yml` | Docker Compose config         |
-| `AGENTS.md`          | Agent instructions            |
-| `CLAUDE.md`          | Claude project rules          |
-| `README.md`          | Project docs                  |
+| File                 | Purpose                                            |
+| -------------------- | -------------------------------------------------- |
+| `next.config.ts`     | Next config                                        |
+| `tsconfig.json`      | TS config (`@/*` → `./src/*`)                      |
+| `components.json`    | shadcn/ui config                                   |
+| `eslint.config.mjs`  | ESLint flat config                                 |
+| `postcss.config.mjs` | PostCSS / Tailwind v4                              |
+| `package.json`       | Deps + scripts                                     |
+| `Dockerfile`         | Container build                                    |
+| `docker-compose.yml` | Docker Compose config                              |
+| `src/proxy.ts`       | Next.js 16 Proxy — session refresh + auth redirect |
+| `AGENTS.md`          | Agent instructions                                 |
+| `CLAUDE.md`          | Claude project rules                               |
+| `README.md`          | Project docs                                       |
 
 ---
 

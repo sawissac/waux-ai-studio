@@ -12,6 +12,8 @@ import { ToolsPanel } from "@/features/ToolsPanel";
 import { Topbar } from "@/features/Topbar";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
+import { useToolsSync } from "@/hooks/useToolsSync";
+import { useAppSelector } from "@/stores/hooks";
 
 /**
  * Tool Builder — top-level feature component.
@@ -21,9 +23,15 @@ import { useToolBuilder } from "@/hooks/useToolBuilder";
  * the node editor when a node is selected in `panel` placement, otherwise the
  * "Select Inputs" palette. All state flows through {@link useToolBuilder};
  * this component holds no local UI state of its own.
+ *
+ * {@link useToolsSync} hydrates the Redux slice from Supabase on mount.
  */
 export function ToolBuilder() {
+  // Hydrate tools from Supabase into the Redux slice on mount.
+  const { saveTools, saveState } = useToolsSync();
+
   const { tool, tools, selectedNode, editorPlacement } = useToolBuilder();
+  const loadState = useAppSelector((s) => s.toolBuilder.loadState);
 
   /** The inspector pane is mounted only at lg+ (Tailwind `lg` = 1024px). */
   const showInspector = useMediaQuery("(min-width: 1024px)");
@@ -32,7 +40,12 @@ export function ToolBuilder() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
-      <Topbar toolName={tool?.name ?? null} toolCount={tools.length} />
+      <Topbar
+        toolName={tool?.name ?? null}
+        toolCount={tools.length}
+        onSave={saveTools}
+        saveState={saveState}
+      />
 
       {/* Mobile: builder only — side panels collapse away below md. */}
       <main className="min-h-0 min-w-0 flex-1 md:hidden">
@@ -40,7 +53,9 @@ export function ToolBuilder() {
           <BuilderPanel tool={tool} />
         ) : (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">
-            Select or create a tool to start building.
+            {loadState === "loading"
+              ? "Loading…"
+              : "Select or create a tool to start building."}
           </div>
         )}
       </main>

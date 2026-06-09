@@ -95,11 +95,7 @@ export function PreviewPane({
   return (
     <div className="mt-10 font-display">
       <div className="mb-4 flex items-center gap-2 border-b border-border/50 pb-3 text-sm font-semibold text-foreground">
-        <Eye size={15} className="text-muted-foreground" />
-        Live Preview
-        <span className="text-xs font-normal text-muted-foreground/50">
-          interactive end-user view
-        </span>
+        Preview
       </div>
       {running && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -141,6 +137,11 @@ export function PreviewPane({
                       <label className="text-sm font-semibold">
                         {node.fieldLabel}
                       </label>
+                      {node.description && (
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          {node.description}
+                        </p>
+                      )}
                       <textarea
                         rows={4}
                         placeholder={node.placeholder}
@@ -173,6 +174,11 @@ export function PreviewPane({
                     <label className="text-sm font-semibold">
                       {node.fieldLabel}
                     </label>
+                    {node.description && (
+                      <p className="text-xs text-muted-foreground -mt-1">
+                        {node.description}
+                      </p>
+                    )}
                     <div className="flex flex-wrap items-center gap-2.5">
                       <input
                         value={value}
@@ -189,7 +195,7 @@ export function PreviewPane({
                             submit();
                           }
                         }}
-                        className="h-10 flex-1 min-w-[200px] rounded-lg border border-input bg-transparent px-3.5 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        className="h-10 flex-1 min-w-50 rounded-lg border border-input bg-transparent px-3.5 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       />
                       {node.runEnabled && (
                         <button

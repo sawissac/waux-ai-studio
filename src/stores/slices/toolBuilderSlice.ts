@@ -8,6 +8,9 @@ import type {
   ToolNodeType,
 } from "@/types/tool-builder";
 
+/** Load state for the tools list hydrated from the server. */
+export type ToolsLoadState = "idle" | "loading" | "ready";
+
 /**
  * Redux state for the Tool Builder feature.
  *
@@ -28,6 +31,8 @@ export interface ToolBuilderState {
   editorPlacement: EditorPlacement;
   /** Tools-list search query. */
   search: string;
+  /** Whether the tools list has been hydrated from the server. */
+  loadState: ToolsLoadState;
 }
 
 const initialState: ToolBuilderState = {
@@ -36,12 +41,29 @@ const initialState: ToolBuilderState = {
   selectedNodeId: null,
   editorPlacement: "panel",
   search: "",
+  loadState: "idle",
 };
 
 const toolBuilderSlice = createSlice({
   name: "toolBuilder",
   initialState,
   reducers: {
+    /**
+     * Replace the tools list with server data. Preserves the current selection
+     * when the selected tool still exists; otherwise selects the first tool.
+     */
+    hydrateTools(state, action: PayloadAction<Tool[]>) {
+      state.tools = action.payload;
+      state.loadState = "ready";
+      if (!action.payload.find((t) => t.id === state.selectedToolId)) {
+        state.selectedToolId = action.payload[0]?.id ?? null;
+        state.selectedNodeId = null;
+      }
+    },
+    /** Mark tools as loading (prevents empty-state flash before first fetch). */
+    setLoadState(state, action: PayloadAction<ToolsLoadState>) {
+      state.loadState = action.payload;
+    },
     /** Open a tool; clears any node selection. */
     selectTool(state, action: PayloadAction<string>) {
       state.selectedToolId = action.payload;
@@ -122,7 +144,9 @@ const toolBuilderSlice = createSlice({
       action: PayloadAction<{ id: string; oldName: string; newName: string }>,
     ) {
       const tool = state.tools.find((t) => t.id === state.selectedToolId);
-      if (!tool) {return;}
+      if (!tool) {
+        return;
+      }
 
       const { id, oldName, newName } = action.payload;
 
@@ -206,6 +230,8 @@ const toolBuilderSlice = createSlice({
 });
 
 export const {
+  hydrateTools,
+  setLoadState,
   selectTool,
   addTool,
   renameTool,

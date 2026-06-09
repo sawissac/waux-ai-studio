@@ -16,9 +16,26 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  Link2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AiKeysButton } from "@/features/AiKeysButton";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Tool } from "@/types/tool-builder";
 
@@ -36,6 +54,7 @@ function SortableToolItem({
   renaming,
   selectTool,
   beginRename,
+  shareTool,
   deleteTool,
   draftName,
   setDraftName,
@@ -48,6 +67,7 @@ function SortableToolItem({
   renaming: boolean;
   selectTool: (id: string) => void;
   beginRename: (id: string, name: string) => void;
+  shareTool: (id: string) => void;
   deleteTool: (id: string) => void;
   draftName: string;
   setDraftName: (val: string) => void;
@@ -142,6 +162,10 @@ function SortableToolItem({
             <Pencil />
             Rename
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => shareTool(t.id)}>
+            <Link2 />
+            Share
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onSelect={() => deleteTool(t.id)}
@@ -158,10 +182,11 @@ function SortableToolItem({
 /**
  * Left panel — the tools list with search, a per-row options menu, and a
  * create control. Selecting a row opens that tool in the builder; the options
- * menu exposes rename (inline edit) and delete.
+ * menu exposes rename (inline edit) and delete (with confirmation dialog).
  */
 export function ToolsPanel() {
   const {
+    tools,
     filteredTools,
     selectedToolId,
     search,
@@ -177,6 +202,17 @@ export function ToolsPanel() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /** Id of the tool pending delete confirmation, or null. */
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const toolToDelete = tools.find((t) => t.id === deleteConfirmId) ?? null;
+
+  function confirmDelete() {
+    if (deleteConfirmId) {
+      deleteTool(deleteConfirmId);
+    }
+    setDeleteConfirmId(null);
+  }
 
   useEffect(() => {
     if (renamingId) {
@@ -197,6 +233,21 @@ export function ToolsPanel() {
       }
     }
     setRenamingId(null);
+  }
+
+  async function handleShare(id: string) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("tools")
+      .update({ is_shared: true })
+      .eq("id", id);
+    if (error) {
+      toast.error("Could not enable sharing.");
+      return;
+    }
+    const url = `${window.location.origin}/${id}`;
+    await navigator.clipboard.writeText(url);
+    toast.success("Share link copied!");
   }
 
   const sensors = useSensors(
@@ -274,7 +325,8 @@ export function ToolsPanel() {
                     renaming={t.id === renamingId}
                     selectTool={selectTool}
                     beginRename={beginRename}
-                    deleteTool={deleteTool}
+                    shareTool={handleShare}
+                    deleteTool={setDeleteConfirmId}
                     draftName={draftName}
                     setDraftName={setDraftName}
                     commitRename={commitRename}
@@ -297,6 +349,32 @@ export function ToolsPanel() {
           <Plus size={14} /> New tool
         </button>
       </div>
+
+      <Dialog
+        open={deleteConfirmId !== null}
+        onOpenChange={(open) => !open && setDeleteConfirmId(null)}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Delete tool?</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-foreground">
+                {toolToDelete?.name}
+              </span>{" "}
+              and all its nodes will be permanently removed. This cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

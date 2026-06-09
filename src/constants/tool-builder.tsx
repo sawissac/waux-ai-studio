@@ -148,15 +148,16 @@ export function createNode(type: ToolNodeType): ToolNode {
   const id = uuid();
   switch (type) {
     case "state":
-      return { id, type, states: [{ id: uuid(), name: "value", value: "" }] };
+      return { id, type, states: [{ id: uuid(), name: "state1", value: "" }] };
     case "text_run":
       return {
         id,
         type,
         fieldLabel: "Field",
+        description: "",
         placeholder: "Type here…",
         buttonText: "Run",
-        binding: { mode: "name", value: "value" },
+        binding: { mode: "name", value: "state1" },
         runEnabled: true,
         resetEnabled: false,
         resetText: "Reset",
@@ -166,11 +167,12 @@ export function createNode(type: ToolNodeType): ToolNode {
         id,
         type,
         fieldLabel: "Message",
+        description: "",
         placeholder: "Write a message…",
-        binding: { mode: "name", value: "value" },
+        binding: { mode: "name", value: "state1" },
       };
     case "code":
-      return { id, type, code: DEFAULT_CODE };
+      return { id, type, description: "", code: DEFAULT_CODE };
     case "canvas": {
       const elementId = uuid();
       return {
@@ -187,8 +189,8 @@ export function createNode(type: ToolNodeType): ToolNode {
         provider: "gemini",
         model: "gemini-2.5-flash",
         systemInstruction: "",
-        prompt: "Summarize: {{value}}",
-        output: { mode: "name", value: "value" },
+        prompt: "Summarize: {{state1}}",
+        output: { mode: "name", value: "state1" },
       };
   }
 }
