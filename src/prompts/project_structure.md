@@ -1,6 +1,6 @@
 # Project Structure — File Placement Rules
 
-Last updated: 2026-06-08
+Last updated: 2026-06-10
 
 Where each file type lives. Next.js 16 App Router + TypeScript.
 
@@ -98,6 +98,7 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
 - `NodeEditor/` — node config form (shared by `NodeCard` and `ToolBuilder`)
 - `PalettePanel/` — right "Select Inputs" node palette
 - `PreviewPane/` — live preview renderer
+  - `components/DataTable.tsx` — Table-node renderer (TanStack Table + Virtual: kind-aware sorting, column resizing, 30/50/100 pagination)
 - `SharedToolView/` — public share view. Fetches a shared tool via `/api/shared/[toolId]` and renders only `PreviewPane`. No builder UI. Mounted by `app/(full-frame-public)/[toolId]/page.tsx`.
 
 Tool Builder shared domain (consumed by the features above):
@@ -216,6 +217,9 @@ Rule: no React imports unless wrapper hook. No business logic.
 ### Current lib
 
 - `tool-builder-runtime.ts` — pure preview helpers (`resolveBinding`, `initialStateMap`, `runChain`, `nodeSubtitle`). No React, no Redux.
+- `json-to-ts.ts` — pure JSON → TypeScript declaration generator (`jsonToTs`). Used by the Tool Builder's `ts_type` (TS Type Converter) node via the runtime.
+- `csv.ts` — pure CSV parser (`parseCsv`, wraps PapaParse) producing an optimized rows array (typed values, empty rows/columns dropped). Used by the Tool Builder's `csv` input node in `PreviewPane`.
+- `table-data.ts` — pure table-data normalizer (`normalizeTableData`, `compareCells`, `formatCell`): auto-optimizes any array / JSON string into a render-ready grid (typed cells, empty rows/columns dropped) and detects per-column kinds (string/number/date) for sorting. Used by the Tool Builder's `table` input node (`PreviewPane/components/DataTable.tsx`).
 - `supabase/client.ts` — browser Supabase client factory (`createClient()`). Use in `"use client"` components/hooks.
 - `supabase/server.ts` — async server Supabase client factory (`await createClient()`). Use in Server Components, Server Functions, Route Handlers.
 

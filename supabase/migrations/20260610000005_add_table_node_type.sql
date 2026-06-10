@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- Add the `table` node type.
+--
+-- `table` — read-only data table over the bound state slot. The value is
+--           auto-optimized client-side (typed cells, empty rows/columns
+--           dropped); columns sort (strings, numbers, auto-detected dates)
+--           and resize, rows paginate at 30/50/100 with the visible page
+--           virtualized (TanStack Table + Virtual).
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'table';

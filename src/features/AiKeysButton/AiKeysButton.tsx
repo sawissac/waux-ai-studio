@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Eye, EyeOff, Settings, X } from "lucide-react";
+import { Check, Eye, EyeOff, KeyRound, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -12,7 +12,9 @@ const POPOVER_WIDTH = 320;
 const VIEWPORT_PADDING = 8;
 
 function readKey(name: string): string {
-  if (typeof window === "undefined") {return "";}
+  if (typeof window === "undefined") {
+    return "";
+  }
   try {
     return window.localStorage.getItem(name) ?? "";
   } catch {
@@ -21,7 +23,9 @@ function readKey(name: string): string {
 }
 
 function writeKey(name: string, value: string) {
-  if (typeof window === "undefined") {return;}
+  if (typeof window === "undefined") {
+    return;
+  }
   try {
     if (value) {
       window.localStorage.setItem(name, value);
@@ -48,7 +52,9 @@ export function AiKeysButton() {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    if (!open) {return;}
+    if (!open) {
+      return;
+    }
     setGemini(readKey(GEMINI_KEY));
     setOpenrouter(readKey(OPENROUTER_KEY));
     setSaved(false);
@@ -61,7 +67,9 @@ export function AiKeysButton() {
     }
     const place = () => {
       const t = triggerRef.current;
-      if (!t) {return;}
+      if (!t) {
+        return;
+      }
       const rect = t.getBoundingClientRect();
       const top = rect.bottom + 6;
       const maxLeft = window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING;
@@ -80,7 +88,9 @@ export function AiKeysButton() {
   }, [open]);
 
   useEffect(() => {
-    if (!open) {return;}
+    if (!open) {
+      return;
+    }
     const onDown = (e: MouseEvent) => {
       const target = e.target as Node;
       if (
@@ -92,7 +102,9 @@ export function AiKeysButton() {
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {setOpen(false);}
+      if (e.key === "Escape") {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -120,11 +132,13 @@ export function AiKeysButton() {
         aria-pressed={open}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "grid size-7 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-accent",
-          open && "bg-accent text-foreground",
+          "nb-press grid size-8 place-items-center border-2 border-foreground shadow-nb-sm",
+          open
+            ? "bg-primary text-primary-foreground"
+            : "bg-card text-foreground",
         )}
       >
-        <Settings size={13} />
+        <KeyRound size={15} />
       </button>
       {open &&
         coords &&
@@ -139,14 +153,14 @@ export function AiKeysButton() {
               width: POPOVER_WIDTH,
               zIndex: 50,
             }}
-            className="rounded-lg border bg-popover p-3 text-popover-foreground shadow-xl"
+            className="border-2 border-foreground bg-popover p-3 text-popover-foreground shadow-nb-lg"
           >
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold">AI API keys</span>
+              <span className="text-xs font-bold">AI API keys</span>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-accent"
+                className="grid size-6 place-items-center text-muted-foreground hover:text-foreground"
                 aria-label="Close"
               >
                 <X size={13} />
@@ -167,13 +181,13 @@ export function AiKeysButton() {
                     onChange={(e) => setGemini(e.target.value)}
                     type={showGemini ? "text" : "password"}
                     placeholder="AIza..."
-                    className="h-8 flex-1 rounded-md border bg-background px-2 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                    className="h-8 flex-1 border-2 border-foreground bg-background px-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   />
                   <button
                     type="button"
                     onClick={() => setShowGemini((v) => !v)}
                     aria-label={showGemini ? "Hide key" : "Show key"}
-                    className="grid size-8 shrink-0 place-items-center rounded-md border text-muted-foreground hover:bg-accent"
+                    className="nb-press grid size-8 shrink-0 place-items-center border-2 border-foreground bg-card text-muted-foreground shadow-nb-sm hover:text-foreground"
                   >
                     {showGemini ? <EyeOff size={13} /> : <Eye size={13} />}
                   </button>
@@ -189,13 +203,13 @@ export function AiKeysButton() {
                     onChange={(e) => setOpenrouter(e.target.value)}
                     type={showOpenrouter ? "text" : "password"}
                     placeholder="sk-or-..."
-                    className="h-8 flex-1 rounded-md border bg-background px-2 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                    className="h-8 flex-1 border-2 border-foreground bg-background px-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   />
                   <button
                     type="button"
                     onClick={() => setShowOpenrouter((v) => !v)}
                     aria-label={showOpenrouter ? "Hide key" : "Show key"}
-                    className="grid size-8 shrink-0 place-items-center rounded-md border text-muted-foreground hover:bg-accent"
+                    className="nb-press grid size-8 shrink-0 place-items-center border-2 border-foreground bg-card text-muted-foreground shadow-nb-sm hover:text-foreground"
                   >
                     {showOpenrouter ? <EyeOff size={13} /> : <Eye size={13} />}
                   </button>
@@ -211,7 +225,7 @@ export function AiKeysButton() {
               <button
                 type="button"
                 onClick={save}
-                className="rounded-md border bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 active:scale-[0.98]"
+                className="nb-press border-2 border-foreground bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-nb-sm"
               >
                 Save
               </button>

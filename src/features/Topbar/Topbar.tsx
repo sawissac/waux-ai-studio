@@ -4,6 +4,7 @@ import { Boxes, Check, CloudUpload, Loader2, LogOut } from "lucide-react";
 import { useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/ui/logo";
 import { signOut } from "@/features/AuthLogin";
 import type { SaveState } from "@/hooks/useToolsSync";
 
@@ -37,21 +38,19 @@ export function Topbar({
   const isError = saveState === "error";
 
   return (
-    <div className="flex items-center gap-2 border-b px-4 py-2.5">
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        <span className="grid size-6 place-items-center rounded-md bg-foreground font-display text-xs text-background">
-          T
-        </span>
+    <div className="flex items-center gap-2 border-b-2 border-foreground bg-card px-4 py-2.5">
+      <div className="flex items-center gap-2 text-sm font-bold">
+        <Logo size={24} />
         Tool Builder
       </div>
       {toolName && (
         <span className="truncate text-sm text-muted-foreground">
-          ·&nbsp; <b className="font-semibold text-foreground">{toolName}</b>
+          ·&nbsp; <b className="font-bold text-foreground">{toolName}</b>
         </span>
       )}
 
       <div className="ml-auto flex items-center gap-2">
-        <span className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
           <Boxes size={12} /> {toolCount} tools
         </span>
 
@@ -62,9 +61,7 @@ export function Topbar({
           disabled={isSaving}
           onClick={onSave}
           className={[
-            "h-7 gap-1.5 px-2.5 text-xs font-medium",
-            "transition-[color,border-color,background-color] duration-[--motion-duration-fast]",
-            "active:scale-[0.98] transition-transform duration-[--motion-duration-instant]",
+            "h-7 gap-1.5 px-2.5 text-xs font-bold",
             isSaved
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               : isError
@@ -89,14 +86,18 @@ export function Topbar({
         </Button>
 
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon-sm"
           aria-label="Sign out"
           disabled={pending}
           onClick={handleSignOut}
-          className="text-muted-foreground transition-transform duration-[--motion-duration-instant] active:scale-[0.98] hover:text-foreground"
+          className="size-7 bg-destructive text-white hover:bg-destructive hover:text-white"
         >
-          <LogOut className="size-4" />
+          {pending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <LogOut className="size-4" />
+          )}
         </Button>
       </div>
     </div>

@@ -1,82 +1,124 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "katex/dist/katex.min.css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
+/* =========================================================================
+   NEUBRUTALISM DESIGN SYSTEM — Toolkits
+   -------------------------------------------------------------------------
+   Principles: hard black borders, flat saturated pop colours, no gradients,
+   sharp corners, hard offset shadows (no blur), bold type, tactile "press"
+   interactions. See design-system/toolkits/MASTER.md for the spec.
+
+   Signature primitives:
+     • border:  2px (default) / 3px (emphasis) solid foreground
+     • shadow:  Npx Npx 0 0 var(--nb-shadow-color)  — zero blur, hard offset
+     • radius:  0 (crisp blocks)
+     • press:   hover lifts (bigger shadow), active sinks (no shadow)
+   ========================================================================= */
+
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Crisp blocks — neubrutalism uses sharp corners. */
+  --radius: 0rem;
+
+  /* --- Surfaces ---------------------------------------------------------- */
+  --background: #fffdf4; /* warm paper */
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+
+  /* --- Pop colours ------------------------------------------------------- */
+  --primary: #ffd23f; /* signal yellow */
+  --primary-foreground: #111111;
+  --secondary: #ffffff;
+  --secondary-foreground: #111111;
+  --muted: #f4f1e8;
+  --muted-foreground: #57534e;
+  --accent: #ffe066; /* soft yellow hover wash */
+  --accent-foreground: #111111;
+  --destructive: #ff5a5f;
+
+  /* --- Lines & focus ----------------------------------------------------- */
+  --border: #111111;
+  --input: #111111;
+  --ring: #2d6bff; /* electric blue focus */
+
+  /* --- Data viz (flat saturated) ---------------------------------------- */
+  --chart-1: #ffd23f;
+  --chart-2: #ff5a5f;
+  --chart-3: #2d6bff;
+  --chart-4: #4ecdc4;
+  --chart-5: #b388ff;
+
+  /* --- Sidebar ----------------------------------------------------------- */
+  --sidebar: #fffdf4;
+  --sidebar-foreground: #111111;
+  --sidebar-primary: #ffd23f;
+  --sidebar-primary-foreground: #111111;
+  --sidebar-accent: #ffe066;
+  --sidebar-accent-foreground: #111111;
+  --sidebar-border: #111111;
+  --sidebar-ring: #2d6bff;
+
+  /* --- Neubrutalism primitives ------------------------------------------ */
+  --nb-border-width: 2px;
+  --nb-border-width-lg: 3px;
+  --nb-shadow-color: #111111;
+  --nb-shadow-sm: 2px 2px 0 0 var(--nb-shadow-color);
+  --nb-shadow: 4px 4px 0 0 var(--nb-shadow-color);
+  --nb-shadow-lg: 6px 6px 0 0 var(--nb-shadow-color);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #1a1a1a;
+  --foreground: #f5f5f0;
+  --card: #242424;
+  --card-foreground: #f5f5f0;
+  --popover: #242424;
+  --popover-foreground: #f5f5f0;
+
+  --primary: #ffd23f;
+  --primary-foreground: #111111;
+  --secondary: #242424;
+  --secondary-foreground: #f5f5f0;
+  --muted: #2e2e2e;
+  --muted-foreground: #a3a3a3;
+  --accent: #333333;
+  --accent-foreground: #f5f5f0;
+  --destructive: #ff5a5f;
+
+  --border: #f5f5f0; /* light lines on dark */
+  --input: #f5f5f0;
+  --ring: #5b8cff;
+
+  --chart-1: #ffd23f;
+  --chart-2: #ff5a5f;
+  --chart-3: #5b8cff;
+  --chart-4: #4ecdc4;
+  --chart-5: #b388ff;
+
+  --sidebar: #1a1a1a;
+  --sidebar-foreground: #f5f5f0;
+  --sidebar-primary: #ffd23f;
+  --sidebar-primary-foreground: #111111;
+  --sidebar-accent: #333333;
+  --sidebar-accent-foreground: #f5f5f0;
+  --sidebar-border: #f5f5f0;
+  --sidebar-ring: #5b8cff;
+
+  /* Hard shadow stays black so it reads as depth under light borders. */
+  --nb-shadow-color: #000000;
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: var(--radius);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -110,6 +152,11 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-sans: var(--font-inter);
   --font-display: var(--font-poppins);
+
+  /* Hard offset shadows as Tailwind utilities: shadow-nb / -sm / -lg. */
+  --shadow-nb-sm: var(--nb-shadow-sm);
+  --shadow-nb: var(--nb-shadow);
+  --shadow-nb-lg: var(--nb-shadow-lg);
 }
 
 :root {
@@ -137,7 +184,36 @@
   h4,
   h5,
   h6 {
-    @apply font-display;
+    @apply font-display font-bold;
+  }
+}
+
+@layer components {
+  /* nb-surface — the canonical block: hard border + hard offset shadow. */
+  .nb-surface {
+    border: var(--nb-border-width) solid var(--color-foreground);
+    box-shadow: var(--nb-shadow);
+    background-color: var(--color-card);
+  }
+  .nb-surface-lg {
+    border: var(--nb-border-width-lg) solid var(--color-foreground);
+    box-shadow: var(--nb-shadow-lg);
+    background-color: var(--color-card);
+  }
+
+  /* nb-press — tactile interaction: hover lifts, active sinks into shadow. */
+  .nb-press {
+    transition:
+      transform var(--motion-duration-fast) var(--motion-ease-standard),
+      box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
+  }
+  .nb-press:hover:not(:disabled) {
+    transform: translate(-2px, -2px);
+    box-shadow: var(--nb-shadow-lg);
+  }
+  .nb-press:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: var(--nb-shadow-sm);
   }
 }
 
@@ -152,5 +228,10 @@
     transition-duration: var(--motion-duration-fast) !important;
     transition-property: opacity !important;
     scroll-behavior: auto !important;
+  }
+  /* No translate jumps on press when motion is reduced. */
+  .nb-press:hover:not(:disabled),
+  .nb-press:active:not(:disabled) {
+    transform: none;
   }
 }

@@ -78,10 +78,9 @@ export function NodeCard({
           }
         }}
         className={cn(
-          "group flex items-center gap-2.5 rounded-xl border border-dashed bg-card p-2.5 h-14 transition-[border-color,box-shadow,transform] duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-standard)]",
-          "hover:border-foreground/20 active:scale-[0.995]",
+          "nb-press group flex h-14 items-center gap-2.5 border-2 border-foreground bg-card p-2.5 shadow-nb",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-          selected && "border-foreground/40 ring-2 ring-foreground/10",
+          selected && "bg-primary text-primary-foreground",
         )}
       >
         <span
@@ -93,7 +92,7 @@ export function NodeCard({
         </span>
         <span
           className={cn(
-            "grid size-8 shrink-0 place-items-center rounded-lg",
+            "grid size-8 shrink-0 place-items-center border-2 border-foreground",
             ACCENT_CLASSES[meta.accent],
           )}
         >
@@ -126,7 +125,7 @@ export function NodeCard({
       </div>
 
       {showInline && (
-        <div className="mt-2 rounded-xl border bg-card p-3 shadow-sm duration-[var(--motion-duration-base)] animate-in fade-in slide-in-from-top-1">
+        <div className="nb-surface mt-2 p-3 duration-(--motion-duration-base) animate-in fade-in slide-in-from-top-1">
           <NodeEditor node={node} placement="inline" />
         </div>
       )}

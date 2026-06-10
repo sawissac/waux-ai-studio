@@ -1,0 +1,11 @@
+-- ---------------------------------------------------------------------------
+-- Add the `csv` node type.
+--
+-- `csv` — CSV file input. The uploaded file is parsed client-side (PapaParse)
+--         into an optimized rows array (typed values, empty rows/columns
+--         dropped) which is written to the bound state slot.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'csv';

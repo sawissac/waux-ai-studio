@@ -1,9 +1,229 @@
 "use client";
 
-import { AlertTriangle, Eye, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  Eye,
+  Globe,
+  Loader2,
+  Maximize,
+  Monitor,
+  Smartphone,
+  Upload,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
+import rehypeKatex from "rehype-katex";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import remarkBreaks from "remark-breaks";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { useDebouncedCallback } from "use-debounce";
 
+function preprocessContent(content: string): string {
+  if (!content) {
+    return "";
+  }
+  return content
+    .replace(/\\\[([\s\S]*?)\\\]/g, "$$$$\n$1\n$$$$")
+    .replace(/\\\(([\s\S]*?)\\\)/g, "$$$1$$")
+    .replace(/\\\\([a-zA-Z]+|[,;!])/g, "\\$1")
+    .replace(/\\n/g, "\n")
+    .replace(/([^\n])\n(#{1,6} )/g, "$1\n\n$2")
+    .replace(/([^\n])\n([-*+] )/g, "$1\n\n$2")
+    .replace(/([^\n])\n(\d+\. )/g, "$1\n\n$2")
+    .replace(/,(?=[a-zA-Z])/g, ", ");
+}
+
+/**
+ * Normalize an author/state-supplied viewport URL for iframe embedding:
+ * trim, prepend `https://` when no scheme is given, and reject anything that
+ * isn't http(s) (blocks `javascript:` & friends). Returns `""` when unusable.
+ */
+function normalizeViewportUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const withScheme = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+  try {
+    const url = new URL(withScheme);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.href
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+const VIEWPORT_SANDBOX =
+  "allow-scripts allow-same-origin allow-forms allow-popups";
+
+/** Toggle icon per simulated screen. */
+const DEVICE_ICONS: Record<ViewportDevice, typeof Monitor> = {
+  responsive: Maximize,
+  desktop: Monitor,
+  mobile: Smartphone,
+};
+
+/**
+ * Sandboxed iframe for the View Port node. `responsive` fills the pane width
+ * at `height`; fixed screens render the page at the device's width/height and
+ * scale the whole frame down (never up) to fit the pane, so the embedded site
+ * lays out exactly as it would on that screen width.
+ */
+function ViewportFrame({
+  src,
+  title,
+  device,
+  height,
+}: {
+  src: string;
+  title: string;
+  device: ViewportDevice;
+  height: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) {
+      return;
+    }
+    const ro = new ResizeObserver((entries) => {
+      setContainerW(entries[0]?.contentRect.width ?? 0);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const dims = VIEWPORT_DEVICES.find((d) => d.value === device);
+  const fixed = dims?.width && dims?.height ? dims : null;
+
+  if (!fixed) {
+    return (
+      <div ref={ref} className="w-full">
+        <iframe
+          src={src}
+          title={title}
+          style={{ height }}
+          sandbox={VIEWPORT_SANDBOX}
+          referrerPolicy="no-referrer"
+          className="w-full rounded-xl border border-input bg-background shadow-sm"
+        />
+      </div>
+    );
+  }
+
+  const scale =
+    containerW > 0 ? Math.min(1, containerW / (fixed.width as number)) : 1;
+  return (
+    <div ref={ref} className="w-full">
+      <div
+        className="mx-auto overflow-hidden rounded-xl border border-input bg-background shadow-sm"
+        style={{
+          width: (fixed.width as number) * scale,
+          height: (fixed.height as number) * scale,
+        }}
+      >
+        <iframe
+          src={src}
+          title={title}
+          width={fixed.width}
+          height={fixed.height}
+          sandbox={VIEWPORT_SANDBOX}
+          referrerPolicy="no-referrer"
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+            border: 0,
+          }}
+          className="bg-background"
+        />
+      </div>
+    </div>
+  );
+}
+
+const katexSchema = {
+  ...defaultSchema,
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "span",
+    "div",
+    "math",
+    "semantics",
+    "annotation",
+    "mrow",
+    "mi",
+    "mn",
+    "mo",
+    "ms",
+    "mtext",
+    "mspace",
+    "msqrt",
+    "mroot",
+    "mfrac",
+    "msub",
+    "msup",
+    "msubsup",
+    "munder",
+    "mover",
+    "munderover",
+    "mtable",
+    "mtr",
+    "mtd",
+  ],
+  attributes: {
+    ...defaultSchema.attributes,
+    "*": ["className", "style"],
+    span: ["aria-hidden"],
+    math: ["xmlns", "display"],
+    annotation: ["encoding"],
+  },
+};
+
+/**
+ * Render `content` as sanitized Markdown (GFM + math + code highlighting),
+ * pre-processing LaTeX delimiters and loose line breaks first. Shared by the
+ * Markdown input node and AI Markdown output.
+ *
+ * Wide GFM tables get their own horizontal scroll container so long rows
+ * never clip at the card border (code blocks already scroll via prose `pre`).
+ *
+ * @param props.content - Raw Markdown source to render.
+ */
+function MarkdownView({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+      rehypePlugins={[
+        rehypeRaw,
+        [rehypeSanitize, katexSchema],
+        rehypeKatex,
+        rehypeHighlight,
+      ]}
+      components={{
+        table: ({ node: _node, ...props }) => (
+          <div className="overflow-x-auto overscroll-x-contain">
+            <table {...props} />
+          </div>
+        ),
+      }}
+    >
+      {preprocessContent(content)}
+    </ReactMarkdown>
+  );
+}
+
+import { CodeEditor } from "@/components/ui/code-editor";
+import { EDITOR_HEIGHTS, VIEWPORT_DEVICES } from "@/constants/tool-builder";
+import { DataTable } from "@/features/PreviewPane/components/DataTable";
+import { parseCsv } from "@/lib/csv";
 import {
   changeChain,
   initialStateMap,
@@ -12,7 +232,13 @@ import {
   runChain,
   type StateMap,
 } from "@/lib/tool-builder-runtime";
-import type { StateNode, Tool } from "@/types/tool-builder";
+import { cn } from "@/lib/utils";
+import type {
+  CsvNode,
+  StateNode,
+  Tool,
+  ViewportDevice,
+} from "@/types/tool-builder";
 import { isRenderNode } from "@/types/tool-builder";
 
 /**
@@ -40,16 +266,35 @@ export function PreviewPane({
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  /** Per-markdown-node view mode (write source vs. rendered preview). */
+  const [mdMode, setMdMode] = useState<Record<string, "write" | "preview">>({});
+  /** Per-viewport-node simulated screen override (defaults to node config). */
+  const [vpDevice, setVpDevice] = useState<Record<string, ViewportDevice>>({});
+  /** Per-csv-node upload metadata (file name, parsed shape, parse error). */
+  const [csvMeta, setCsvMeta] = useState<
+    Record<
+      string,
+      {
+        fileName: string;
+        rowCount: number;
+        fields: string[];
+        error: string | null;
+      }
+    >
+  >({});
 
   // Full reset when switching tools.
   useEffect(() => {
     setRuntime(initialStateMap(stateNode));
     setInputs({});
+    setMdMode({});
+    setVpDevice({});
+    setCsvMeta({});
   }, [tool.id]);
 
   const debouncedChange = useDebouncedCallback(
     async (startingState: StateMap) => {
-      const nextState = await changeChain(tool, startingState);
+      const nextState = await changeChain(tool, startingState, stateNode);
       setRuntime(nextState);
     },
     300,
@@ -87,8 +332,83 @@ export function PreviewPane({
     }
   };
 
+  /**
+   * Run the chain over current state without writing a fresh input. When
+   * `targets` is non-empty, only those code/AI nodes run.
+   */
+  const runNow = async (targets?: string[]) => {
+    setRunError(null);
+    setRunning(true);
+    try {
+      const nextState = await runChain(
+        tool,
+        runtime,
+        stateNode,
+        (msg) => setRunError(msg),
+        targets,
+      );
+      setRuntime(nextState);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  /**
+   * Reset the chain over current state. When `targets` is non-empty, only those
+   * code nodes' `reset()` run (mirrors {@link runNow} targeting).
+   */
+  const resetNow = async (targets?: string[]) => {
+    const nextState = await resetChain(tool, { ...runtime }, targets);
+    setRuntime(nextState);
+  };
+
   const setInput = (id: string, v: string) =>
     setInputs((prev) => ({ ...prev, [id]: v }));
+
+  /**
+   * Parse an uploaded CSV file and write the optimized rows array into the
+   * node's bound state slot, then run the live `change` chain. Parse errors
+   * are surfaced inline on the node; nothing is written on failure.
+   */
+  const loadCsv = async (node: CsvNode, file: File) => {
+    const name = resolveBinding(node.binding, stateNode);
+    const text = await file.text();
+    const result = parseCsv(text, node.hasHeader);
+    setCsvMeta((prev) => ({
+      ...prev,
+      [node.id]: {
+        fileName: file.name,
+        rowCount: result.rowCount,
+        fields: result.fields,
+        error: result.error,
+      },
+    }));
+    if (result.error || !name) {
+      return;
+    }
+    const nextState = { ...runtime, [name]: result.rows };
+    setRuntime(nextState);
+    debouncedChange(nextState);
+  };
+
+  const aiMarkdownNodes = useMemo(
+    () =>
+      tool.nodes.filter(
+        (n) => n.type === "ai" && n.markdownOutput,
+      ) as import("@/types/tool-builder").AiNode[],
+    [tool.nodes],
+  );
+
+  const markdownStates = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of aiMarkdownNodes) {
+      const name = resolveBinding(n.output, stateNode);
+      if (name) {
+        set.add(name);
+      }
+    }
+    return set;
+  }, [aiMarkdownNodes, stateNode]);
 
   const renderNodes = tool.nodes.filter(isRenderNode);
 
@@ -129,9 +449,129 @@ export function PreviewPane({
                   );
                 }
 
+                if (node.type === "button") {
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      {node.fieldLabel && (
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                      )}
+                      {node.description && (
+                        <p className="-mt-1 text-xs text-muted-foreground">
+                          {node.description}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => runNow(node.targets)}
+                          disabled={running}
+                          className="inline-flex h-10 shrink-0 items-center justify-center border-2 border-foreground bg-primary px-4 text-sm font-bold text-primary-foreground shadow-nb nb-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+                        >
+                          {node.buttonText}
+                        </button>
+                        {node.resetEnabled && (
+                          <button
+                            type="button"
+                            onClick={() => resetNow(node.resetTargets)}
+                            className="inline-flex h-10 shrink-0 items-center justify-center border-2 border-foreground bg-background px-4 text-sm font-bold shadow-nb nb-press hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                          >
+                            {node.resetText}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
                 const name = resolveBinding(node.binding, stateNode);
 
+                if (node.type === "viewport") {
+                  const raw = name ? runtime[name] : "";
+                  const override = typeof raw === "string" ? raw : "";
+                  const src = normalizeViewportUrl(override || node.url);
+                  const height =
+                    node.editorHeight ?? EDITOR_HEIGHTS.defaults.viewport;
+                  const device =
+                    vpDevice[node.id] ?? node.device ?? "responsive";
+                  const dims = VIEWPORT_DEVICES.find(
+                    (d) => d.value === device && d.width,
+                  );
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        <div className="inline-flex shrink-0 rounded-lg border border-border/60 bg-muted/40 p-0.5">
+                          {VIEWPORT_DEVICES.map((d) => {
+                            const DIcon = DEVICE_ICONS[d.value];
+                            return (
+                              <button
+                                key={d.value}
+                                type="button"
+                                title={
+                                  d.width
+                                    ? `${d.label} (${d.width}×${d.height})`
+                                    : d.label
+                                }
+                                aria-label={`${d.label} screen`}
+                                onClick={() =>
+                                  setVpDevice((prev) => ({
+                                    ...prev,
+                                    [node.id]: d.value,
+                                  }))
+                                }
+                                className={cn(
+                                  "rounded-md px-2 py-1 transition-colors duration-(--motion-duration-fast)",
+                                  device === d.value
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground",
+                                )}
+                              >
+                                <DIcon size={13} />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {node.description && (
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          {node.description}
+                        </p>
+                      )}
+                      {src ? (
+                        <>
+                          <ViewportFrame
+                            src={src}
+                            title={node.fieldLabel || "Website viewport"}
+                            device={device}
+                            height={height}
+                          />
+                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                            {src}
+                            {dims && ` · ${dims.width}×${dims.height}`}
+                          </p>
+                        </>
+                      ) : (
+                        <div
+                          style={{ height }}
+                          className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/50 text-xs text-muted-foreground"
+                        >
+                          <Globe size={20} className="opacity-30" />
+                          {override || node.url
+                            ? "Invalid URL — only http(s) pages can be embedded."
+                            : "Set a URL to load a website here."}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
                 if (node.type === "textarea") {
+                  const isMarkdown = markdownStates.has(name);
+                  const currentValue = runtime[name] ?? "";
                   return (
                     <div key={node.id} className="flex flex-col gap-2">
                       <label className="text-sm font-semibold">
@@ -142,20 +582,317 @@ export function PreviewPane({
                           {node.description}
                         </p>
                       )}
-                      <textarea
-                        rows={4}
-                        placeholder={node.placeholder}
-                        value={runtime[name] ?? ""}
-                        onChange={(e) => {
-                          const nextState = {
-                            ...runtime,
-                            [name]: e.target.value,
-                          };
+                      {isMarkdown && currentValue ? (
+                        <div className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm">
+                          <MarkdownView content={currentValue} />
+                        </div>
+                      ) : (
+                        <textarea
+                          style={{
+                            height:
+                              node.editorHeight ??
+                              EDITOR_HEIGHTS.defaults.textarea,
+                          }}
+                          placeholder={node.placeholder}
+                          value={currentValue}
+                          onChange={(e) => {
+                            const nextState = {
+                              ...runtime,
+                              [name]: e.target.value,
+                            };
+                            setRuntime(nextState);
+                            debouncedChange(nextState);
+                          }}
+                          className="w-full resize-y rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                        />
+                      )}
+                    </div>
+                  );
+                }
+
+                if (node.type === "json") {
+                  const raw = runtime[name];
+                  // Non-string state (e.g. a code node wrote an object) is
+                  // surfaced pretty-printed so the user can keep editing it.
+                  const currentValue =
+                    typeof raw === "string"
+                      ? raw
+                      : raw === null || raw === undefined
+                        ? ""
+                        : JSON.stringify(raw, null, 2);
+                  let jsonError: string | null = null;
+                  if (currentValue.trim()) {
+                    try {
+                      JSON.parse(currentValue);
+                    } catch (e) {
+                      jsonError = e instanceof Error ? e.message : String(e);
+                    }
+                  }
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      <label className="text-sm font-semibold">
+                        {node.fieldLabel}
+                      </label>
+                      {node.description && (
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          {node.description}
+                        </p>
+                      )}
+                      <CodeEditor
+                        language="json"
+                        height={
+                          node.editorHeight ?? EDITOR_HEIGHTS.defaults.json
+                        }
+                        aiEnabled={false}
+                        autoFocus={false}
+                        value={currentValue}
+                        onChange={(v) => {
+                          const nextState = { ...runtime, [name]: v };
                           setRuntime(nextState);
                           debouncedChange(nextState);
                         }}
-                        className="w-full resize-y rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                       />
+                      {jsonError && (
+                        <p className="flex items-start gap-1.5 text-[11px] text-destructive">
+                          <AlertTriangle size={12} className="mt-px shrink-0" />
+                          <span className="min-w-0 wrap-break-word">
+                            Invalid JSON: {jsonError}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (node.type === "csv") {
+                  const meta = csvMeta[node.id];
+                  const data = runtime[name];
+                  const rows = Array.isArray(data) ? data : [];
+                  const fields = (meta?.fields ?? []).slice(0, 6);
+                  const sample = rows.slice(0, 5);
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      <label className="text-sm font-semibold">
+                        {node.fieldLabel}
+                      </label>
+                      {node.description && (
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          {node.description}
+                        </p>
+                      )}
+                      <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
+                        <Upload size={14} className="shrink-0" />
+                        <span className="max-w-60 truncate">
+                          {meta?.fileName ?? "Choose CSV file…"}
+                        </span>
+                        <input
+                          type="file"
+                          accept=".csv,text/csv"
+                          className="sr-only"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              loadCsv(node, file);
+                            }
+                            // Allow re-uploading the same file.
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      {meta?.error && (
+                        <p className="flex items-start gap-1.5 text-[11px] text-destructive">
+                          <AlertTriangle size={12} className="mt-px shrink-0" />
+                          <span className="min-w-0 wrap-break-word">
+                            Invalid CSV: {meta.error}
+                          </span>
+                        </p>
+                      )}
+                      {meta && !meta.error && (
+                        <p className="text-[11px] text-muted-foreground">
+                          {meta.rowCount} row{meta.rowCount === 1 ? "" : "s"} ·{" "}
+                          {meta.fields.length} column
+                          {meta.fields.length === 1 ? "" : "s"}
+                        </p>
+                      )}
+                      {sample.length > 0 && fields.length > 0 && (
+                        <div className="overflow-x-auto rounded-xl border border-input shadow-sm">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-border/60 bg-muted/40 text-left">
+                                {fields.map((f) => (
+                                  <th
+                                    key={f}
+                                    className="max-w-40 truncate px-2.5 py-1.5 font-semibold"
+                                  >
+                                    {f}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sample.map((row, ri) => (
+                                <tr
+                                  key={ri}
+                                  className="border-b border-border/40 last:border-0"
+                                >
+                                  {fields.map((f, ci) => {
+                                    const cell = node.hasHeader
+                                      ? (row as Record<string, unknown>)[f]
+                                      : (row as unknown[])[ci];
+                                    return (
+                                      <td
+                                        key={f}
+                                        className="max-w-40 truncate px-2.5 py-1.5 text-muted-foreground"
+                                      >
+                                        {cell === null || cell === undefined
+                                          ? ""
+                                          : String(cell)}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {rows.length > sample.length && (
+                            <div className="border-t border-border/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                              + {rows.length - sample.length} more row
+                              {rows.length - sample.length === 1 ? "" : "s"}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (node.type === "table") {
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      <label className="text-sm font-semibold">
+                        {node.fieldLabel}
+                      </label>
+                      {node.description && (
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          {node.description}
+                        </p>
+                      )}
+                      <DataTable
+                        value={runtime[name]}
+                        pageSize={node.pageSize}
+                      />
+                    </div>
+                  );
+                }
+
+                if (node.type === "code_input") {
+                  const raw = runtime[name];
+                  const currentValue =
+                    typeof raw === "string"
+                      ? raw
+                      : raw === null || raw === undefined
+                        ? ""
+                        : String(raw);
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      <label className="text-sm font-semibold">
+                        {node.fieldLabel}
+                      </label>
+                      {node.description && (
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          {node.description}
+                        </p>
+                      )}
+                      <CodeEditor
+                        language={node.language}
+                        height={
+                          node.editorHeight ??
+                          EDITOR_HEIGHTS.defaults.code_input
+                        }
+                        aiEnabled={false}
+                        autoFocus={false}
+                        value={currentValue}
+                        onChange={(v) => {
+                          const nextState = { ...runtime, [name]: v };
+                          setRuntime(nextState);
+                          debouncedChange(nextState);
+                        }}
+                      />
+                    </div>
+                  );
+                }
+
+                if (node.type === "markdown") {
+                  const currentValue = runtime[name] ?? "";
+                  const mode = mdMode[node.id] ?? "write";
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        <div className="inline-flex shrink-0 rounded-lg border border-border/60 bg-muted/40 p-0.5 text-xs">
+                          {(["write", "preview"] as const).map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() =>
+                                setMdMode((prev) => ({ ...prev, [node.id]: m }))
+                              }
+                              className={cn(
+                                "rounded-md px-2.5 py-1 font-medium capitalize transition-colors duration-(--motion-duration-fast)",
+                                mode === m
+                                  ? "bg-background text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {node.description && (
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          {node.description}
+                        </p>
+                      )}
+                      {mode === "preview" ? (
+                        <div
+                          style={{
+                            minHeight:
+                              node.editorHeight ??
+                              EDITOR_HEIGHTS.defaults.markdown,
+                          }}
+                          className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm"
+                        >
+                          {currentValue ? (
+                            <MarkdownView content={currentValue} />
+                          ) : (
+                            <span className="text-muted-foreground">
+                              Nothing to preview yet.
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <textarea
+                          style={{
+                            height:
+                              node.editorHeight ??
+                              EDITOR_HEIGHTS.defaults.markdown,
+                          }}
+                          placeholder={node.placeholder}
+                          value={currentValue}
+                          onChange={(e) => {
+                            const nextState = {
+                              ...runtime,
+                              [name]: e.target.value,
+                            };
+                            setRuntime(nextState);
+                            debouncedChange(nextState);
+                          }}
+                          className="w-full resize-y rounded-xl border border-input bg-transparent px-4 py-3 font-mono text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                        />
+                      )}
                     </div>
                   );
                 }
@@ -224,6 +961,24 @@ export function PreviewPane({
                         </button>
                       )}
                     </div>
+                  </div>
+                );
+              })}
+              {aiMarkdownNodes.map((node) => {
+                const name = resolveBinding(node.output, stateNode);
+                const content = name ? (runtime[name] ?? "") : "";
+                return (
+                  <div key={node.id} className="flex flex-col gap-2">
+                    <label className="text-sm font-semibold">AI Response</label>
+                    {content ? (
+                      <div className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm">
+                        <MarkdownView content={content} />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center rounded-xl border border-dashed border-border/50 py-8 text-xs text-muted-foreground">
+                        AI response will appear here after running the chain.
+                      </div>
+                    )}
                   </div>
                 );
               })}

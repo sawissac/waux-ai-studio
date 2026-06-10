@@ -33,18 +33,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ACCENT_CLASSES, NODE_META, uuid } from "@/constants/tool-builder";
+import {
+  ACCENT_CLASSES,
+  CODE_INPUT_LANGUAGES,
+  EDITOR_HEIGHTS,
+  NODE_META,
+  TABLE_PAGE_SIZES,
+  uuid,
+  VIEWPORT_DEVICES,
+} from "@/constants/tool-builder";
 import { useProviderModels } from "@/hooks/useProviderModels";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { cn } from "@/lib/utils";
 import type {
   AiNode,
+  ButtonNode,
+  CodeInputLanguage,
+  CodeInputNode,
+  CsvNode,
   EditorPlacement,
+  JsonNode,
+  MarkdownNode,
   StateEntry,
   StateNode,
+  TableNode,
+  TablePageSize,
   TextareaNode,
   TextRunNode,
   ToolNode,
+  ToolNodeType,
+  TsTypeNode,
+  ViewportDevice,
+  ViewportNode,
 } from "@/types/tool-builder";
 
 const inputCls =
@@ -142,7 +162,18 @@ function StateSelect({
 }
 
 /** Target selector shared by all input editors. */
-function BindingControl({ node }: { node: TextRunNode | TextareaNode }) {
+function BindingControl({
+  node,
+}: {
+  node:
+    | TextRunNode
+    | TextareaNode
+    | MarkdownNode
+    | JsonNode
+    | CsvNode
+    | TableNode
+    | CodeInputNode;
+}) {
   const { stateNode, updateNode } = useToolBuilder();
   const states = stateNode?.states ?? [];
   const { value } = node.binding;
@@ -173,6 +204,178 @@ function BindingControl({ node }: { node: TextRunNode | TextareaNode }) {
         Which state this node reads from / writes to.
       </p>
     </Field>
+  );
+}
+
+/**
+ * Preview-editor height control shared by the sizeable input nodes
+ * (textarea / markdown / json). Free typing while focused; clamps to the
+ * {@link EDITOR_HEIGHTS} range on blur.
+ */
+function EditorHeightField({
+  node,
+}: {
+  node: TextareaNode | MarkdownNode | JsonNode | CodeInputNode | ViewportNode;
+}) {
+  const { updateNode } = useToolBuilder();
+  const fallback = EDITOR_HEIGHTS.defaults[node.type];
+  return (
+    <Field label="Editor height (px)">
+      <input
+        type="number"
+        min={EDITOR_HEIGHTS.min}
+        max={EDITOR_HEIGHTS.max}
+        step={10}
+        value={node.editorHeight ?? fallback}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) {
+            updateNode(node.id, { editorHeight: n });
+          }
+        }}
+        onBlur={(e) => {
+          const n = Number(e.target.value);
+          const clamped = Math.min(
+            EDITOR_HEIGHTS.max,
+            Math.max(EDITOR_HEIGHTS.min, Number.isFinite(n) ? n : fallback),
+          );
+          if (clamped !== node.editorHeight) {
+            updateNode(node.id, { editorHeight: clamped });
+          }
+        }}
+        className={inputCls}
+      />
+      <p className="text-[11px] text-muted-foreground">
+        Initial field height in the preview ({EDITOR_HEIGHTS.min}–
+        {EDITOR_HEIGHTS.max}px).
+      </p>
+    </Field>
+  );
+}
+
+/**
+ * Run-target picker for a Button node. Lists the tool's code & AI nodes; the
+ * button runs only the checked ones (in chain order). None checked = run all.
+ */
+function describeRunnable(n: ToolNode): string {
+  if (n.type === "code") {
+    return n.description?.trim() || "Code";
+  }
+  if (n.type === "ai") {
+    return `AI · ${n.model || "default"}`;
+  }
+  if (n.type === "ts_type") {
+    return n.description?.trim() || "TS Type Converter";
+  }
+  return NODE_META[n.type].label;
+}
+
+/**
+ * Multi-select list of a button's targetable nodes. Generic over which
+ * `ButtonNode` array field it edits (`targets` for run, `resetTargets` for
+ * reset) and which node kinds are eligible (run targets code + AI; reset
+ * targets code only, since `reset()` lives on code nodes).
+ */
+function TargetSelector({
+  node,
+  field,
+  label,
+  kinds,
+  emptyHint,
+  verb,
+}: {
+  node: ButtonNode;
+  field: "targets" | "resetTargets";
+  label: string;
+  kinds: ToolNodeType[];
+  emptyHint: string;
+  verb: string;
+}) {
+  const { tool, updateNode } = useToolBuilder();
+  const eligible = (tool?.nodes ?? []).filter((n) => kinds.includes(n.type));
+  const current = node[field] ?? [];
+  const selected = new Set(current);
+
+  const toggle = (id: string) => {
+    const next = selected.has(id)
+      ? current.filter((t) => t !== id)
+      : [...current, id];
+    updateNode(node.id, { [field]: next });
+  };
+
+  return (
+    <Field label={label}>
+      {eligible.length === 0 ? (
+        <p className="rounded-md border border-dashed px-2.5 py-2 text-[11px] text-muted-foreground">
+          {emptyHint}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {eligible.map((n, i) => {
+            const Icon = NODE_META[n.type].icon;
+            const on = selected.has(n.id);
+            return (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => toggle(n.id)}
+                className={cn(
+                  "flex items-center gap-2 rounded-md border-2 px-2.5 py-1.5 text-left text-xs transition-colors duration-(--motion-duration-fast)",
+                  on
+                    ? "border-foreground bg-primary text-primary-foreground"
+                    : "border-transparent bg-muted/40 hover:border-foreground/30",
+                )}
+              >
+                <span
+                  className={cn(
+                    "grid size-5 shrink-0 place-items-center border-2 border-current",
+                    ACCENT_CLASSES[NODE_META[n.type].accent],
+                    on && "bg-transparent",
+                  )}
+                >
+                  <Icon size={11} />
+                </span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {describeRunnable(n)}
+                </span>
+                <span className="shrink-0 font-mono opacity-60">#{i + 1}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-[11px] text-muted-foreground">
+        {current.length === 0
+          ? `Nothing checked — ${verb} the whole chain.`
+          : `${verb[0].toUpperCase()}${verb.slice(1)}s ${current.length} selected node${current.length > 1 ? "s" : ""}, in chain order.`}
+      </p>
+    </Field>
+  );
+}
+
+function RunTargets({ node }: { node: ButtonNode }) {
+  return (
+    <TargetSelector
+      node={node}
+      field="targets"
+      label="Run targets"
+      kinds={["code", "ts_type", "ai"]}
+      emptyHint="No code, TS type, or AI nodes in this tool yet. Add some to target them."
+      verb="run"
+    />
+  );
+}
+
+function ResetTargets({ node }: { node: ButtonNode }) {
+  return (
+    <TargetSelector
+      node={node}
+      field="resetTargets"
+      label="Reset targets"
+      kinds={["code"]}
+      emptyHint="No code nodes in this tool yet. Add some to target them."
+      verb="reset"
+    />
   );
 }
 
@@ -285,7 +488,9 @@ function StateEditor({ node }: { node: StateNode }) {
       <Dialog
         open={renameTarget !== null}
         onOpenChange={(open) => {
-          if (!open) {setRenameTarget(null);}
+          if (!open) {
+            setRenameTarget(null);
+          }
         }}
       >
         <DialogContent showCloseButton={false} className="sm:max-w-sm">
@@ -407,6 +612,161 @@ function AiEditor({
           Model reply writes here.
         </p>
       </Field>
+      <ToggleRow
+        label="Markdown output"
+        description="Render reply as Markdown in the preview."
+        checked={node.markdownOutput ?? false}
+        onChange={(next) => updateNode(node.id, { markdownOutput: next })}
+      />
+    </div>
+  );
+}
+
+/** TS Type Converter editor — description, root name, input/output bindings. */
+function TsTypeEditor({ node }: { node: TsTypeNode }) {
+  const { updateNode } = useToolBuilder();
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Description">
+        <input
+          value={node.description ?? ""}
+          placeholder="What this converter is for"
+          onChange={(e) => updateNode(node.id, { description: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label="Root type name">
+        <input
+          value={node.rootName}
+          placeholder="Root"
+          onChange={(e) => updateNode(node.id, { rootName: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Name of the generated top-level interface/type.
+        </p>
+      </Field>
+      <Field label="Input state (JSON source)">
+        <StateSelect
+          value={node.input.value}
+          onChange={(v) =>
+            updateNode(node.id, { input: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          State slot holding the JSON to convert — bind a JSON input node here.
+        </p>
+      </Field>
+      <Field label="Output state (TypeScript)">
+        <StateSelect
+          value={node.output.value}
+          onChange={(v) =>
+            updateNode(node.id, { output: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Generated declarations write here. Updates live as the JSON changes;
+          invalid JSON keeps the last output (runs report the parse error).
+        </p>
+      </Field>
+    </div>
+  );
+}
+
+/** Sentinel for the "no state bound" option (Radix Select forbids `""`). */
+const VIEWPORT_UNBOUND = "__none__";
+
+/** View Port editor — label, URL, height, optional URL-override binding. */
+function ViewportEditor({ node }: { node: ViewportNode }) {
+  const { stateNode, updateNode } = useToolBuilder();
+  const states = stateNode?.states ?? [];
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Field label">
+        <input
+          value={node.fieldLabel}
+          onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label="Description">
+        <input
+          value={node.description ?? ""}
+          placeholder="Optional helper text shown below the label"
+          onChange={(e) => updateNode(node.id, { description: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label="URL">
+        <input
+          value={node.url}
+          placeholder="https://example.com"
+          onChange={(e) => updateNode(node.id, { url: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Page shown in the preview. A bare domain gets{" "}
+          <code className="font-mono">https://</code> prepended.
+        </p>
+      </Field>
+      <Field label="Default screen">
+        <Select
+          value={node.device ?? "responsive"}
+          onValueChange={(v) =>
+            updateNode(node.id, { device: v as ViewportDevice })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue placeholder="Pick screen…" />
+          </SelectTrigger>
+          <SelectContent>
+            {VIEWPORT_DEVICES.map((d) => (
+              <SelectItem key={d.value} value={d.value}>
+                {d.label}
+                {d.width ? ` (${d.width}×${d.height})` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          Screen the preview opens with — end users can still switch between
+          fill / desktop / mobile. Fixed screens render at device width and
+          scale to fit (width simulation; the site still sees a desktop
+          browser).
+        </p>
+      </Field>
+      <EditorHeightField node={node} />
+      <Field label="URL state (optional)">
+        <Select
+          value={node.binding.value || VIEWPORT_UNBOUND}
+          onValueChange={(v) =>
+            updateNode(node.id, {
+              binding: { mode: "name", value: v === VIEWPORT_UNBOUND ? "" : v },
+            })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue placeholder="— none —" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={VIEWPORT_UNBOUND}>— none —</SelectItem>
+            {states.map((s) => (
+              <SelectItem key={s.id} value={s.name}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          When the bound state holds a non-empty string it overrides the URL
+          above — bind a text input or write it from a code node.
+        </p>
+      </Field>
+      <p className="text-[11px] text-muted-foreground">
+        The page loads in a sandboxed iframe. Sites that forbid embedding
+        (X-Frame-Options / frame-ancestors) render blank — that is the remote
+        site&apos;s policy, not an error in your tool.
+      </p>
     </div>
   );
 }
@@ -450,6 +810,12 @@ function EditorBody({
               className={isPanel ? "flex-1 min-h-0" : undefined}
               value={node.code}
               onChange={(code) => updateNode(node.id, { code })}
+              aiProvider={node.aiProvider}
+              onAiProviderChange={(aiProvider) =>
+                updateNode(node.id, { aiProvider })
+              }
+              aiModel={node.aiModel}
+              onAiModelChange={(aiModel) => updateNode(node.id, { aiModel })}
             />
             <p className="text-[11px] text-muted-foreground">
               Runs top-to-bottom in the chain; reads &amp; writes state
@@ -459,6 +825,10 @@ function EditorBody({
         </div>
       );
     }
+    case "ts_type":
+      return <TsTypeEditor node={node} />;
+    case "viewport":
+      return <ViewportEditor node={node} />;
     case "canvas": {
       const isPanel = placement === "panel";
       return (
@@ -568,6 +938,62 @@ function EditorBody({
           <BindingControl node={node} />
         </div>
       );
+    case "button":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label="Label (optional)">
+            <input
+              value={node.fieldLabel}
+              placeholder="Heading shown above the button"
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Description">
+            <input
+              value={node.description ?? ""}
+              placeholder="Optional helper text shown below the label"
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Button text">
+            <input
+              value={node.buttonText}
+              onChange={(e) =>
+                updateNode(node.id, { buttonText: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <ToggleRow
+            label="Reset button"
+            description="Show a reset button beside the action button."
+            checked={node.resetEnabled}
+            onChange={(next) => updateNode(node.id, { resetEnabled: next })}
+          />
+          {node.resetEnabled && (
+            <Field label="Reset button text">
+              <input
+                value={node.resetText}
+                onChange={(e) =>
+                  updateNode(node.id, { resetText: e.target.value })
+                }
+                className={inputCls}
+              />
+            </Field>
+          )}
+          <RunTargets node={node} />
+          {node.resetEnabled && <ResetTargets node={node} />}
+          <p className="text-[11px] text-muted-foreground">
+            Runs over current state — no input field.
+          </p>
+        </div>
+      );
     case "textarea":
       return (
         <div className="flex flex-col gap-4">
@@ -599,7 +1025,221 @@ function EditorBody({
               className={inputCls}
             />
           </Field>
+          <EditorHeightField node={node} />
           <BindingControl node={node} />
+        </div>
+      );
+    case "markdown":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label="Field label">
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Description">
+            <input
+              value={node.description ?? ""}
+              placeholder="Optional helper text shown below the label"
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Placeholder">
+            <input
+              value={node.placeholder}
+              onChange={(e) =>
+                updateNode(node.id, { placeholder: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <EditorHeightField node={node} />
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">
+            End users write Markdown and can toggle a live rendered preview.
+          </p>
+        </div>
+      );
+    case "json":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label="Field label">
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Description">
+            <input
+              value={node.description ?? ""}
+              placeholder="Optional helper text shown below the label"
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <EditorHeightField node={node} />
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">
+            End users paste or edit JSON in a code editor; valid JSON
+            auto-formats. The raw source string lands in the bound state — use
+            <code className="font-mono"> JSON.parse(state.get(…))</code> in code
+            nodes.
+          </p>
+        </div>
+      );
+    case "csv":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label="Field label">
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Description">
+            <input
+              value={node.description ?? ""}
+              placeholder="Optional helper text shown below the label"
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <ToggleRow
+            label="Header row"
+            description="First row is column names — rows become objects keyed by header."
+            checked={node.hasHeader}
+            onChange={(next) => updateNode(node.id, { hasHeader: next })}
+          />
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">
+            End users upload a .csv file. The parsed rows land in the bound
+            state as an array (typed values, empty rows/columns dropped) —
+            iterate <code className="font-mono">state.get(…)</code> directly in
+            code nodes.
+          </p>
+        </div>
+      );
+    case "table":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label="Field label">
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Description">
+            <input
+              value={node.description ?? ""}
+              placeholder="Optional helper text shown below the label"
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Rows per page">
+            <Select
+              value={String(node.pageSize)}
+              onValueChange={(v) =>
+                updateNode(node.id, { pageSize: Number(v) as TablePageSize })
+              }
+            >
+              <SelectTrigger className="h-8 w-full">
+                <SelectValue placeholder="Pick page size…" />
+              </SelectTrigger>
+              <SelectContent>
+                {TABLE_PAGE_SIZES.map((s) => (
+                  <SelectItem key={s} value={String(s)}>
+                    {s} rows
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Default page size in the preview — end users can switch between{" "}
+              {TABLE_PAGE_SIZES.join(" / ")}.
+            </p>
+          </Field>
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">
+            Displays the bound state as a table — bind an array (e.g. CSV rows,
+            a JSON array, or a code-node result). Data is auto-optimized for
+            display; every column sorts (text, numbers, and auto-detected dates)
+            and resizes by dragging the header edge.
+          </p>
+        </div>
+      );
+    case "code_input":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label="Field label">
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Description">
+            <input
+              value={node.description ?? ""}
+              placeholder="Optional helper text shown below the label"
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Language">
+            <Select
+              value={node.language}
+              onValueChange={(v) =>
+                updateNode(node.id, { language: v as CodeInputLanguage })
+              }
+            >
+              <SelectTrigger className="h-8 w-full">
+                <SelectValue placeholder="Pick language…" />
+              </SelectTrigger>
+              <SelectContent>
+                {CODE_INPUT_LANGUAGES.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Drives syntax highlighting in the preview editor.
+            </p>
+          </Field>
+          <EditorHeightField node={node} />
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">
+            End users write or paste code in a Monaco editor. The raw source
+            string lands in the bound state — it is never executed.
+          </p>
         </div>
       );
   }

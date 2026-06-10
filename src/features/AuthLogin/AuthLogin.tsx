@@ -4,6 +4,7 @@ import { Boxes, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
 
 import { signIn, signUp } from "./actions";
@@ -69,9 +70,7 @@ export function AuthLogin() {
         {/* Wordmark */}
         <div className="space-y-1 text-center">
           <div className="flex items-center justify-center gap-2">
-            <span className="grid size-8 place-items-center rounded-lg bg-foreground text-sm font-bold text-background">
-              T
-            </span>
+            <Logo size={32} />
             <span className="font-display text-lg font-semibold">
               Tool Builder
             </span>

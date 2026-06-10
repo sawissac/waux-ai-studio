@@ -3,6 +3,7 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { Loader2, Send, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDebouncedCallback } from "use-debounce";
 
 import { ModelCombobox } from "@/components/ui/model-combobox";
 import {
@@ -18,12 +19,13 @@ import {
   callOpenRouter,
   type ChatMessage,
 } from "@/lib/ai-providers";
+import type { AiProvider, CodeInputLanguage } from "@/types/tool-builder";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type CodeEditorLanguage = "javascript" | "typescript" | "html";
+export type CodeEditorLanguage = CodeInputLanguage;
 
 export interface CodeEditorProps {
   /** Current source value. */
@@ -38,6 +40,18 @@ export interface CodeEditorProps {
   readOnly?: boolean;
   /** Optional container class name. */
   className?: string;
+  /** Show the Ask AI header button + panel (default true). */
+  aiEnabled?: boolean;
+  /** Focus the editor on mount (default true). */
+  autoFocus?: boolean;
+  /** Controlled AI provider for the Ask AI panel. */
+  aiProvider?: AiProvider;
+  /** Called when the user changes the AI provider. */
+  onAiProviderChange?: (provider: AiProvider) => void;
+  /** Controlled AI model for the Ask AI panel. */
+  aiModel?: string;
+  /** Called when the user changes the AI model. */
+  onAiModelChange?: (model: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -474,8 +488,6 @@ function registerSnippets(
  *
  * Loaded dynamically (no SSR) via `@monaco-editor/react`.
  */
-type AiProvider = "gemini" | "openrouter";
-
 const DEFAULT_MODELS: Record<AiProvider, string> = {
   gemini: "gemini-2.5-flash",
   openrouter: "openrouter/auto",
@@ -498,14 +510,22 @@ export function CodeEditor({
   height = 280,
   readOnly = false,
   className,
+  aiEnabled = true,
+  autoFocus = true,
+  aiProvider,
+  onAiProviderChange,
+  aiModel,
+  onAiModelChange,
 }: CodeEditorProps) {
   const registered = useRef<Set<string>>(new Set());
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
 
   const [chatOpen, setChatOpen] = useState(false);
-  const [provider, setProvider] = useState<AiProvider>("gemini");
-  const [model, setModel] = useState<string>(DEFAULT_MODELS.gemini);
+  const [provider, setProvider] = useState<AiProvider>(aiProvider ?? "gemini");
+  const [model, setModel] = useState<string>(
+    aiModel ?? DEFAULT_MODELS[aiProvider ?? "gemini"],
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -514,15 +534,46 @@ export function CodeEditor({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const providerModels = useProviderModels(provider);
 
-  useEffect(() => {
-    setModel(DEFAULT_MODELS[provider]);
-  }, [provider]);
+  const handleProviderChange = (v: AiProvider) => {
+    setProvider(v);
+    onAiProviderChange?.(v);
+    const next = DEFAULT_MODELS[v];
+    setModel(next);
+    onAiModelChange?.(next);
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, sending]);
+
+  /**
+   * Auto-format JSON shortly after the user stops typing — only when the
+   * document parses, so half-typed JSON is never touched. Runs Monaco's
+   * format action (keeps the cursor in place); the resulting model change
+   * flows back through `onChange`.
+   */
+  const debouncedJsonFormat = useDebouncedCallback(() => {
+    const editor = editorRef.current;
+    if (language !== "json" || readOnly || !editor) {
+      return;
+    }
+    try {
+      JSON.parse(editor.getValue());
+    } catch {
+      return; // invalid JSON — leave the user's draft alone
+    }
+    void editor.getAction("editor.action.formatDocument")?.run();
+  }, 600);
+
+  // Format on set as well as on edit: external `value` writes (e.g. a code/AI
+  // node writing into the bound state) update the prop without firing Monaco's
+  // onChange, so watch the prop itself. The format action's own model change
+  // re-enters here once and settles (already-formatted text parses + matches).
+  useEffect(() => {
+    debouncedJsonFormat();
+  }, [value, debouncedJsonFormat]);
 
   /** Insert text at the current cursor in the editor. */
   const insertAtCursor = useCallback(
@@ -535,7 +586,9 @@ export function CodeEditor({
       }
       const selection = editor.getSelection();
       const pos = selection ?? editor.getPosition();
-      if (!pos) {return;}
+      if (!pos) {
+        return;
+      }
       const range = new monaco.Range(
         "startLineNumber" in pos ? pos.startLineNumber : pos.lineNumber,
         "startColumn" in pos ? pos.startColumn : pos.column,
@@ -555,14 +608,18 @@ export function CodeEditor({
     (text: string) => {
       onChange(text);
       const editor = editorRef.current;
-      if (editor) {editor.focus();}
+      if (editor) {
+        editor.focus();
+      }
     },
     [onChange],
   );
 
   const sendChat = useCallback(async () => {
     const prompt = input.trim();
-    if (!prompt || sending) {return;}
+    if (!prompt || sending) {
+      return;
+    }
     setErr(null);
     const nextMessages: ChatMessage[] = [
       ...messages,
@@ -611,69 +668,80 @@ export function CodeEditor({
     selectedText,
   ]);
 
-  const handleMount: OnMount = useCallback((editor, monaco) => {
-    editorRef.current = editor;
-    monacoRef.current = monaco;
+  const handleMount: OnMount = useCallback(
+    (editor, monaco) => {
+      editorRef.current = editor;
+      monacoRef.current = monaco;
 
-    // Track the current selection so the AI panel can scope answers to it.
-    editor.onDidChangeCursorSelection(() => {
-      const sel = editor.getSelection();
-      const text = sel ? (editor.getModel()?.getValueInRange(sel) ?? "") : "";
-      setSelectedText(text);
-    });
+      // Track the current selection so the AI panel can scope answers to it.
+      editor.onDidChangeCursorSelection(() => {
+        const sel = editor.getSelection();
+        const text = sel ? (editor.getModel()?.getValueInRange(sel) ?? "") : "";
+        setSelectedText(text);
+      });
 
-    // Register JS snippets for both JS and TS (TS inherits JS)
-    if (!registered.current.has("javascript")) {
-      registerSnippets(monaco, "javascript", JS_SNIPPETS);
-      registered.current.add("javascript");
-    }
-    if (!registered.current.has("typescript")) {
-      registerSnippets(monaco, "typescript", [
-        ...JS_SNIPPETS,
-        ...TS_ONLY_SNIPPETS,
-      ]);
-      registered.current.add("typescript");
-    }
-    if (!registered.current.has("html")) {
-      // HTML gets JS snippets for inline <script> convenience
-      registerSnippets(monaco, "html", JS_SNIPPETS);
-      registered.current.add("html");
-    }
+      // Register JS snippets for both JS and TS (TS inherits JS)
+      if (!registered.current.has("javascript")) {
+        registerSnippets(monaco, "javascript", JS_SNIPPETS);
+        registered.current.add("javascript");
+      }
+      if (!registered.current.has("typescript")) {
+        registerSnippets(monaco, "typescript", [
+          ...JS_SNIPPETS,
+          ...TS_ONLY_SNIPPETS,
+        ]);
+        registered.current.add("typescript");
+      }
+      if (!registered.current.has("html")) {
+        // HTML gets JS snippets for inline <script> convenience
+        registerSnippets(monaco, "html", JS_SNIPPETS);
+        registered.current.add("html");
+      }
 
-    // Configure JS/TS compiler defaults
-    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
-      noSyntaxValidation: false,
-    });
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
-      noSyntaxValidation: false,
-    });
-    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ESNext,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
-      allowJs: true,
-      checkJs: false,
-      strict: false,
-      noEmit: true,
-      esModuleInterop: true,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      allowNonTsExtensions: true,
-    });
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ESNext,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
-      strict: true,
-      noEmit: true,
-      esModuleInterop: true,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      allowNonTsExtensions: true,
-      jsx: monaco.languages.typescript.JsxEmit.React,
-    });
+      // Configure JS/TS compiler defaults
+      monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: false,
+        noSyntaxValidation: false,
+      });
+      monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: false,
+        noSyntaxValidation: false,
+      });
+      monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+        target: monaco.languages.typescript.ScriptTarget.ESNext,
+        module: monaco.languages.typescript.ModuleKind.ESNext,
+        allowJs: true,
+        checkJs: false,
+        strict: false,
+        noEmit: true,
+        esModuleInterop: true,
+        moduleResolution:
+          monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+        allowNonTsExtensions: true,
+      });
+      monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+        target: monaco.languages.typescript.ScriptTarget.ESNext,
+        module: monaco.languages.typescript.ModuleKind.ESNext,
+        strict: true,
+        noEmit: true,
+        esModuleInterop: true,
+        moduleResolution:
+          monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+        allowNonTsExtensions: true,
+        jsx: monaco.languages.typescript.JsxEmit.React,
+      });
 
-    // Focus & set cursor at end
-    editor.focus();
-  }, []);
+      // Focus & set cursor at end
+      if (autoFocus) {
+        editor.focus();
+      }
+
+      // Pretty-print an already-valid document on open (e.g. pasted minified JSON
+      // persisted earlier).
+      debouncedJsonFormat();
+    },
+    [autoFocus, debouncedJsonFormat],
+  );
 
   return (
     <div
@@ -686,22 +754,27 @@ export function CodeEditor({
         <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
           {language}
         </span>
-        <button
-          type="button"
-          onClick={() => setChatOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-accent active:scale-[0.98]"
-          aria-pressed={chatOpen}
-        >
-          <Sparkles size={12} className="text-pink-500" />
-          {chatOpen ? "Close AI" : "Ask AI"}
-        </button>
+        {aiEnabled && (
+          <button
+            type="button"
+            onClick={() => setChatOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-accent active:scale-[0.98]"
+            aria-pressed={chatOpen}
+          >
+            <Sparkles size={12} className="text-pink-500" />
+            {chatOpen ? "Close AI" : "Ask AI"}
+          </button>
+        )}
       </div>
       <div className="relative flex-1">
         <Editor
           height={height}
           language={language}
           value={value}
-          onChange={(v) => onChange(v ?? "")}
+          onChange={(v) => {
+            onChange(v ?? "");
+            debouncedJsonFormat();
+          }}
           onMount={handleMount}
           theme="vs-dark"
           loading={
@@ -765,7 +838,7 @@ export function CodeEditor({
               <span className="text-xs font-semibold">AI assistant</span>
               <Select
                 value={provider}
-                onValueChange={(v) => setProvider(v as AiProvider)}
+                onValueChange={(v) => handleProviderChange(v as AiProvider)}
               >
                 <SelectTrigger
                   size="sm"
@@ -790,7 +863,10 @@ export function CodeEditor({
             <div className="border-b px-2.5 py-1.5">
               <ModelCombobox
                 value={model}
-                onChange={setModel}
+                onChange={(v) => {
+                  setModel(v);
+                  onAiModelChange?.(v);
+                }}
                 options={providerModels}
                 placeholder={DEFAULT_MODELS[provider]}
                 size="sm"

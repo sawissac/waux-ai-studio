@@ -4,12 +4,14 @@
  * code-node chain over a plain `{ [stateName]: string }` map.
  */
 import { aiHelpers, callGemini, callOpenRouter } from "@/lib/ai-providers";
+import { jsonToTs } from "@/lib/json-to-ts";
 import type {
   AiNode,
   StateBinding,
   StateNode,
   Tool,
   ToolNode,
+  TsTypeNode,
 } from "@/types/tool-builder";
 
 /** A flat snapshot of the shared state store keyed by state name. */
@@ -47,6 +49,32 @@ export function initialStateMap(stateNode: StateNode | null): StateMap {
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
+/**
+ * Build the `state` shim handed to code-node `run` / `change` / `reset`
+ * functions. Reads & writes go straight to `next`; `copyToClipboard` copies a
+ * string to the user's clipboard (browser-only, best-effort) and resolves
+ * `true` on success.
+ */
+function makeStateShim(next: StateMap) {
+  return {
+    get: (k: string) => next[k],
+    set: (k: string, v: any) => {
+      next[k] = v;
+    },
+    copyToClipboard: async (text: string): Promise<boolean> => {
+      try {
+        if (typeof navigator !== "undefined" && navigator.clipboard) {
+          await navigator.clipboard.writeText(String(text ?? ""));
+          return true;
+        }
+      } catch {
+        // Clipboard API unavailable or write rejected (e.g. no user gesture).
+      }
+      return false;
+    },
+  };
+}
+
 /** Replace `{{name}}` tokens in `template` with values from `state`. */
 function interpolate(template: string, state: StateMap): string {
   return template.replace(/\{\{\s*([\w$]+)\s*\}\}/g, (_, key) => {
@@ -83,16 +111,50 @@ async function runAiNode(
 }
 
 /**
+ * Run a single TS Type Converter node against `state`: read the JSON source
+ * from its input binding, generate TypeScript declarations, and write them to
+ * its output binding. Throws on invalid JSON (caller decides how to surface).
+ */
+function runTsTypeNode(
+  node: TsTypeNode,
+  state: StateMap,
+  stateNode: StateNode | null,
+): void {
+  const inName = resolveBinding(node.input, stateNode);
+  const outName = resolveBinding(node.output, stateNode);
+  if (!inName || !outName) {
+    return;
+  }
+  const raw = state[inName];
+  // Code nodes may have stored a parsed object — re-serialize it.
+  const source =
+    typeof raw === "string"
+      ? raw
+      : raw === null || raw === undefined
+        ? ""
+        : JSON.stringify(raw);
+  if (!source.trim()) {
+    state[outName] = "";
+    return;
+  }
+  state[outName] = jsonToTs(source, node.rootName || "Root");
+}
+
+/**
  * Run every code & AI node in `tool` top-to-bottom against a copy of `current`.
  *
- * Code bodies define `async function run(state, ai) { ... }` — `ai` exposes
- * `gemini` / `openrouter` helpers. AI nodes interpolate `{{stateName}}` tokens
+ * Code bodies define `async function run(state, ai) { ... }` — `state` exposes
+ * `get` / `set` / `copyToClipboard`, `ai` exposes `gemini` / `openrouter`
+ * helpers. AI nodes interpolate `{{stateName}}` tokens
  * in their prompt and write the model reply into their output binding. Author
  * errors are swallowed so a bad node can't crash the preview.
  *
  * @param tool - The tool whose nodes should execute.
  * @param current - The pre-run state map.
  * @param stateNode - The tool's state node (for AI output binding resolution).
+ * @param onError - Surface author/runtime errors without crashing the preview.
+ * @param targetIds - When non-empty, run only these code/AI node ids (still in
+ *   chain order); empty/omitted runs every code & AI node.
  * @returns A new state map reflecting all writes.
  */
 export async function runChain(
@@ -100,16 +162,17 @@ export async function runChain(
   current: StateMap,
   stateNode: StateNode | null = null,
   onError?: (message: string) => void,
+  targetIds?: string[],
 ): Promise<StateMap> {
   const next: StateMap = { ...current };
-  const shim = {
-    get: (k: string) => next[k],
-    set: (k: string, v: any) => {
-      next[k] = v;
-    },
-  };
+  const shim = makeStateShim(next);
+
+  const only = targetIds && targetIds.length > 0 ? new Set(targetIds) : null;
 
   for (const node of tool.nodes) {
+    if (only && !only.has(node.id)) {
+      continue;
+    }
     if (node.type === "code") {
       try {
         const fn = new AsyncFunction(
@@ -139,6 +202,15 @@ export async function runChain(
         );
         onError?.(msg);
       }
+    } else if (node.type === "ts_type") {
+      try {
+        runTsTypeNode(node, next, stateNode);
+      } catch (err) {
+        // Invalid JSON in the bound input — surface, keep the preview alive.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[ToolBuilder] ts_type node "${node.id}" failed:`, msg);
+        onError?.(msg);
+      }
     }
   }
   return next;
@@ -150,22 +222,25 @@ export async function runChain(
  *
  * @param tool - The tool whose code nodes should execute.
  * @param current - The pre-reset state map.
+ * @param targetIds - When non-empty, reset only these code node ids (still in
+ *   chain order); empty/omitted resets every code node.
  * @returns A new state map reflecting all `state.set(...)` writes during reset.
  */
 export async function resetChain(
   tool: Tool,
   current: StateMap,
+  targetIds?: string[],
 ): Promise<StateMap> {
   const next: StateMap = { ...current };
-  const shim = {
-    get: (k: string) => next[k],
-    set: (k: string, v: any) => {
-      next[k] = v;
-    },
-  };
+  const shim = makeStateShim(next);
+
+  const only = targetIds && targetIds.length > 0 ? new Set(targetIds) : null;
 
   for (const node of tool.nodes) {
     if (node.type !== "code") {
+      continue;
+    }
+    if (only && !only.has(node.id)) {
       continue;
     }
     try {
@@ -189,23 +264,32 @@ export async function resetChain(
  * Run every code node in `tool` top-to-bottom against a copy of `current`,
  * looking for an `async function change(state) { ... }` definition.
  *
+ * TS Type Converter nodes also re-run here so their output tracks the bound
+ * JSON input live (invalid/partial JSON is skipped silently).
+ *
  * @param tool - The tool whose code nodes should execute.
  * @param current - The pre-change state map.
+ * @param stateNode - The tool's state node (for ts_type binding resolution).
  * @returns A new state map reflecting all `state.set(...)` writes during change.
  */
 export async function changeChain(
   tool: Tool,
   current: StateMap,
+  stateNode: StateNode | null = null,
 ): Promise<StateMap> {
   const next: StateMap = { ...current };
-  const shim = {
-    get: (k: string) => next[k],
-    set: (k: string, v: any) => {
-      next[k] = v;
-    },
-  };
+  const shim = makeStateShim(next);
 
   for (const node of tool.nodes) {
+    if (node.type === "ts_type") {
+      // Live conversion while typing — silently skip until the JSON parses.
+      try {
+        runTsTypeNode(node, next, stateNode);
+      } catch {
+        // Partially-typed JSON; keep the previous output.
+      }
+      continue;
+    }
     if (node.type !== "code") {
       continue;
     }
@@ -217,9 +301,9 @@ export async function changeChain(
       );
       await fn(shim, aiHelpers);
     } catch (err) {
-      console.error(
+      console.warn(
         `[ToolBuilder] code node "${node.id}" change() failed:`,
-        err instanceof Error ? (err.stack ?? err.message) : err,
+        err instanceof Error ? err.message : err,
       );
     }
   }
@@ -238,14 +322,38 @@ export function nodeSubtitle(
       return { label: "Available State", value: node.states.length };
     case "text_run":
     case "textarea":
+    case "markdown":
+    case "json":
+    case "csv":
+    case "table":
+    case "code_input":
       return {
         label: "Using State",
         value: resolveBinding(node.binding, stateNode),
       };
+    case "button":
+      return {
+        label: "Action",
+        value: node.resetEnabled
+          ? `${node.buttonText} / ${node.resetText}`
+          : node.buttonText,
+      };
     case "canvas":
       return { label: "ID", value: node.elementId };
+    case "viewport": {
+      const bound = resolveBinding(node.binding, stateNode);
+      return {
+        label: "URL",
+        value: node.url.trim() || (bound ? `{{${bound}}}` : "—"),
+      };
+    }
     case "code":
       return node.description ? { label: node.description } : null;
+    case "ts_type":
+      return {
+        label: "JSON → TS",
+        value: `${resolveBinding(node.input, stateNode) || "?"} → ${resolveBinding(node.output, stateNode) || "?"}`,
+      };
     case "ai":
       return {
         label: node.provider === "openrouter" ? "OpenRouter" : "Gemini",

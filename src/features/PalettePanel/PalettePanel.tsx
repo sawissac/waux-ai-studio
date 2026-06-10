@@ -19,50 +19,52 @@ export function PalettePanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-        <span className="text-sm font-semibold">Select Inputs</span>
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b-2 border-foreground px-4">
+        <span className="text-sm font-bold">Select Inputs</span>
       </div>
-      <div className="flex-1 overflow-auto p-3">
+      <div className="flex-1 overflow-auto p-3 @container">
         <div className="flex flex-col gap-4">
           {PALETTE_GROUPS.map(({ group, types }) => (
             <div key={group} className="flex flex-col gap-1.5">
               <div className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
                 {group}
               </div>
-              {types.map((type) => {
-                const meta = NODE_META[type];
-                const Icon = meta.icon;
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => addNode(type)}
-                    className="group flex items-start gap-3 rounded-xl border bg-card p-2.5 text-left transition-[border-color,background-color,transform] duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-standard)] hover:border-foreground/20 hover:bg-accent/40 active:scale-[0.99]"
-                  >
-                    <span
-                      className={cn(
-                        "grid size-8 shrink-0 place-items-center rounded-lg",
-                        ACCENT_CLASSES[meta.accent],
-                      )}
+              <div className="grid grid-cols-1 gap-1.5 @xl:grid-cols-2 @4xl:grid-cols-3">
+                {types.map((type) => {
+                  const meta = NODE_META[type];
+                  const Icon = meta.icon;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => addNode(type)}
+                      className="nb-press group flex items-start gap-3 border-2 border-foreground bg-card p-2.5 text-left shadow-nb-sm"
                     >
-                      <Icon size={16} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold">
-                        {meta.label}
+                      <span
+                        className={cn(
+                          "grid size-8 shrink-0 place-items-center border-2 border-foreground",
+                          ACCENT_CLASSES[meta.accent],
+                        )}
+                      >
+                        <Icon size={16} />
                       </span>
-                      {meta.blurb && (
-                        <span className="block text-[11px] leading-snug text-muted-foreground">
-                          {meta.blurb}
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold">
+                          {meta.label}
                         </span>
-                      )}
-                    </span>
-                    <span className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] group-hover:bg-foreground group-hover:text-background">
-                      <Plus size={15} />
-                    </span>
-                  </button>
-                );
-              })}
+                        {meta.blurb && (
+                          <span className="block text-[11px] leading-snug text-muted-foreground">
+                            {meta.blurb}
+                          </span>
+                        )}
+                      </span>
+                      <span className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] group-hover:bg-foreground group-hover:text-background">
+                        <Plus size={15} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>

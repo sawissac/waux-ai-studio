@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- Add the `viewport` node type.
+--
+-- `viewport` — embedded website viewport. Shows the page at the configured
+--              URL inside a sandboxed iframe in the preview; an optional
+--              state binding overrides the URL at runtime so text inputs or
+--              code nodes can drive which page is shown. Only http(s) URLs
+--              are embedded (normalized client-side).
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'viewport';

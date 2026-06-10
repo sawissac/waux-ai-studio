@@ -42,10 +42,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AiKeysButton } from "@/features/AiKeysButton";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/stores/hooks";
 import type { Tool } from "@/types/tool-builder";
 
 function SortableToolItem({
@@ -107,9 +109,11 @@ function SortableToolItem({
         }
       }}
       className={cn(
-        "group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 transition-colors duration-[var(--motion-duration-fast)]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 relative",
-        selected ? "bg-accent" : "hover:bg-accent/50",
+        "group relative flex cursor-pointer items-center gap-2 border-2 px-2.5 py-2 transition-colors duration-(--motion-duration-fast)",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        selected
+          ? "border-foreground bg-primary text-primary-foreground shadow-nb-sm"
+          : "border-transparent hover:border-foreground hover:bg-accent",
       )}
       {...attributes}
       {...listeners}
@@ -137,7 +141,7 @@ function SortableToolItem({
               setRenamingId(null);
             }
           }}
-          className="flex-1 rounded-sm border bg-background px-1.5 py-0.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="flex-1 border-2 border-foreground bg-background px-1.5 py-0.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         />
       ) : (
         <span className="flex-1 truncate text-sm font-medium">{t.name}</span>
@@ -197,6 +201,8 @@ export function ToolsPanel() {
     deleteTool,
     reorderTools,
   } = useToolBuilder();
+
+  const loadState = useAppSelector((s) => s.toolBuilder.loadState);
 
   /** Id of the tool currently being renamed inline, or null. */
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -270,22 +276,22 @@ export function ToolsPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-        <span className="text-sm font-semibold">Tools</span>
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b-2 border-foreground px-4">
+        <span className="text-sm font-bold">Tools</span>
         <div className="ml-auto flex items-center gap-2">
           <AiKeysButton />
           <button
             type="button"
             aria-label="New tool"
             onClick={addTool}
-            className="grid size-8 place-items-center rounded-md border transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-95"
+            className="nb-press grid size-8 place-items-center border-2 border-foreground bg-card shadow-nb-sm"
           >
             <Plus size={15} />
           </button>
         </div>
       </div>
 
-      <div className="border-b px-3 py-2.5">
+      <div className="border-b-2 border-foreground px-3 py-2.5">
         <div className="relative">
           <Search
             size={14}
@@ -295,13 +301,28 @@ export function ToolsPanel() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tools…"
-            className="h-8 w-full rounded-md border bg-background pl-8 pr-2.5 text-sm outline-none transition-[box-shadow,border-color] duration-[var(--motion-duration-fast)] focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="h-8 w-full border-2 border-foreground bg-background pl-8 pr-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-2">
-        {filteredTools.length === 0 ? (
+        {loadState === "loading" && tools.length === 0 ? (
+          <div className="flex flex-col gap-1">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2 border-2 border-transparent px-2.5 py-2"
+              >
+                <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/30" />
+                <Skeleton
+                  className="h-3 border-0"
+                  style={{ width: `${55 + ((i * 13) % 35)}%` }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : filteredTools.length === 0 ? (
           <div className="px-2 py-6 text-center text-xs text-muted-foreground">
             No tools match “{search}”.
           </div>
@@ -340,11 +361,11 @@ export function ToolsPanel() {
         )}
       </div>
 
-      <div className="border-t p-3">
+      <div className="border-t-2 border-foreground p-3">
         <button
           type="button"
           onClick={addTool}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-[0.99]"
+          className="nb-press inline-flex w-full items-center justify-center gap-1.5 border-2 border-foreground bg-primary px-3 py-2 text-sm font-bold text-primary-foreground shadow-nb"
         >
           <Plus size={14} /> New tool
         </button>

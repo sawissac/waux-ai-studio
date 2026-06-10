@@ -68,8 +68,8 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-        <span className="text-sm font-semibold">Builder</span>
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b-2 border-foreground px-4">
+        <span className="text-sm font-bold">Builder</span>
         <span className="truncate font-mono text-xs text-muted-foreground">
           {tool.name}
         </span>
@@ -97,11 +97,11 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
       <div className="flex-1 overflow-auto p-4 sm:p-6">
         <div className="mx-auto max-w-2xl">
           {empty ? (
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-14 text-center">
-              <span className="grid size-11 place-items-center rounded-full bg-muted text-muted-foreground">
+            <div className="flex flex-col items-center gap-2 border-2 border-dashed border-foreground py-14 text-center">
+              <span className="grid size-11 place-items-center border-2 border-foreground bg-primary text-primary-foreground shadow-nb-sm">
                 <FlaskConical size={22} />
               </span>
-              <div className="text-sm font-semibold">This tool is empty</div>
+              <div className="text-sm font-bold">This tool is empty</div>
               <div className="max-w-xs text-xs text-muted-foreground">
                 Add nodes from the <b>Select Inputs</b> panel. Start with a
                 State Control.
@@ -123,7 +123,7 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
                     <div key={node.id} className="flex flex-col">
                       {i > 0 && (
                         <span
-                          className="mx-auto h-5 w-0 border-l border-dashed border-border"
+                          className="mx-auto h-5 w-0 border-l-2 border-foreground"
                           aria-hidden
                         />
                       )}
@@ -146,7 +146,7 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
               <button
                 type="button"
                 onClick={clearNodeSelection}
-                className="inline-flex h-14 items-center justify-center gap-1.5 rounded-xl border border-dashed text-sm font-medium text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:border-foreground/30 hover:text-foreground active:scale-[0.99]"
+                className="inline-flex h-14 items-center justify-center gap-1.5 border-2 border-dashed border-foreground text-sm font-bold text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground"
               >
                 <Plus size={15} /> Add input
               </button>
