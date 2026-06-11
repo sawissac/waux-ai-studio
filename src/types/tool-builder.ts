@@ -28,6 +28,9 @@ export type ToolNodeType =
   | "table"
   | "code_input"
   | "viewport"
+  | "convert_html"
+  | "themed"
+  | "html_sanitize"
   | "code"
   | "ts_type"
   | "canvas"
@@ -246,6 +249,93 @@ export interface ViewportNode extends BaseNode {
    * Omitted = `responsive` (nodes saved before the field existed).
    */
   device?: ViewportDevice;
+  /**
+   * Render the live preview frame? Off by default — the iframe (and its
+   * network load) is skipped until the author flips the switch, so adding the
+   * node doesn't immediately fetch a page. Omitted/false = off.
+   */
+  previewEnabled?: boolean;
+}
+
+/**
+ * Convert to HTML. Copies the static layout of a View Port node's page —
+ * HTML with linked CSS inlined, scripts stripped — through the server-side
+ * site proxy and writes the document into the bound state slot, so code
+ * nodes, AI nodes, or a Themed node can consume it. Shows the snapshot in a
+ * script-free sandboxed frame with a copy-to-clipboard button.
+ */
+export interface ConvertHtmlNode extends BaseNode {
+  type: "convert_html";
+  fieldLabel: string;
+  description: string;
+  /** Id of the View Port node whose page is snapshotted. "" = first viewport. */
+  source: string;
+  /** State slot the static HTML (CSS inlined) is written into. */
+  binding: StateBinding;
+  /** Frame height in px (preview, `responsive` screen only). Omitted = type default. */
+  editorHeight?: number;
+  /**
+   * Default simulated screen for the snapshot frame — end users can switch
+   * in the preview. Same semantics as {@link ViewportNode.device}.
+   */
+  device?: ViewportDevice;
+  /**
+   * Render the live preview frame? Off by default — the server-side snapshot
+   * (and its network load) is skipped until the author flips the switch.
+   * Omitted/false = off. Same semantics as {@link ViewportNode.previewEnabled}.
+   */
+  previewEnabled?: boolean;
+}
+
+/**
+ * Themed website output. Reads static page HTML (CSS inlined) from the bound
+ * state slot — typically a Convert to HTML node's output — and renders it in a
+ * sandboxed frame where clicking any element recolors that element and every
+ * identical element (same tag + classes) live. Does not connect to a View Port.
+ */
+export interface ThemedNode extends BaseNode {
+  type: "themed";
+  fieldLabel: string;
+  description: string;
+  /** State slot holding the static HTML document to recolor. */
+  binding: StateBinding;
+  /** Frame height in px (preview, `responsive` screen only). Omitted = type default. */
+  editorHeight?: number;
+  /**
+   * Default simulated screen for the recolored frame — end users can switch
+   * in the preview. Same semantics as {@link ViewportNode.device}.
+   */
+  device?: ViewportDevice;
+  /**
+   * Render the live preview frame? Off by default — the recolor iframe is
+   * skipped until the author flips the switch. Omitted/false = off. Same
+   * semantics as {@link ViewportNode.previewEnabled}.
+   */
+  previewEnabled?: boolean;
+}
+
+/**
+ * Sanitize HTML held in a state slot with `sanitize-html`. Reads the raw HTML
+ * from `input`, strips dangerous content (scripts, event handlers, unsafe
+ * URL schemes), and writes the cleaned markup to `output`. Runs in the chain
+ * like a transform node and also re-sanitizes live as the input changes.
+ *
+ * The two toggles widen the allowlist for common page content:
+ * `allowStyles` keeps `<style>` blocks, inline `style=""`, and `class`
+ * attributes (so the result still themes correctly); `allowImages` keeps
+ * `<img>`/`<picture>` and their `src` (including `data:` image URIs).
+ */
+export interface HtmlSanitizeNode extends BaseNode {
+  type: "html_sanitize";
+  description: string;
+  /** State slot holding the raw HTML to clean. */
+  input: StateBinding;
+  /** State slot the sanitized HTML is written into. */
+  output: StateBinding;
+  /** Keep `<style>` blocks, inline styles, and `class`/`id` attributes. */
+  allowStyles: boolean;
+  /** Keep `<img>`/`<picture>` tags and their `src` (incl. `data:` URIs). */
+  allowImages: boolean;
 }
 
 /** Custom logic block. Body defines `function run(state) { ... }`. */
@@ -315,6 +405,9 @@ export type ToolNode =
   | TableNode
   | CodeInputNode
   | ViewportNode
+  | ConvertHtmlNode
+  | ThemedNode
+  | HtmlSanitizeNode
   | CodeNode
   | TsTypeNode
   | CanvasNode
@@ -341,6 +434,8 @@ export type RenderNode =
   | TableNode
   | CodeInputNode
   | ViewportNode
+  | ConvertHtmlNode
+  | ThemedNode
   | CanvasNode;
 
 /** Node kinds that produce visible output in the preview. */
@@ -355,6 +450,8 @@ export const RENDER_NODE_TYPES: ReadonlySet<ToolNodeType> =
     "table",
     "code_input",
     "viewport",
+    "convert_html",
+    "themed",
     "canvas",
   ]);
 

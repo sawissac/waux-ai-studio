@@ -3,14 +3,12 @@
 import {
   AlertTriangle,
   Eye,
+  EyeOff,
   Globe,
   Loader2,
-  Maximize,
-  Monitor,
-  Smartphone,
   Upload,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
@@ -57,96 +55,6 @@ function normalizeViewportUrl(raw: string): string {
   } catch {
     return "";
   }
-}
-
-const VIEWPORT_SANDBOX =
-  "allow-scripts allow-same-origin allow-forms allow-popups";
-
-/** Toggle icon per simulated screen. */
-const DEVICE_ICONS: Record<ViewportDevice, typeof Monitor> = {
-  responsive: Maximize,
-  desktop: Monitor,
-  mobile: Smartphone,
-};
-
-/**
- * Sandboxed iframe for the View Port node. `responsive` fills the pane width
- * at `height`; fixed screens render the page at the device's width/height and
- * scale the whole frame down (never up) to fit the pane, so the embedded site
- * lays out exactly as it would on that screen width.
- */
-function ViewportFrame({
-  src,
-  title,
-  device,
-  height,
-}: {
-  src: string;
-  title: string;
-  device: ViewportDevice;
-  height: number;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [containerW, setContainerW] = useState(0);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) {
-      return;
-    }
-    const ro = new ResizeObserver((entries) => {
-      setContainerW(entries[0]?.contentRect.width ?? 0);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const dims = VIEWPORT_DEVICES.find((d) => d.value === device);
-  const fixed = dims?.width && dims?.height ? dims : null;
-
-  if (!fixed) {
-    return (
-      <div ref={ref} className="w-full">
-        <iframe
-          src={src}
-          title={title}
-          style={{ height }}
-          sandbox={VIEWPORT_SANDBOX}
-          referrerPolicy="no-referrer"
-          className="w-full rounded-xl border border-input bg-background shadow-sm"
-        />
-      </div>
-    );
-  }
-
-  const scale =
-    containerW > 0 ? Math.min(1, containerW / (fixed.width as number)) : 1;
-  return (
-    <div ref={ref} className="w-full">
-      <div
-        className="mx-auto overflow-hidden rounded-xl border border-input bg-background shadow-sm"
-        style={{
-          width: (fixed.width as number) * scale,
-          height: (fixed.height as number) * scale,
-        }}
-      >
-        <iframe
-          src={src}
-          title={title}
-          width={fixed.width}
-          height={fixed.height}
-          sandbox={VIEWPORT_SANDBOX}
-          referrerPolicy="no-referrer"
-          style={{
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-            border: 0,
-          }}
-          className="bg-background"
-        />
-      </div>
-    </div>
-  );
 }
 
 const katexSchema = {
@@ -222,7 +130,14 @@ function MarkdownView({ content }: { content: string }) {
 
 import { CodeEditor } from "@/components/ui/code-editor";
 import { EDITOR_HEIGHTS, VIEWPORT_DEVICES } from "@/constants/tool-builder";
+import { ConvertHtmlSite } from "@/features/PreviewPane/components/ConvertHtmlSite";
 import { DataTable } from "@/features/PreviewPane/components/DataTable";
+import {
+  DeviceFrame,
+  DeviceToggle,
+} from "@/features/PreviewPane/components/DeviceFrame";
+import { ThemedSite } from "@/features/PreviewPane/components/ThemedSite";
+import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { parseCsv } from "@/lib/csv";
 import {
   changeChain,
@@ -238,8 +153,58 @@ import type {
   StateNode,
   Tool,
   ViewportDevice,
+  ViewportNode,
 } from "@/types/tool-builder";
 import { isRenderNode } from "@/types/tool-builder";
+
+/**
+ * Seed the preview's shared simulated screen from the first website node's
+ * configured default screen. All website frames then switch together.
+ */
+function firstWebsiteDevice(tool: Tool): ViewportDevice {
+  for (const n of tool.nodes) {
+    if (
+      n.type === "viewport" ||
+      n.type === "convert_html" ||
+      n.type === "themed"
+    ) {
+      return n.device ?? "responsive";
+    }
+  }
+  return "responsive";
+}
+
+/**
+ * Placeholder shown for a website node whose live preview is switched off.
+ * Skips loading the iframe/network until the author enables it.
+ *
+ * @param props.height - Matches the node's frame height so the layout is stable.
+ * @param props.onEnable - Flip the node's `previewEnabled` flag on.
+ */
+function PreviewOffNotice({
+  height,
+  onEnable,
+}: {
+  height: number;
+  onEnable: () => void;
+}) {
+  return (
+    <div
+      style={{ height }}
+      className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/50 text-center text-xs text-muted-foreground"
+    >
+      <EyeOff size={20} className="opacity-30" />
+      <span>Live preview off</span>
+      <button
+        type="button"
+        onClick={onEnable}
+        className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-[11px] font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        <Eye size={12} /> Enable preview
+      </button>
+    </div>
+  );
+}
 
 /**
  * Live preview — what the end user of the tool sees, fully interactive.
@@ -260,6 +225,7 @@ export function PreviewPane({
   tool: Tool;
   stateNode: StateNode | null;
 }) {
+  const { updateNode } = useToolBuilder();
   const [runtime, setRuntime] = useState<StateMap>(() =>
     initialStateMap(stateNode),
   );
@@ -268,8 +234,10 @@ export function PreviewPane({
   const [runError, setRunError] = useState<string | null>(null);
   /** Per-markdown-node view mode (write source vs. rendered preview). */
   const [mdMode, setMdMode] = useState<Record<string, "write" | "preview">>({});
-  /** Per-viewport-node simulated screen override (defaults to node config). */
-  const [vpDevice, setVpDevice] = useState<Record<string, ViewportDevice>>({});
+  /** Shared simulated screen — every website frame switches together. */
+  const [previewDevice, setPreviewDevice] = useState<ViewportDevice>(() =>
+    firstWebsiteDevice(tool),
+  );
   /** Per-csv-node upload metadata (file name, parsed shape, parse error). */
   const [csvMeta, setCsvMeta] = useState<
     Record<
@@ -288,7 +256,7 @@ export function PreviewPane({
     setRuntime(initialStateMap(stateNode));
     setInputs({});
     setMdMode({});
-    setVpDevice({});
+    setPreviewDevice(firstWebsiteDevice(tool));
     setCsvMeta({});
   }, [tool.id]);
 
@@ -485,6 +453,113 @@ export function PreviewPane({
                   );
                 }
 
+                if (node.type === "convert_html") {
+                  const sourceVp = (
+                    node.source
+                      ? tool.nodes.find(
+                          (n) => n.id === node.source && n.type === "viewport",
+                        )
+                      : tool.nodes.find((n) => n.type === "viewport")
+                  ) as ViewportNode | undefined;
+                  let sourceUrl = "";
+                  if (sourceVp) {
+                    const vpName = resolveBinding(sourceVp.binding, stateNode);
+                    const vpRaw = vpName ? runtime[vpName] : "";
+                    const vpOverride = typeof vpRaw === "string" ? vpRaw : "";
+                    sourceUrl = normalizeViewportUrl(
+                      vpOverride || sourceVp.url,
+                    );
+                  }
+                  const outName = resolveBinding(node.binding, stateNode);
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      {node.fieldLabel && (
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                      )}
+                      {node.description && (
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          {node.description}
+                        </p>
+                      )}
+                      {node.previewEnabled ? (
+                        <ConvertHtmlSite
+                          url={sourceUrl}
+                          height={
+                            node.editorHeight ??
+                            EDITOR_HEIGHTS.defaults.convert_html
+                          }
+                          hasSource={!!sourceVp}
+                          device={previewDevice}
+                          onDeviceChange={setPreviewDevice}
+                          outputName={outName}
+                          onHtml={(html) => {
+                            if (!outName) {
+                              return;
+                            }
+                            setRuntime((prev) => {
+                              const nextState = { ...prev, [outName]: html };
+                              debouncedChange(nextState);
+                              return nextState;
+                            });
+                          }}
+                        />
+                      ) : (
+                        <PreviewOffNotice
+                          height={
+                            node.editorHeight ??
+                            EDITOR_HEIGHTS.defaults.convert_html
+                          }
+                          onEnable={() =>
+                            updateNode(node.id, { previewEnabled: true })
+                          }
+                        />
+                      )}
+                    </div>
+                  );
+                }
+
+                if (node.type === "themed") {
+                  const htmlName = resolveBinding(node.binding, stateNode);
+                  const htmlRaw = htmlName ? runtime[htmlName] : "";
+                  const html = typeof htmlRaw === "string" ? htmlRaw : "";
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      {node.fieldLabel && (
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                      )}
+                      {node.description && (
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          {node.description}
+                        </p>
+                      )}
+                      {node.previewEnabled ? (
+                        <ThemedSite
+                          html={html}
+                          height={
+                            node.editorHeight ?? EDITOR_HEIGHTS.defaults.themed
+                          }
+                          hasBinding={!!htmlName}
+                          device={previewDevice}
+                          onDeviceChange={setPreviewDevice}
+                        />
+                      ) : (
+                        <PreviewOffNotice
+                          height={
+                            node.editorHeight ?? EDITOR_HEIGHTS.defaults.themed
+                          }
+                          onEnable={() =>
+                            updateNode(node.id, { previewEnabled: true })
+                          }
+                        />
+                      )}
+                    </div>
+                  );
+                }
+
                 const name = resolveBinding(node.binding, stateNode);
 
                 if (node.type === "viewport") {
@@ -493,8 +568,7 @@ export function PreviewPane({
                   const src = normalizeViewportUrl(override || node.url);
                   const height =
                     node.editorHeight ?? EDITOR_HEIGHTS.defaults.viewport;
-                  const device =
-                    vpDevice[node.id] ?? node.device ?? "responsive";
+                  const device = previewDevice;
                   const dims = VIEWPORT_DEVICES.find(
                     (d) => d.value === device && d.width,
                   );
@@ -504,46 +578,28 @@ export function PreviewPane({
                         <label className="text-sm font-semibold">
                           {node.fieldLabel}
                         </label>
-                        <div className="inline-flex shrink-0 rounded-lg border border-border/60 bg-muted/40 p-0.5">
-                          {VIEWPORT_DEVICES.map((d) => {
-                            const DIcon = DEVICE_ICONS[d.value];
-                            return (
-                              <button
-                                key={d.value}
-                                type="button"
-                                title={
-                                  d.width
-                                    ? `${d.label} (${d.width}×${d.height})`
-                                    : d.label
-                                }
-                                aria-label={`${d.label} screen`}
-                                onClick={() =>
-                                  setVpDevice((prev) => ({
-                                    ...prev,
-                                    [node.id]: d.value,
-                                  }))
-                                }
-                                className={cn(
-                                  "rounded-md px-2 py-1 transition-colors duration-(--motion-duration-fast)",
-                                  device === d.value
-                                    ? "bg-background text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground",
-                                )}
-                              >
-                                <DIcon size={13} />
-                              </button>
-                            );
-                          })}
-                        </div>
+                        {node.previewEnabled && (
+                          <DeviceToggle
+                            value={device}
+                            onChange={setPreviewDevice}
+                          />
+                        )}
                       </div>
                       {node.description && (
                         <p className="text-xs text-muted-foreground -mt-1">
                           {node.description}
                         </p>
                       )}
-                      {src ? (
+                      {!node.previewEnabled ? (
+                        <PreviewOffNotice
+                          height={height}
+                          onEnable={() =>
+                            updateNode(node.id, { previewEnabled: true })
+                          }
+                        />
+                      ) : src ? (
                         <>
-                          <ViewportFrame
+                          <DeviceFrame
                             src={src}
                             title={node.fieldLabel || "Website viewport"}
                             device={device}

@@ -10,6 +10,7 @@ import {
   AlignLeft,
   Braces,
   ChevronsLeftRight,
+  CodeXml,
   Columns3,
   Database,
   FileCode2,
@@ -20,6 +21,8 @@ import {
   Globe,
   type LucideIcon,
   MousePointerClick,
+  Palette,
+  ShieldCheck,
   Sparkles,
   Table,
 } from "lucide-react";
@@ -164,6 +167,36 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     icon: Globe,
     slug: "@viewport",
   },
+  convert_html: {
+    type: "convert_html",
+    label: "Convert to HTML",
+    blurb:
+      "Copy a View Port page's static layout — HTML with its CSS inlined — into a state slot.",
+    accent: "cyan",
+    group: "Website Site",
+    icon: CodeXml,
+    slug: "@convert_html",
+  },
+  themed: {
+    type: "themed",
+    label: "Themed",
+    blurb:
+      "Read static page HTML from state and click any element to recolor it — every identical element updates too.",
+    accent: "cyan",
+    group: "Website Site",
+    icon: Palette,
+    slug: "@themed",
+  },
+  html_sanitize: {
+    type: "html_sanitize",
+    label: "HTML Sanitize",
+    blurb:
+      "Clean HTML from a state slot with sanitize-html — strips scripts & unsafe markup; output writes to bound state.",
+    accent: "cyan",
+    group: "Website Site",
+    icon: ShieldCheck,
+    slug: "@html_sanitize",
+  },
   code: {
     type: "code",
     label: "Code",
@@ -223,7 +256,10 @@ export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
     },
     { group: "Logic", types: ["code", "ts_type", "ai"] },
     { group: "Output", types: ["canvas"] },
-    { group: "Website Site", types: ["viewport"] },
+    {
+      group: "Website Site",
+      types: ["viewport", "convert_html", "html_sanitize", "themed"],
+    },
   ];
 
 /**
@@ -240,6 +276,8 @@ export const EDITOR_HEIGHTS = {
     json: 220,
     code_input: 220,
     viewport: 480,
+    convert_html: 480,
+    themed: 480,
   },
 } as const;
 
@@ -411,6 +449,40 @@ export function createNode(type: ToolNodeType): ToolNode {
         binding: { mode: "name", value: "" },
         editorHeight: EDITOR_HEIGHTS.defaults.viewport,
         device: "responsive",
+        previewEnabled: false,
+      };
+    case "convert_html":
+      return {
+        id,
+        type,
+        fieldLabel: "Convert to HTML",
+        description: "",
+        source: "",
+        binding: { mode: "name", value: "" },
+        editorHeight: EDITOR_HEIGHTS.defaults.convert_html,
+        device: "responsive",
+        previewEnabled: false,
+      };
+    case "themed":
+      return {
+        id,
+        type,
+        fieldLabel: "Themed website",
+        description: "",
+        binding: { mode: "name", value: "" },
+        editorHeight: EDITOR_HEIGHTS.defaults.themed,
+        device: "responsive",
+        previewEnabled: false,
+      };
+    case "html_sanitize":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "" },
+        output: { mode: "name", value: "" },
+        allowStyles: true,
+        allowImages: true,
       };
     case "code":
       return { id, type, description: "", code: DEFAULT_CODE };

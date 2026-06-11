@@ -1,0 +1,16 @@
+-- ---------------------------------------------------------------------------
+-- Add the `html_sanitize` node type.
+--
+-- `html_sanitize` — HTML Sanitize. Reads raw HTML from a bound state slot,
+--                   cleans it with sanitize-html (scripts, event handlers,
+--                   unsafe URL schemes, and embedding tags stripped; optional
+--                   allowlists for styles and images), and writes the cleaned
+--                   markup into another state slot. Runs in the chain like a
+--                   transform node and re-sanitizes live as the input changes.
+--                   Lives in the Website category between Convert to HTML and
+--                   Themed.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'html_sanitize';

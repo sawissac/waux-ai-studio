@@ -4,9 +4,11 @@
  * code-node chain over a plain `{ [stateName]: string }` map.
  */
 import { aiHelpers, callGemini, callOpenRouter } from "@/lib/ai-providers";
+import { sanitizeHtmlDoc } from "@/lib/html-sanitize";
 import { jsonToTs } from "@/lib/json-to-ts";
 import type {
   AiNode,
+  HtmlSanitizeNode,
   StateBinding,
   StateNode,
   Tool,
@@ -141,6 +143,26 @@ function runTsTypeNode(
 }
 
 /**
+ * Run a single HTML Sanitize node against `state`: read raw HTML from its
+ * input binding, sanitize it, and write the cleaned markup to its output
+ * binding. Non-string input is coerced; empty input clears the output.
+ */
+function runHtmlSanitizeNode(
+  node: HtmlSanitizeNode,
+  state: StateMap,
+  stateNode: StateNode | null,
+): void {
+  const inName = resolveBinding(node.input, stateNode);
+  const outName = resolveBinding(node.output, stateNode);
+  if (!inName || !outName) {
+    return;
+  }
+  const raw = state[inName];
+  const source = typeof raw === "string" ? raw : raw == null ? "" : String(raw);
+  state[outName] = sanitizeHtmlDoc(source, node.allowStyles, node.allowImages);
+}
+
+/**
  * Run every code & AI node in `tool` top-to-bottom against a copy of `current`.
  *
  * Code bodies define `async function run(state, ai) { ... }` — `state` exposes
@@ -209,6 +231,17 @@ export async function runChain(
         // Invalid JSON in the bound input — surface, keep the preview alive.
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[ToolBuilder] ts_type node "${node.id}" failed:`, msg);
+        onError?.(msg);
+      }
+    } else if (node.type === "html_sanitize") {
+      try {
+        runHtmlSanitizeNode(node, next, stateNode);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[ToolBuilder] html_sanitize node "${node.id}" failed:`,
+          msg,
+        );
         onError?.(msg);
       }
     }
@@ -290,6 +323,15 @@ export async function changeChain(
       }
       continue;
     }
+    if (node.type === "html_sanitize") {
+      // Live re-sanitize as the bound HTML changes.
+      try {
+        runHtmlSanitizeNode(node, next, stateNode);
+      } catch {
+        // Keep the previous output on an unexpected sanitizer error.
+      }
+      continue;
+    }
     if (node.type !== "code") {
       continue;
     }
@@ -347,11 +389,26 @@ export function nodeSubtitle(
         value: node.url.trim() || (bound ? `{{${bound}}}` : "—"),
       };
     }
+    case "convert_html":
+      return {
+        label: "HTML →",
+        value: resolveBinding(node.binding, stateNode) || "—",
+      };
+    case "themed":
+      return {
+        label: "Recolors",
+        value: resolveBinding(node.binding, stateNode) || "—",
+      };
     case "code":
       return node.description ? { label: node.description } : null;
     case "ts_type":
       return {
         label: "JSON → TS",
+        value: `${resolveBinding(node.input, stateNode) || "?"} → ${resolveBinding(node.output, stateNode) || "?"}`,
+      };
+    case "html_sanitize":
+      return {
+        label: "Sanitize",
         value: `${resolveBinding(node.input, stateNode) || "?"} → ${resolveBinding(node.output, stateNode) || "?"}`,
       };
     case "ai":

@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- Add the `themed` node type.
+--
+-- `themed` — themed website output. Reads static page HTML (CSS inlined)
+--            from a bound state slot — typically a Convert to HTML node's
+--            output — lists the colors found in its stylesheets, and lets
+--            end users remap them; the recolored page renders in a
+--            script-free sandboxed frame.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'themed';

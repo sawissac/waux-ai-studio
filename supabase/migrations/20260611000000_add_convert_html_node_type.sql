@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- Add the `convert_html` node type.
+--
+-- `convert_html` — Convert to HTML. Copies the static layout of a View Port
+--                  page through the server-side site proxy (HTML with linked
+--                  CSS inlined, scripts stripped) and writes the document
+--                  into a bound state slot. The Themed node now reads that
+--                  state instead of connecting to a View Port directly.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'convert_html';

@@ -50,8 +50,10 @@ import type {
   ButtonNode,
   CodeInputLanguage,
   CodeInputNode,
+  ConvertHtmlNode,
   CsvNode,
   EditorPlacement,
+  HtmlSanitizeNode,
   JsonNode,
   MarkdownNode,
   StateEntry,
@@ -60,6 +62,7 @@ import type {
   TablePageSize,
   TextareaNode,
   TextRunNode,
+  ThemedNode,
   ToolNode,
   ToolNodeType,
   TsTypeNode,
@@ -215,7 +218,14 @@ function BindingControl({
 function EditorHeightField({
   node,
 }: {
-  node: TextareaNode | MarkdownNode | JsonNode | CodeInputNode | ViewportNode;
+  node:
+    | TextareaNode
+    | MarkdownNode
+    | JsonNode
+    | CodeInputNode
+    | ViewportNode
+    | ConvertHtmlNode
+    | ThemedNode;
 }) {
   const { updateNode } = useToolBuilder();
   const fallback = EDITOR_HEIGHTS.defaults[node.type];
@@ -673,8 +683,131 @@ function TsTypeEditor({ node }: { node: TsTypeNode }) {
   );
 }
 
+/**
+ * Live-preview on/off switch shared by the website nodes. Off by default — the
+ * frame (and its network load) is skipped until the author turns it on.
+ */
+function PreviewToggleField({
+  node,
+}: {
+  node: ViewportNode | ConvertHtmlNode | ThemedNode;
+}) {
+  const { updateNode } = useToolBuilder();
+  return (
+    <ToggleRow
+      label="Live preview"
+      description="Render the frame in the preview. Off by default — saves loading the page until you turn it on."
+      checked={node.previewEnabled ?? false}
+      onChange={(next) => updateNode(node.id, { previewEnabled: next })}
+    />
+  );
+}
+
+/** HTML Sanitize editor — description, input/output bindings, allowlist toggles. */
+function HtmlSanitizeEditor({ node }: { node: HtmlSanitizeNode }) {
+  const { tool, updateNode } = useToolBuilder();
+  // The allowlist toggles are tool-wide: applying them to every HTML Sanitize
+  // node keeps all sanitizers in a tool consistent.
+  const syncAllSanitizers = (changes: Partial<HtmlSanitizeNode>) => {
+    for (const n of tool?.nodes ?? []) {
+      if (n.type === "html_sanitize") {
+        updateNode(n.id, changes);
+      }
+    }
+  };
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Description">
+        <input
+          value={node.description ?? ""}
+          placeholder="What this sanitizer is for"
+          onChange={(e) => updateNode(node.id, { description: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label="Input state (HTML)">
+        <StateSelect
+          value={node.input.value}
+          onChange={(v) =>
+            updateNode(node.id, { input: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          State slot holding the raw HTML — bind a Convert to HTML node&apos;s
+          output here.
+        </p>
+      </Field>
+      <Field label="Output state (clean HTML)">
+        <StateSelect
+          value={node.output.value}
+          onChange={(v) =>
+            updateNode(node.id, { output: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Sanitized HTML writes here. Updates live as the input changes — bind a
+          Themed node to recolor the cleaned page.
+        </p>
+      </Field>
+      <ToggleRow
+        label="Keep styles"
+        description="Preserve <style> blocks, inline style, and class/id (keeps theming intact). Synced across all HTML Sanitize nodes."
+        checked={node.allowStyles}
+        onChange={(next) => syncAllSanitizers({ allowStyles: next })}
+      />
+      <ToggleRow
+        label="Keep images"
+        description="Preserve <img>/<picture> and their src, including data: image URIs. Synced across all HTML Sanitize nodes."
+        checked={node.allowImages}
+        onChange={(next) => syncAllSanitizers({ allowImages: next })}
+      />
+      <p className="text-[11px] text-muted-foreground">
+        Always strips scripts, event handlers, unsafe URL schemes, and embedding
+        tags (iframe / object / embed). Runs in the chain and live as the input
+        changes.
+      </p>
+    </div>
+  );
+}
+
 /** Sentinel for the "no state bound" option (Radix Select forbids `""`). */
 const VIEWPORT_UNBOUND = "__none__";
+
+/** Default simulated-screen select shared by the website nodes. */
+function DeviceSelectField({
+  node,
+}: {
+  node: ViewportNode | ConvertHtmlNode | ThemedNode;
+}) {
+  const { updateNode } = useToolBuilder();
+  return (
+    <Field label="Default screen">
+      <Select
+        value={node.device ?? "responsive"}
+        onValueChange={(v) =>
+          updateNode(node.id, { device: v as ViewportDevice })
+        }
+      >
+        <SelectTrigger className="h-8 w-full">
+          <SelectValue placeholder="Pick screen…" />
+        </SelectTrigger>
+        <SelectContent>
+          {VIEWPORT_DEVICES.map((d) => (
+            <SelectItem key={d.value} value={d.value}>
+              {d.label}
+              {d.width ? ` (${d.width}×${d.height})` : ""}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-[11px] text-muted-foreground">
+        Screen the preview opens with — end users can still switch between fill
+        / desktop / mobile. Fixed screens render at device width and scale to
+        fit (width simulation; the site still sees a desktop browser).
+      </p>
+    </Field>
+  );
+}
 
 /** View Port editor — label, URL, height, optional URL-override binding. */
 function ViewportEditor({ node }: { node: ViewportNode }) {
@@ -709,32 +842,8 @@ function ViewportEditor({ node }: { node: ViewportNode }) {
           <code className="font-mono">https://</code> prepended.
         </p>
       </Field>
-      <Field label="Default screen">
-        <Select
-          value={node.device ?? "responsive"}
-          onValueChange={(v) =>
-            updateNode(node.id, { device: v as ViewportDevice })
-          }
-        >
-          <SelectTrigger className="h-8 w-full">
-            <SelectValue placeholder="Pick screen…" />
-          </SelectTrigger>
-          <SelectContent>
-            {VIEWPORT_DEVICES.map((d) => (
-              <SelectItem key={d.value} value={d.value}>
-                {d.label}
-                {d.width ? ` (${d.width}×${d.height})` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-[11px] text-muted-foreground">
-          Screen the preview opens with — end users can still switch between
-          fill / desktop / mobile. Fixed screens render at device width and
-          scale to fit (width simulation; the site still sees a desktop
-          browser).
-        </p>
-      </Field>
+      <PreviewToggleField node={node} />
+      <DeviceSelectField node={node} />
       <EditorHeightField node={node} />
       <Field label="URL state (optional)">
         <Select
@@ -766,6 +875,123 @@ function ViewportEditor({ node }: { node: ViewportNode }) {
         The page loads in a sandboxed iframe. Sites that forbid embedding
         (X-Frame-Options / frame-ancestors) render blank — that is the remote
         site&apos;s policy, not an error in your tool.
+      </p>
+    </div>
+  );
+}
+
+/** Sentinel for "snapshot the first View Port" (Radix Select forbids `""`). */
+const SOURCE_AUTO = "__auto__";
+
+/** Convert to HTML editor — label, source View Port, output state, height. */
+function ConvertHtmlEditor({ node }: { node: ConvertHtmlNode }) {
+  const { tool, updateNode } = useToolBuilder();
+  const viewports = (tool?.nodes ?? []).filter((n) => n.type === "viewport");
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Field label">
+        <input
+          value={node.fieldLabel}
+          onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label="Description">
+        <input
+          value={node.description ?? ""}
+          placeholder="Optional helper text shown below the label"
+          onChange={(e) => updateNode(node.id, { description: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label="Source View Port">
+        <Select
+          value={node.source || SOURCE_AUTO}
+          onValueChange={(v) =>
+            updateNode(node.id, { source: v === SOURCE_AUTO ? "" : v })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue placeholder="Pick View Port…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={SOURCE_AUTO}>Auto — first View Port</SelectItem>
+            {viewports.map((v, i) => (
+              <SelectItem key={v.id} value={v.id}>
+                #{i + 1} {v.fieldLabel || "View Port"}
+                {v.url ? ` · ${v.url}` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          {viewports.length === 0
+            ? "No View Port nodes yet — add one; this node copies its page."
+            : "Whose page gets copied. Tracks the View Port's URL, including state-driven overrides."}
+        </p>
+      </Field>
+      <Field label="Output state (HTML)">
+        <StateSelect
+          value={node.binding.value}
+          onChange={(v) =>
+            updateNode(node.id, { binding: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          The page&apos;s static HTML (CSS inlined) writes here — bind a Themed
+          node or read it from code nodes.
+        </p>
+      </Field>
+      <PreviewToggleField node={node} />
+      <DeviceSelectField node={node} />
+      <EditorHeightField node={node} />
+      <p className="text-[11px] text-muted-foreground">
+        Copies the page&apos;s static layout server-side — HTML with its linked
+        CSS inlined, scripts removed — shows the snapshot, and offers a
+        copy-to-clipboard button in the preview.
+      </p>
+    </div>
+  );
+}
+
+/** Themed editor — label, HTML state binding, frame height. */
+function ThemedEditor({ node }: { node: ThemedNode }) {
+  const { updateNode } = useToolBuilder();
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Field label">
+        <input
+          value={node.fieldLabel}
+          onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label="Description">
+        <input
+          value={node.description ?? ""}
+          placeholder="Optional helper text shown below the label"
+          onChange={(e) => updateNode(node.id, { description: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label="HTML state">
+        <StateSelect
+          value={node.binding.value}
+          onChange={(v) =>
+            updateNode(node.id, { binding: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          State slot holding the static page HTML to recolor — bind a Convert to
+          HTML node&apos;s output here. No View Port connection.
+        </p>
+      </Field>
+      <PreviewToggleField node={node} />
+      <DeviceSelectField node={node} />
+      <EditorHeightField node={node} />
+      <p className="text-[11px] text-muted-foreground">
+        Click any element in the preview to recolor it — every identical element
+        (same tag &amp; classes) updates too. Scripts removed.
       </p>
     </div>
   );
@@ -827,8 +1053,14 @@ function EditorBody({
     }
     case "ts_type":
       return <TsTypeEditor node={node} />;
+    case "html_sanitize":
+      return <HtmlSanitizeEditor node={node} />;
     case "viewport":
       return <ViewportEditor node={node} />;
+    case "convert_html":
+      return <ConvertHtmlEditor node={node} />;
+    case "themed":
+      return <ThemedEditor node={node} />;
     case "canvas": {
       const isPanel = placement === "panel";
       return (

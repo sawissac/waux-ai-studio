@@ -44,8 +44,19 @@ export async function proxy(request: NextRequest) {
       pathname,
     );
   const isSharedApi = pathname.startsWith("/api/shared/");
+  // Themed-node fetcher + its font relay; shared tool views call them
+  // anonymously. The routes do their own target validation (http(s) only,
+  // private hosts rejected).
+  const isSiteProxy =
+    pathname === "/api/site-proxy" || pathname.startsWith("/api/site-proxy/");
 
-  if (!user && pathname !== "/login" && !isSharePage && !isSharedApi) {
+  if (
+    !user &&
+    pathname !== "/login" &&
+    !isSharePage &&
+    !isSharedApi &&
+    !isSiteProxy
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
