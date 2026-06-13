@@ -1,6 +1,14 @@
 "use client";
 
-import { Boxes, Check, CloudUpload, Loader2, LogOut } from "lucide-react";
+import {
+  BookText,
+  Boxes,
+  Check,
+  CloudUpload,
+  Loader2,
+  LogOut,
+} from "lucide-react";
+import Link from "next/link";
 import { useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -86,6 +94,16 @@ export function Topbar({
               : isError
                 ? t("topbar.error")
                 : t("topbar.save")}
+        </Button>
+
+        <Button asChild variant="outline" size="icon-sm" className="size-7">
+          <Link
+            href="/docs/nodes"
+            aria-label={t("docs.link")}
+            title={t("docs.link")}
+          >
+            <BookText className="size-4" />
+          </Link>
         </Button>
 
         <SettingsButton />

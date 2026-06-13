@@ -1,0 +1,30 @@
+import { NodeDocs } from "@/features/NodeDocs";
+
+export const metadata = {
+  title: "Nodes",
+  description:
+    "Reference for every node type in Toolkit Studio — inputs, logic, data, and website nodes you chain into a tool.",
+};
+
+# Nodes
+
+A **tool** is an ordered chain of nodes that runs top-to-bottom. Every node
+shares one flat key/value store defined by the single **State** node: input
+nodes read and write it, logic nodes transform it, and website/output nodes
+surface it in the live preview.
+
+Each node is identified by a mono `@slug` (shown in its editor header) and lives
+under one palette group. Drag a node from the **Node** panel into the builder,
+or click it to append. The catalogue below is generated from the same data the
+in-app palette uses, so it always matches what you see in the builder.
+
+## Reading state
+
+Logic nodes bind to a state slot **by name** (e.g. `state1`) or **by index**.
+Text templates and AI prompts interpolate state with `{{name}}` tokens. The
+`@code` node receives a `state` object with `state.get(name)` / `state.set(name,
+value)`.
+
+## Catalogue
+
+<NodeDocs />

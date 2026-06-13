@@ -90,6 +90,22 @@ const en = {
   "palette.group.Logic": "Logic",
   "palette.group.Website Site": "Website Site",
 
+  // Docs
+  "docs.title": "Docs",
+  "docs.backToStudio": "Back to Studio",
+  "docs.link": "Docs",
+  "docs.cardHint": "Click a node for full details",
+  "docs.detail.summary": "Overview",
+  "docs.detail.whenToUse": "When to use",
+  "docs.detail.config": "Configuration",
+  "docs.detail.io": "State in / out",
+  "docs.detail.reads": "Reads",
+  "docs.detail.writes": "Writes",
+  "docs.detail.none": "—",
+  "docs.detail.tips": "Tips",
+  "docs.detail.example": "Example",
+  "docs.detail.close": "Close",
+
   // Node card + editor chrome
   "node.delete": "Delete node",
   "node.back": "Back to palette",
@@ -720,6 +736,22 @@ const my: Record<MessageKey, string> = {
   "palette.group.Inputs": "ထည့်သွင်းမှုများ",
   "palette.group.Logic": "ယုတ္တိ",
   "palette.group.Website Site": "ဝဘ်ဆိုက်",
+
+  // Docs
+  "docs.title": "စာရွက်စာတမ်း",
+  "docs.backToStudio": "Studio သို့ ပြန်",
+  "docs.link": "စာရွက်စာတမ်း",
+  "docs.cardHint": "အသေးစိတ်အတွက် node ကို နှိပ်ပါ",
+  "docs.detail.summary": "ခြုံငုံသုံးသပ်ချက်",
+  "docs.detail.whenToUse": "အသုံးပြုသင့်သည့်အချိန်",
+  "docs.detail.config": "ပြင်ဆင်သတ်မှတ်ချက်",
+  "docs.detail.io": "State ဝင်/ထွက်",
+  "docs.detail.reads": "ဖတ်သည်",
+  "docs.detail.writes": "ရေးသည်",
+  "docs.detail.none": "—",
+  "docs.detail.tips": "အကြံပြုချက်များ",
+  "docs.detail.example": "ဥပမာ",
+  "docs.detail.close": "ပိတ်",
 
   "node.delete": "Node ဖျက်",
   "node.back": "Palette သို့ ပြန်",

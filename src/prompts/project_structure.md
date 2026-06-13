@@ -54,6 +54,11 @@ Rule: `page.tsx` is a thin shell that mounts one feature. No markup, no fetching
 - `app/(full-frame-public)/login/page.tsx` — `/login` route (thin shell, mounts `AuthLogin` feature)
 - `app/(full-frame-public)/[toolId]/page.tsx` — `/<uuid>` share route (thin shell, mounts `SharedToolView` feature; public, no auth required)
 
+- `app/docs/layout.tsx` — docs section shell (mounts `DocsShell` from the `NodeDocs` feature: topbar + `prose` column)
+- `app/docs/nodes/page.mdx` — `/docs/nodes` MDX page. Authored prose + `<NodeDocs />` (the generated node-type reference). MDX is enabled via `next.config.ts` (`createMDX` + `pageExtensions`) and styled globally by `src/mdx-components.tsx`.
+
+**MDX**: `.md`/`.mdx` files are routable pages. The root `src/mdx-components.tsx` (`@next/mdx` requirement) maps generated HTML to the neobrutalism design system. Docs pages wrap their content in `prose`; interactive React components mounted inside MDX opt out with `not-prose`.
+
 > **Example usage** (target convention, not yet present):
 >
 > - Public: `app/(full-frame-public)/login/[[...path]]/page.tsx`
@@ -102,6 +107,9 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
 - `SharedToolView/` — public share view. Fetches a shared tool via `/api/shared/[toolId]` and renders only `PreviewPane`. No builder UI. Mounted by `app/(full-frame-public)/[toolId]/page.tsx`.
 - `Settings/` — user settings. Exposes `SettingsButton` (gear trigger + dialog) mounted in `Topbar`. Renders the available-settings catalog (`@/constants/settings`); reads/writes via `@/hooks/useAppConfig`. Persistence + theme application live in `@/providers/AppConfigProvider`.
   - `components/SettingToggle.tsx` — feature-private on/off switch.
+- `NodeDocs/` — docs section. `NodeDocs` renders the node-type reference catalogue from `@/lib/node-catalog` (`getNodeCatalog()`) + `@/constants/tool-builder` (icons/accents), localized via `useTranslation` so it stays in lockstep with the in-app palette. Mounted by `app/docs/nodes/page.mdx`. Each card is a button that opens the detail dialog; the selected node is mirrored to the URL hash (`#node-<type>`) for deep-linking.
+  - `components/DocsShell.tsx` — feature-private `/docs` topbar + `prose` wrapper; mounted by `app/docs/layout.tsx`. The `Topbar` "Docs" link points here.
+  - `components/NodeDetailDialog.tsx` — feature-private modal showing one node's full reference (summary, config, state I/O, tips, example) from `@/constants/node-docs`; chrome localized, body is the English content layer.
 
 Tool Builder shared domain (consumed by the features above):
 `@/stores/slices/toolBuilderSlice` (state), `@/hooks/useToolBuilder` (state/actions
@@ -222,6 +230,7 @@ Rule: no React imports unless wrapper hook. No business logic.
 ### Current lib
 
 - `tool-builder-runtime.ts` — pure preview helpers (`resolveBinding`, `initialStateMap`, `runChain`, `nodeSubtitle`). No React, no Redux.
+- `node-catalog.ts` — serialisable view of the node catalogue (`getNodeCatalog()`, `getNodeCount()`): flattens `@/constants/tool-builder` (which carries icon components) into plain grouped data + i18n keys, safe to cross server/client and feed non-React readers. Also `getNodeReference()` / `getNodeReferenceFor()` — fully-resolved flat records merging catalogue identity + canonical English label/blurb (`MESSAGES.en`) + the `@/constants/node-docs` detail, the shape intended for an **AI tool call**. Consumed by the `NodeDocs` feature.
 - `json-to-ts.ts` — pure JSON → TypeScript declaration generator (`jsonToTs`). Used by the Tool Builder's `ts_type` (TS Type Converter) node via the runtime.
 - `csv.ts` — pure CSV parser (`parseCsv`, wraps PapaParse) producing an optimized rows array (typed values, empty rows/columns dropped). Used by the Tool Builder's `csv` input node in `PreviewPane`.
 - `table-data.ts` — pure table-data normalizer (`normalizeTableData`, `compareCells`, `formatCell`): auto-optimizes any array / JSON string into a render-ready grid (typed cells, empty rows/columns dropped) and detects per-column kinds (string/number/date) for sorting. Used by the Tool Builder's `table` input node (`PreviewPane/components/DataTable.tsx`).
@@ -261,6 +270,7 @@ Rule: never hardcode route strings in JSX — use `Routes.X`. Use `.tsx` only wh
 ### Current constants
 
 - `tool-builder.tsx` — node catalog (`NODE_META`, `ACCENT_CLASSES`, `PALETTE_GROUPS`), the `createNode()` factory, and `uuid()`. `.tsx` because entries reference lucide icon components.
+- `node-docs.ts` — long-form per-node reference docs (`NodeDetail` type, `NODE_DETAILS` keyed by `ToolNodeType`, `getNodeDetail()`). Pure serialisable English content (summary, when-to-use, config controls, state in/out, tips, example) — the _content_ layer behind the docs detail dialog, and AI-tool-call-ready (no React/icons). Short labels/blurbs stay in `i18n.ts`; the depth lives here.
 - `settings.tsx` — available-settings catalog (`THEME_OPTIONS`, `LOCALE_OPTIONS`, `TOGGLE_SETTINGS`, `SETTINGS_STORAGE_KEY`) consumed by the `Settings` feature. Labels are `MessageKey`s resolved at render. `.tsx` because options carry lucide icons.
 - `i18n.ts` — in-house i18n message catalog (`MESSAGES` per `AppLocale`, `MessageKey` type). Hardcoded `en` + `my` (Burmese) dictionaries; `en` is the source-of-truth key set (the `my: Record<MessageKey, string>` value type forces parity). Covers Topbar, Settings, PreviewPane, the Tools/Builder/Node panels (chrome + node-catalog labels/blurbs), and the full NodeEditor detail form (field labels, helper text, toggles, targets, dialogs). Only author-supplied content (a node's own fieldLabel/description/buttonText) stays untranslated. Resolved via `@/hooks/useTranslation`.
 
