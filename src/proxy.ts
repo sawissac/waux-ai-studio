@@ -53,10 +53,13 @@ export async function proxy(request: NextRequest) {
   // before a session exists, so they must be reachable while unauthenticated.
   const isAuthFlow =
     pathname === "/forgot-password" || pathname.startsWith("/auth/");
+  // Public marketing landing page — reachable by everyone, logged in or not.
+  const isLanding = pathname === "/";
 
   if (
     !user &&
     pathname !== "/login" &&
+    !isLanding &&
     !isSharePage &&
     !isSharedApi &&
     !isSiteProxy &&
@@ -69,7 +72,7 @@ export async function proxy(request: NextRequest) {
 
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/studio";
     return NextResponse.redirect(url);
   }
 
@@ -77,7 +80,11 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip Next.js internals, static assets, and the favicon. All other routes
-  // (including API routes) go through the session-refresh logic.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Skip Next.js internals, the favicon, and public static assets (cursors,
+  // images, fonts) — these must load even while unauthenticated, or the auth
+  // redirect breaks them (e.g. the SVG cursor falls back to the native arrow).
+  // All other routes (including API routes) go through session-refresh logic.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?|ttf|otf)$).*)",
+  ],
 };

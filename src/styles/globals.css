@@ -177,6 +177,34 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+    /* Custom neo-brutalist cursor — hotspot at arrow tip (3,3). */
+    cursor:
+      url("/cursor-default.svg") 3 3,
+      auto;
+  }
+  /* Interactive elements get the blue pointer variant. */
+  a,
+  button,
+  [role="button"],
+  summary,
+  label[for],
+  select,
+  [data-slot="trigger"],
+  .cursor-pointer {
+    cursor:
+      url("/cursor-pointer.svg") 3 3,
+      pointer;
+  }
+  /* Text-entry keeps a caret; disabled keeps the blocked cursor. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="button"]),
+  textarea,
+  [contenteditable="true"] {
+    cursor: text;
+  }
+  button:disabled,
+  [aria-disabled="true"],
+  [data-disabled] {
+    cursor: not-allowed;
   }
   h1,
   h2,
@@ -199,6 +227,20 @@
     border: var(--nb-border-width-lg) solid var(--color-foreground);
     box-shadow: var(--nb-shadow-lg);
     background-color: var(--color-card);
+  }
+
+  /* node-card — hero chain card. Rests at a slight tilt (--r); on hover it
+     straightens, lifts up-left, and grows its shadow. */
+  .node-card {
+    transform: rotate(var(--r, 0deg));
+    transition:
+      transform var(--motion-duration-base) var(--motion-ease-spring),
+      box-shadow var(--motion-duration-base) var(--motion-ease-standard);
+  }
+  .node-card:hover {
+    transform: rotate(0deg) translate(-4px, -4px);
+    box-shadow: var(--nb-shadow-lg);
+    z-index: 20;
   }
 
   /* nb-press — tactile interaction: hover lifts, active sinks into shadow. */
@@ -234,6 +276,41 @@
   .nb-press:active:not(:disabled) {
     transform: none;
   }
+}
+
+/* =========================================================================
+   HERO BACKGROUND MOTION — slow ambient drift. Pure decoration, behind
+   content, pointer-events:none. Honoured by the reduced-motion block above.
+   ========================================================================= */
+@keyframes nb-grid-pan {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    /* One full tile (26px) so the loop is seamless. */
+    background-position: 26px 26px;
+  }
+}
+
+@keyframes nb-float {
+  0% {
+    transform: translateY(0) rotate(var(--nb-float-rot, 0deg));
+  }
+  50% {
+    transform: translateY(-22px) rotate(calc(var(--nb-float-rot, 0deg) + 6deg));
+  }
+  100% {
+    transform: translateY(0) rotate(var(--nb-float-rot, 0deg));
+  }
+}
+
+.animate-grid-pan {
+  animation: nb-grid-pan 7s linear infinite;
+}
+
+.animate-float {
+  animation: nb-float var(--nb-float-dur, 9s) ease-in-out infinite;
+  animation-delay: var(--nb-float-delay, 0s);
 }
 
 /* =========================================================================

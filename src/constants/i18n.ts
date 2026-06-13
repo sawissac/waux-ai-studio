@@ -82,6 +82,8 @@ const en = {
 
   // Node panel (palette)
   "palette.title": "Node",
+  "palette.search": "Filter nodes…",
+  "palette.empty": "No nodes match your filter.",
   "palette.footer": "Nodes run top-to-bottom along the chain.",
   "palette.group.Data": "Data",
   "palette.group.Inputs": "Inputs",
@@ -631,6 +633,16 @@ NOTES
   "common.delete": "Delete",
   "common.rename": "Rename",
   "common.copy": "Copy",
+
+  // Welcome splash (post-login branding screen)
+  "welcome.eyebrow": "Welcome back",
+  "welcome.title": "Your studio is ready.",
+  "welcome.subtitle":
+    "Compose tools as a top-to-bottom chain of input, logic, and output nodes — with a live, interactive preview. No backend required.",
+  "welcome.enter": "Enter studio",
+  "welcome.node.input": "Input",
+  "welcome.node.logic": "Logic",
+  "welcome.node.output": "Output",
 } as const;
 
 /** A valid translation key. */
@@ -700,6 +712,8 @@ const my: Record<MessageKey, string> = {
   "builder.dropToAdd": "Node ထည့်ရန် ချပါ",
 
   "palette.title": "Node များ",
+  "palette.search": "Node များ စစ်ထုတ်…",
+  "palette.empty": "စစ်ထုတ်မှုနှင့် ကိုက်ညီသော node မရှိပါ။",
   "palette.footer":
     "Node များသည် ကွင်းဆက်အတိုင်း အပေါ်မှအောက်သို့ လုပ်ဆောင်သည်။",
   "palette.group.Data": "ဒေတာ",
@@ -1215,6 +1229,16 @@ FRACTIONS & UNITS
   "common.delete": "ဖျက်",
   "common.rename": "အမည်ပြောင်း",
   "common.copy": "ကူး",
+
+  // Welcome splash (post-login branding screen)
+  "welcome.eyebrow": "ပြန်လည်ကြိုဆိုပါသည်",
+  "welcome.title": "သင့် studio အသင့်ဖြစ်ပါပြီ။",
+  "welcome.subtitle":
+    "Tool များကို input, logic, output node များ၏ အပေါ်မှအောက် ကွင်းဆက်အဖြစ် တည်ဆောက်ပါ — တိုက်ရိုက် preview နှင့်အတူ။ Backend မလို။",
+  "welcome.enter": "Studio သို့ ဝင်မည်",
+  "welcome.node.input": "Input",
+  "welcome.node.logic": "Logic",
+  "welcome.node.output": "Output",
 };
 
 /** All message catalogs keyed by locale. */

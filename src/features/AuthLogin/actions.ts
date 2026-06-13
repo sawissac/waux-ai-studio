@@ -19,7 +19,8 @@ async function getOrigin(): Promise<string> {
 
 /**
  * Sign in with email + password.
- * Returns `{ error }` on failure; redirects to `/` on success.
+ * Returns `{ error }` on failure; redirects to the post-login welcome splash
+ * (`/welcome`) on success, which then hands off to the studio (`/studio`).
  */
 export async function signIn(
   email: string,
@@ -32,7 +33,7 @@ export async function signIn(
     return { error: error.message };
   }
 
-  redirect("/");
+  redirect("/welcome");
 }
 
 /**
@@ -83,7 +84,7 @@ export async function requestPasswordReset(
  * Set a new password for the currently authenticated (recovery-session) user.
  * Reached only after `/auth/callback` established the recovery session.
  *
- * Returns `{ error }` on failure; redirects to `/` on success.
+ * Returns `{ error }` on failure; redirects to `/studio` on success.
  */
 export async function updatePassword(
   password: string,
@@ -95,7 +96,7 @@ export async function updatePassword(
     return { error: error.message };
   }
 
-  redirect("/");
+  redirect("/studio");
 }
 
 /**

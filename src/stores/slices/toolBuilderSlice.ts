@@ -41,7 +41,9 @@ const initialState: ToolBuilderState = {
   selectedNodeId: null,
   editorPlacement: "panel",
   search: "",
-  loadState: "idle",
+  // Start in "loading" so the first client paint shows the skeleton,
+  // continuous with the route-level loading.tsx fallback (no empty-state flash).
+  loadState: "loading",
 };
 
 const toolBuilderSlice = createSlice({

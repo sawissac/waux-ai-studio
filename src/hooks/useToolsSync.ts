@@ -133,7 +133,7 @@ export type SaveState = "idle" | "saving" | "saved" | "error";
  * @returns `saveState` — current save operation status.
  */
 export function useToolsSync() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const dispatch = useAppDispatch();
   const tools = useAppSelector((s) => s.toolBuilder.tools);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -147,14 +147,18 @@ export function useToolsSync() {
   });
 
   useEffect(() => {
-    if (isLoading) {
+    // Keep "loading" while auth resolves AND while the query runs. The query is
+    // disabled until `user` exists, so without `authLoading` the gap between
+    // mount and auth-ready would flip to "idle" and flash the empty state
+    // before the real fetch begins.
+    if (authLoading || isLoading) {
       dispatch(setLoadState("loading"));
     } else if (data) {
       dispatch(hydrateTools(data));
     } else {
       dispatch(setLoadState("idle"));
     }
-  }, [isLoading, data, dispatch]);
+  }, [authLoading, isLoading, data, dispatch]);
 
   const saveTools = useCallback(async () => {
     if (saveState === "saving") {
