@@ -42,7 +42,7 @@ export interface AppConfigState {
 export type PersistedAppConfig = Omit<AppConfigState, "hydrated">;
 
 export const initialAppConfig: AppConfigState = {
-  theme: "system",
+  theme: "light",
   locale: "en",
   sidebarCollapsed: false,
   reducedMotion: false,

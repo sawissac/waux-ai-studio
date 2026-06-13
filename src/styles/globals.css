@@ -206,6 +206,25 @@
   [data-disabled] {
     cursor: not-allowed;
   }
+  /* Dark mode — the default cursor is dark-filled and vanishes on the dark
+     background, so swap to light-filled variants. */
+  .dark body {
+    cursor:
+      url("/cursor-default-dark.svg") 3 3,
+      auto;
+  }
+  .dark a,
+  .dark button,
+  .dark [role="button"],
+  .dark summary,
+  .dark label[for],
+  .dark select,
+  .dark [data-slot="trigger"],
+  .dark .cursor-pointer {
+    cursor:
+      url("/cursor-pointer-dark.svg") 3 3,
+      pointer;
+  }
   h1,
   h2,
   h3,

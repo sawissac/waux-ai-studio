@@ -5,8 +5,19 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 
-/** Resolve the public site origin from request headers (proto + host). */
+/**
+ * Resolve the public site origin used to build auth-email links.
+ *
+ * Prefers `NEXT_PUBLIC_SITE_URL` (set this to the deployed URL,
+ * e.g. https://toolkits-black.vercel.app) so confirmation/reset links always
+ * point at the real site instead of whatever host the request came in on.
+ * Falls back to request headers for local dev.
+ */
 async function getOrigin(): Promise<string> {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL;
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
   const h = await headers();
   const origin = h.get("origin");
   if (origin) {
@@ -46,7 +57,13 @@ export async function signUp(
   password: string,
 ): Promise<{ error: string } | undefined> {
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({ email, password });
+  const origin = await getOrigin();
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    // After the user clicks the confirmation link, land them on /login.
+    options: { emailRedirectTo: `${origin}/login` },
+  });
 
   if (error) {
     return { error: error.message };
