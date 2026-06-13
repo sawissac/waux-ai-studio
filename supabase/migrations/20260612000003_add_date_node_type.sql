@@ -1,0 +1,11 @@
+-- ---------------------------------------------------------------------------
+-- Add the `date` node type.
+--
+-- `date` — temporal input (date, time, or date-time) two-way bound to its
+--          state slot. Config carries `mode` (date | time | datetime); the
+--          native control's string value is written straight to state.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'date';

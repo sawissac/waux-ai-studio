@@ -21,6 +21,12 @@ export type ToolNodeType =
   | "state"
   | "text_run"
   | "button"
+  | "number"
+  | "select"
+  | "toggle"
+  | "date"
+  | "file"
+  | "image"
   | "textarea"
   | "markdown"
   | "json"
@@ -33,6 +39,17 @@ export type ToolNodeType =
   | "html_sanitize"
   | "code"
   | "ts_type"
+  | "http_request"
+  | "filter"
+  | "map"
+  | "sort"
+  | "merge"
+  | "template"
+  | "regex"
+  | "jsonpath"
+  | "math"
+  | "schema_validate"
+  | "encode"
   | "canvas"
   | "ai";
 
@@ -54,8 +71,54 @@ export type CodeInputLanguage =
 /** Simulated screen the View Port node renders at in the preview. */
 export type ViewportDevice = "responsive" | "desktop" | "mobile";
 
+/** Temporal input mode for the Date / Time node. */
+export type DateTimeMode = "date" | "time" | "datetime";
+
+/** How the File upload node encodes the chosen file into its bound state. */
+export type FileOutputFormat = "text" | "base64" | "dataurl";
+
 /** AI providers supported by the AI node. */
 export type AiProvider = "gemini" | "openrouter";
+
+/** HTTP verbs the HTTP Request node can issue. */
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/** How the HTTP Request node parses the response into its output state. */
+export type HttpResponseType = "json" | "text";
+
+/** Comparison operators the Filter node supports. */
+export type FilterOperator =
+  | "eq"
+  | "neq"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "contains"
+  | "startsWith"
+  | "endsWith"
+  | "exists"
+  | "notExists";
+
+/** Sort direction for the Sort node. */
+export type SortDirection = "asc" | "desc";
+
+/** Value type the Sort node compares as. */
+export type SortType = "string" | "number" | "date";
+
+/** Join kind for the Merge / Join node. */
+export type JoinKind = "inner" | "left";
+
+/** Mode the Regex node runs in. */
+export type RegexMode = "match" | "extract" | "replace" | "test";
+
+/** Operation the Encode / Decode node performs. */
+export type EncodeOperation =
+  | "base64_encode"
+  | "base64_decode"
+  | "url_encode"
+  | "url_decode"
+  | "hash_sha256";
 
 /** A single named slot in the shared state store. */
 export interface StateEntry {
@@ -105,6 +168,17 @@ export interface TextRunNode extends BaseNode {
   runEnabled: boolean;
   resetEnabled: boolean;
   resetText: string;
+  /**
+   * Ids of the code / AI nodes this field's run runs, in chain order. Empty
+   * means run the whole chain (every code & AI node).
+   */
+  targets: string[];
+  /**
+   * Ids of the code nodes whose `reset()` runs when the reset button is
+   * clicked, in chain order. Empty means reset the whole chain (every code
+   * node). Only meaningful when `resetEnabled` is true.
+   */
+  resetTargets: string[];
 }
 
 /**
@@ -130,6 +204,105 @@ export interface ButtonNode extends BaseNode {
    * node). Only meaningful when `resetEnabled` is true.
    */
   resetTargets: string[];
+}
+
+/**
+ * Numeric input — a number field paired with a slider, two-way bound to its
+ * state slot. `min` / `max` / `step` constrain both controls; the value is
+ * stored as a stringified number (consistent with the flat string state map).
+ */
+export interface NumberNode extends BaseNode {
+  type: "number";
+  fieldLabel: string;
+  description: string;
+  binding: StateBinding;
+  /** Lowest allowed value (inclusive). */
+  min: number;
+  /** Highest allowed value (inclusive). */
+  max: number;
+  /** Increment for the slider and number stepper. */
+  step: number;
+}
+
+/** One choice in a Select node's static option list. */
+export interface SelectOption {
+  /** Stable id for list keying. */
+  id: string;
+  /** Stored value written to state when chosen. */
+  value: string;
+  /** Display text; falls back to `value` when blank. */
+  label: string;
+}
+
+/**
+ * Single-choice dropdown, two-way bound to its state slot. Options come from
+ * the static `options` list, unless `optionsBinding` names a state slot holding
+ * an array (of strings, or `{ value, label }` objects) — then the list is
+ * driven by that state at runtime.
+ */
+export interface SelectNode extends BaseNode {
+  type: "select";
+  fieldLabel: string;
+  description: string;
+  binding: StateBinding;
+  /** Static choices (used when `optionsBinding` is unset/empty). */
+  options: SelectOption[];
+  /** Optional state slot whose array value supplies the options at runtime. */
+  optionsBinding: StateBinding;
+}
+
+/**
+ * Boolean flag rendered as a switch, two-way bound to its state slot. The bound
+ * value is stored as the string `"true"` / `"false"` (flat string state map).
+ */
+export interface ToggleNode extends BaseNode {
+  type: "toggle";
+  fieldLabel: string;
+  description: string;
+  binding: StateBinding;
+}
+
+/**
+ * Temporal input (date, time, or both) two-way bound to its state slot. The
+ * native control's string value (ISO-ish `YYYY-MM-DD` / `HH:mm` /
+ * `YYYY-MM-DDTHH:mm`) is written straight to state.
+ */
+export interface DateNode extends BaseNode {
+  type: "date";
+  fieldLabel: string;
+  description: string;
+  binding: StateBinding;
+  /** Which native picker to render. */
+  mode: DateTimeMode;
+}
+
+/**
+ * Generic file upload. The chosen file is encoded per `outputFormat` and the
+ * encoded string is written to the bound state slot:
+ * `text` (UTF-8 contents), `base64` (raw base64, no prefix), or `dataurl`
+ * (a `data:` URI). Optional `accept` narrows the file picker (e.g. `.pdf`).
+ */
+export interface FileNode extends BaseNode {
+  type: "file";
+  fieldLabel: string;
+  description: string;
+  binding: StateBinding;
+  /** How the file bytes are encoded into state. */
+  outputFormat: FileOutputFormat;
+  /** Native `accept` filter (e.g. `.pdf,.txt`). Empty = any file. */
+  accept: string;
+}
+
+/**
+ * Image upload with a live thumbnail. The chosen image is written to the bound
+ * state slot as a `data:` URL — ready to feed an AI vision prompt or render in
+ * a Canvas / Markdown node.
+ */
+export interface ImageNode extends BaseNode {
+  type: "image";
+  fieldLabel: string;
+  description: string;
+  binding: StateBinding;
 }
 
 /** Multi-line, two-way bound text field (e.g. a message body). */
@@ -338,6 +511,213 @@ export interface HtmlSanitizeNode extends BaseNode {
   allowImages: boolean;
 }
 
+/** One request header for the HTTP Request node. */
+export interface HttpHeader {
+  /** Stable id for list keying. */
+  id: string;
+  key: string;
+  /** Supports `{{stateName}}` interpolation. */
+  value: string;
+}
+
+/**
+ * Issue an HTTP request through the server-side proxy (`/api/http-proxy`,
+ * SSRF-guarded) and write the response into `output`. `url` / `body` / header
+ * values support `{{stateName}}` interpolation against the shared state. The
+ * response is parsed per `responseType` (parsed JSON, or raw text). Runs in
+ * the chain like a transform node; not re-run live on `change`.
+ */
+export interface HttpRequestNode extends BaseNode {
+  type: "http_request";
+  description: string;
+  method: HttpMethod;
+  /** Request URL. Supports `{{stateName}}` interpolation. */
+  url: string;
+  headers: HttpHeader[];
+  /** Request body (ignored for GET). Supports `{{stateName}}` interpolation. */
+  body: string;
+  /** How the response is parsed before writing to `output`. */
+  responseType: HttpResponseType;
+  /** State slot the parsed response is written into. */
+  output: StateBinding;
+}
+
+/**
+ * Keep only the array rows from `input` whose `field` satisfies `operator`
+ * against `value`, writing the filtered array to `output`. `field` reads a
+ * (optionally dotted) path on each row; for primitive rows leave it blank to
+ * test the row itself. Numeric comparisons coerce both sides to numbers.
+ */
+export interface FilterNode extends BaseNode {
+  type: "filter";
+  description: string;
+  input: StateBinding;
+  output: StateBinding;
+  /** Dotted path into each row (blank = the row itself). */
+  field: string;
+  operator: FilterOperator;
+  /** Comparison value (ignored for exists / notExists). */
+  value: string;
+}
+
+/** One output-field mapping for the Map node. */
+export interface MapField {
+  /** Stable id for list keying. */
+  id: string;
+  /** Output key name. */
+  to: string;
+  /** Dotted source path on each input row. */
+  from: string;
+}
+
+/**
+ * Reshape each array row from `input` into a new object built from `fields`
+ * (each `to` key copies the value at the row's `from` path), writing the
+ * mapped array to `output`. Use it to project / rename columns before a Table.
+ */
+export interface MapNode extends BaseNode {
+  type: "map";
+  description: string;
+  input: StateBinding;
+  output: StateBinding;
+  fields: MapField[];
+}
+
+/**
+ * Order the array from `input` by `field` (a dotted path, or blank for the row
+ * itself), comparing as `sortType`, writing the sorted array to `output`.
+ */
+export interface SortNode extends BaseNode {
+  type: "sort";
+  description: string;
+  input: StateBinding;
+  output: StateBinding;
+  /** Dotted path to sort by (blank = the row itself). */
+  field: string;
+  direction: SortDirection;
+  sortType: SortType;
+}
+
+/**
+ * Combine two arrays (`left` from `input`, `right` from `rightInput`) on a key:
+ * rows whose `leftKey` equals the other row's `rightKey` are merged
+ * (right's fields spread over left's). `inner` drops unmatched left rows;
+ * `left` keeps them. Result is written to `output`.
+ */
+export interface MergeNode extends BaseNode {
+  type: "merge";
+  description: string;
+  /** Left (primary) array. */
+  input: StateBinding;
+  /** Right array to join against. */
+  rightInput: StateBinding;
+  output: StateBinding;
+  /** Dotted path for the left join key. */
+  leftKey: string;
+  /** Dotted path for the right join key. */
+  rightKey: string;
+  joinKind: JoinKind;
+}
+
+/**
+ * Interpolate `{{stateName}}` tokens in `template` against the shared state and
+ * write the rendered string to `output`. The standalone version of the AI
+ * node's prompt templating. Re-runs live on `change`.
+ */
+export interface TemplateNode extends BaseNode {
+  type: "template";
+  description: string;
+  template: string;
+  output: StateBinding;
+}
+
+/**
+ * Run a regular expression (`pattern` + `flags`) over the string in `input`.
+ * `test` writes "true"/"false"; `match` writes the first match (or full match
+ * array with the `g` flag); `extract` writes the captured groups as an array;
+ * `replace` writes the input with matches replaced by `replacement` (supports
+ * `$1` group refs). Result goes to `output`.
+ */
+export interface RegexNode extends BaseNode {
+  type: "regex";
+  description: string;
+  input: StateBinding;
+  output: StateBinding;
+  pattern: string;
+  flags: string;
+  mode: RegexMode;
+  /** Replacement string for `replace` mode (supports `$1` group refs). */
+  replacement: string;
+}
+
+/**
+ * Pull a nested value out of the JSON in `input` using a dotted / bracketed
+ * path (e.g. `data.items[0].name`), writing the resolved value to `output`.
+ * A leading `$` is optional. Missing paths write an empty string.
+ */
+export interface JsonPathNode extends BaseNode {
+  type: "jsonpath";
+  description: string;
+  input: StateBinding;
+  output: StateBinding;
+  /** Dotted / bracketed path (e.g. `data.items[0].name`). */
+  path: string;
+}
+
+/**
+ * Evaluate a math `expression` over the shared state and write the stringified
+ * result to `output`. State slots are referenced by name as bare identifiers
+ * (e.g. `price * qty + 1`). Evaluated by mathjs — the full function library,
+ * units, and fractions are available; `import`/`createUnit` are disabled and
+ * there is no JS eval.
+ */
+export interface MathNode extends BaseNode {
+  type: "math";
+  description: string;
+  expression: string;
+  output: StateBinding;
+}
+
+/** One required-field rule for the Schema Validate node. */
+export interface SchemaRule {
+  /** Stable id for list keying. */
+  id: string;
+  /** Dotted path that must be present. */
+  field: string;
+  /** Expected JS typeof (or `any`). */
+  type: "any" | "string" | "number" | "boolean" | "object" | "array";
+}
+
+/**
+ * Validate the JSON in `input` against `rules` (each a required field + type).
+ * Writes "true"/"false" to `output`; on failure also writes the list of
+ * problems to `errorOutput`. Use a downstream Filter / Code node to gate the
+ * chain on the boolean.
+ */
+export interface SchemaValidateNode extends BaseNode {
+  type: "schema_validate";
+  description: string;
+  input: StateBinding;
+  /** State slot the boolean "true"/"false" result is written into. */
+  output: StateBinding;
+  /** State slot the newline-joined error list is written into. */
+  errorOutput: StateBinding;
+  rules: SchemaRule[];
+}
+
+/**
+ * Transform the string in `input` with a single reversible/encoding
+ * `operation` (base64 / URL encode-decode, or a one-way SHA-256 hex hash),
+ * writing the result to `output`.
+ */
+export interface EncodeNode extends BaseNode {
+  type: "encode";
+  description: string;
+  input: StateBinding;
+  output: StateBinding;
+  operation: EncodeOperation;
+}
+
 /** Custom logic block. Body defines `function run(state) { ... }`. */
 export interface CodeNode extends BaseNode {
   type: "code";
@@ -398,6 +778,12 @@ export type ToolNode =
   | StateNode
   | TextRunNode
   | ButtonNode
+  | NumberNode
+  | SelectNode
+  | ToggleNode
+  | DateNode
+  | FileNode
+  | ImageNode
   | TextareaNode
   | MarkdownNode
   | JsonNode
@@ -410,6 +796,17 @@ export type ToolNode =
   | HtmlSanitizeNode
   | CodeNode
   | TsTypeNode
+  | HttpRequestNode
+  | FilterNode
+  | MapNode
+  | SortNode
+  | MergeNode
+  | TemplateNode
+  | RegexNode
+  | JsonPathNode
+  | MathNode
+  | SchemaValidateNode
+  | EncodeNode
   | CanvasNode
   | AiNode;
 
@@ -427,6 +824,12 @@ export type EditorPlacement = "panel" | "inline";
 export type RenderNode =
   | TextRunNode
   | ButtonNode
+  | NumberNode
+  | SelectNode
+  | ToggleNode
+  | DateNode
+  | FileNode
+  | ImageNode
   | TextareaNode
   | MarkdownNode
   | JsonNode
@@ -443,6 +846,12 @@ export const RENDER_NODE_TYPES: ReadonlySet<ToolNodeType> =
   new Set<ToolNodeType>([
     "text_run",
     "button",
+    "number",
+    "select",
+    "toggle",
+    "date",
+    "file",
+    "image",
     "textarea",
     "markdown",
     "json",

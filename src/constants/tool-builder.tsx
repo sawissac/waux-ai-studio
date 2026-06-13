@@ -8,7 +8,10 @@
  */
 import {
   AlignLeft,
+  ArrowDownUp,
+  Binary,
   Braces,
+  CalendarClock,
   ChevronsLeftRight,
   CodeXml,
   Columns3,
@@ -17,19 +20,43 @@ import {
   FileSpreadsheet,
   FileText,
   FileType2,
+  FileUp,
+  Filter as FilterIcon,
   FormInput,
+  GitMerge,
   Globe,
+  Hash,
+  ImageUp,
+  ListFilter,
   type LucideIcon,
   MousePointerClick,
   Palette,
+  Regex as RegexIcon,
+  Search,
   ShieldCheck,
+  Shuffle,
+  Sigma,
   Sparkles,
   Table,
+  ToggleRight,
+  Type as TypeIcon,
+  Webhook,
 } from "lucide-react";
 
 import type {
   CodeInputLanguage,
+  DateTimeMode,
+  EncodeOperation,
+  FileOutputFormat,
+  FilterOperator,
+  HttpMethod,
+  HttpResponseType,
+  JoinKind,
   NodeAccent,
+  RegexMode,
+  SchemaRule,
+  SortDirection,
+  SortType,
   TablePageSize,
   ToolNode,
   ToolNodeType,
@@ -37,12 +64,7 @@ import type {
 } from "@/types/tool-builder";
 
 /** Palette section a node type lives under. */
-export type PaletteGroup =
-  | "Data"
-  | "Inputs"
-  | "Logic"
-  | "Output"
-  | "Website Site";
+export type PaletteGroup = "Data" | "Inputs" | "Logic" | "Website Site";
 
 /** Display + behaviour metadata for one node type. */
 export interface NodeMeta {
@@ -98,6 +120,65 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     group: "Inputs",
     icon: MousePointerClick,
     slug: "@button",
+  },
+  number: {
+    type: "number",
+    label: "Number",
+    blurb:
+      "Numeric value with a slider + number field. Set min / max / step; two-way bound to state.",
+    accent: "blue",
+    group: "Inputs",
+    icon: Hash,
+    slug: "@number",
+  },
+  select: {
+    type: "select",
+    label: "Select",
+    blurb:
+      "Single-choice dropdown. Use a static option list or bind the options to a state array.",
+    accent: "blue",
+    group: "Inputs",
+    icon: ListFilter,
+    slug: "@select",
+  },
+  toggle: {
+    type: "toggle",
+    label: "Toggle",
+    blurb: "Boolean on/off switch, two-way bound to state.",
+    accent: "blue",
+    group: "Inputs",
+    icon: ToggleRight,
+    slug: "@toggle",
+  },
+  date: {
+    type: "date",
+    label: "Date / Time",
+    blurb:
+      "Date, time, or date-time picker. The native value writes straight to bound state.",
+    accent: "blue",
+    group: "Inputs",
+    icon: CalendarClock,
+    slug: "@date",
+  },
+  file: {
+    type: "file",
+    label: "File upload",
+    blurb:
+      "Upload any file. Encodes it as text, base64, or a data URL into bound state.",
+    accent: "blue",
+    group: "Inputs",
+    icon: FileUp,
+    slug: "@file",
+  },
+  image: {
+    type: "image",
+    label: "Image upload",
+    blurb:
+      "Upload an image with a live preview. Writes a data URL — feeds AI vision.",
+    accent: "blue",
+    group: "Inputs",
+    icon: ImageUp,
+    slug: "@image",
   },
   textarea: {
     type: "textarea",
@@ -216,12 +297,122 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     icon: FileType2,
     slug: "@ts_type",
   },
+  http_request: {
+    type: "http_request",
+    label: "HTTP Request",
+    blurb:
+      "Call a real API through a server proxy. Method, URL, headers & body interpolate state; response writes to bound state.",
+    accent: "amber",
+    group: "Logic",
+    icon: Webhook,
+    slug: "@http_request",
+  },
+  filter: {
+    type: "filter",
+    label: "Filter",
+    blurb:
+      "Keep array rows whose field matches a condition; output writes to bound state.",
+    accent: "amber",
+    group: "Logic",
+    icon: FilterIcon,
+    slug: "@filter",
+  },
+  map: {
+    type: "map",
+    label: "Map / Transform",
+    blurb:
+      "Reshape array rows into new objects by mapping output keys to source paths.",
+    accent: "amber",
+    group: "Logic",
+    icon: Shuffle,
+    slug: "@map",
+  },
+  sort: {
+    type: "sort",
+    label: "Sort",
+    blurb:
+      "Order an array by a field, as text / number / date, ascending or descending.",
+    accent: "amber",
+    group: "Logic",
+    icon: ArrowDownUp,
+    slug: "@sort",
+  },
+  merge: {
+    type: "merge",
+    label: "Merge / Join",
+    blurb:
+      "Join two state arrays on a key — right fields spread over matching left rows.",
+    accent: "amber",
+    group: "Logic",
+    icon: GitMerge,
+    slug: "@merge",
+  },
+  template: {
+    type: "template",
+    label: "Template / String",
+    blurb:
+      "Interpolate {{name}} state tokens into a text template; result writes to bound state.",
+    accent: "amber",
+    group: "Logic",
+    icon: TypeIcon,
+    slug: "@template",
+  },
+  regex: {
+    type: "regex",
+    label: "Regex",
+    blurb:
+      "Test, match, extract groups, or replace over a string with a regular expression.",
+    accent: "amber",
+    group: "Logic",
+    icon: RegexIcon,
+    slug: "@regex",
+  },
+  jsonpath: {
+    type: "jsonpath",
+    label: "JSONPath / Query",
+    blurb:
+      "Pull a nested value out of JSON with a dotted/bracketed path (e.g. data.items[0].name).",
+    accent: "amber",
+    group: "Logic",
+    icon: Search,
+    slug: "@jsonpath",
+  },
+  math: {
+    type: "math",
+    label: "Math / Expression",
+    blurb:
+      "Evaluate a math expression over state (e.g. price * qty, sqrt, units, fractions) via mathjs; no JS eval.",
+    accent: "amber",
+    group: "Logic",
+    icon: Sigma,
+    slug: "@math",
+  },
+  schema_validate: {
+    type: "schema_validate",
+    label: "Schema Validate",
+    blurb:
+      "Check JSON shape against required field + type rules; writes a boolean to gate the chain.",
+    accent: "amber",
+    group: "Logic",
+    icon: ShieldCheck,
+    slug: "@schema_validate",
+  },
+  encode: {
+    type: "encode",
+    label: "Encode / Decode",
+    blurb:
+      "Base64 / URL encode-decode, or a one-way SHA-256 hash over a string; output writes to state.",
+    accent: "amber",
+    group: "Logic",
+    icon: Binary,
+    slug: "@encode",
+  },
   canvas: {
     type: "canvas",
     label: "HTML Canvas",
     blurb: "A free-form HTML div you populate with elements via JS.",
     accent: "emerald",
-    group: "Output",
+    group: "Website Site",
     icon: Columns3,
     slug: "@canvas",
   },
@@ -246,6 +437,12 @@ export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
       types: [
         "text_run",
         "button",
+        "number",
+        "select",
+        "toggle",
+        "date",
+        "file",
+        "image",
         "textarea",
         "markdown",
         "json",
@@ -254,11 +451,28 @@ export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
         "code_input",
       ],
     },
-    { group: "Logic", types: ["code", "ts_type", "ai"] },
-    { group: "Output", types: ["canvas"] },
+    {
+      group: "Logic",
+      types: [
+        "code",
+        "ts_type",
+        "http_request",
+        "filter",
+        "map",
+        "sort",
+        "merge",
+        "template",
+        "regex",
+        "jsonpath",
+        "math",
+        "schema_validate",
+        "encode",
+        "ai",
+      ],
+    },
     {
       group: "Website Site",
-      types: ["viewport", "convert_html", "html_sanitize", "themed"],
+      types: ["viewport", "convert_html", "html_sanitize", "themed", "canvas"],
     },
   ];
 
@@ -320,6 +534,96 @@ export const CODE_INPUT_LANGUAGES: {
   { value: "plaintext", label: "Plain text" },
 ];
 
+/** Picker modes for the Date / Time node, in menu order. */
+export const DATE_MODES: { value: DateTimeMode; label: string }[] = [
+  { value: "date", label: "Date" },
+  { value: "time", label: "Time" },
+  { value: "datetime", label: "Date & time" },
+];
+
+/** Native `<input type>` for each Date / Time picker mode. */
+export const DATE_INPUT_TYPE: Record<DateTimeMode, string> = {
+  date: "date",
+  time: "time",
+  datetime: "datetime-local",
+};
+
+/** Encodings the File upload node can write to state, in menu order. */
+export const FILE_OUTPUT_FORMATS: {
+  value: FileOutputFormat;
+  label: string;
+}[] = [
+  { value: "text", label: "Text (UTF-8)" },
+  { value: "base64", label: "Base64" },
+  { value: "dataurl", label: "Data URL" },
+];
+
+/** HTTP verbs for the HTTP Request node, in menu order. */
+export const HTTP_METHODS: HttpMethod[] = [
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+];
+
+/** Response parse modes for the HTTP Request node, in menu order. */
+export const HTTP_RESPONSE_TYPES: { value: HttpResponseType; label: string }[] =
+  [
+    { value: "json", label: "JSON" },
+    { value: "text", label: "Text" },
+  ];
+
+/** Filter operators, in menu order (label resolved via i18n at render). */
+export const FILTER_OPERATORS: FilterOperator[] = [
+  "eq",
+  "neq",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "contains",
+  "startsWith",
+  "endsWith",
+  "exists",
+  "notExists",
+];
+
+/** Filter operators that ignore the comparison value. */
+export const VALUELESS_FILTER_OPERATORS: ReadonlySet<FilterOperator> =
+  new Set<FilterOperator>(["exists", "notExists"]);
+
+/** Sort directions, in menu order. */
+export const SORT_DIRECTIONS: SortDirection[] = ["asc", "desc"];
+
+/** Sort value types, in menu order. */
+export const SORT_TYPES: SortType[] = ["string", "number", "date"];
+
+/** Join kinds for the Merge node, in menu order. */
+export const JOIN_KINDS: JoinKind[] = ["inner", "left"];
+
+/** Regex modes, in menu order. */
+export const REGEX_MODES: RegexMode[] = ["test", "match", "extract", "replace"];
+
+/** Encode / decode operations, in menu order. */
+export const ENCODE_OPERATIONS: { value: EncodeOperation; label: string }[] = [
+  { value: "base64_encode", label: "Base64 encode" },
+  { value: "base64_decode", label: "Base64 decode" },
+  { value: "url_encode", label: "URL encode" },
+  { value: "url_decode", label: "URL decode" },
+  { value: "hash_sha256", label: "SHA-256 hash" },
+];
+
+/** Schema-rule value types, in menu order. */
+export const SCHEMA_TYPES: SchemaRule["type"][] = [
+  "any",
+  "string",
+  "number",
+  "boolean",
+  "object",
+  "array",
+];
+
 /** Browser-safe UUID v4. */
 export const uuid = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -369,6 +673,8 @@ export function createNode(type: ToolNodeType): ToolNode {
         runEnabled: true,
         resetEnabled: false,
         resetText: "Reset",
+        targets: [],
+        resetTargets: [],
       };
     case "button":
       return {
@@ -381,6 +687,65 @@ export function createNode(type: ToolNodeType): ToolNode {
         resetText: "Reset",
         targets: [],
         resetTargets: [],
+      };
+    case "number":
+      return {
+        id,
+        type,
+        fieldLabel: "Number",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        min: 0,
+        max: 100,
+        step: 1,
+      };
+    case "select":
+      return {
+        id,
+        type,
+        fieldLabel: "Select",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        options: [
+          { id: uuid(), value: "option1", label: "Option 1" },
+          { id: uuid(), value: "option2", label: "Option 2" },
+        ],
+        optionsBinding: { mode: "name", value: "" },
+      };
+    case "toggle":
+      return {
+        id,
+        type,
+        fieldLabel: "Toggle",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+      };
+    case "date":
+      return {
+        id,
+        type,
+        fieldLabel: "Date",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        mode: "date",
+      };
+    case "file":
+      return {
+        id,
+        type,
+        fieldLabel: "File",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        outputFormat: "text",
+        accept: "",
+      };
+    case "image":
+      return {
+        id,
+        type,
+        fieldLabel: "Image",
+        description: "",
+        binding: { mode: "name", value: "state1" },
       };
     case "textarea":
       return {
@@ -449,7 +814,7 @@ export function createNode(type: ToolNodeType): ToolNode {
         binding: { mode: "name", value: "" },
         editorHeight: EDITOR_HEIGHTS.defaults.viewport,
         device: "responsive",
-        previewEnabled: false,
+        previewEnabled: true,
       };
     case "convert_html":
       return {
@@ -461,7 +826,7 @@ export function createNode(type: ToolNodeType): ToolNode {
         binding: { mode: "name", value: "" },
         editorHeight: EDITOR_HEIGHTS.defaults.convert_html,
         device: "responsive",
-        previewEnabled: false,
+        previewEnabled: true,
       };
     case "themed":
       return {
@@ -472,7 +837,7 @@ export function createNode(type: ToolNodeType): ToolNode {
         binding: { mode: "name", value: "" },
         editorHeight: EDITOR_HEIGHTS.defaults.themed,
         device: "responsive",
-        previewEnabled: false,
+        previewEnabled: true,
       };
     case "html_sanitize":
       return {
@@ -494,6 +859,117 @@ export function createNode(type: ToolNodeType): ToolNode {
         rootName: "Root",
         input: { mode: "name", value: "state1" },
         output: { mode: "name", value: "state1" },
+      };
+    case "http_request":
+      return {
+        id,
+        type,
+        description: "",
+        method: "GET",
+        url: "https://api.example.com/data",
+        headers: [],
+        body: "",
+        responseType: "json",
+        output: { mode: "name", value: "state1" },
+      };
+    case "filter":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
+        field: "",
+        operator: "eq",
+        value: "",
+      };
+    case "map":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
+        fields: [{ id: uuid(), to: "field", from: "field" }],
+      };
+    case "sort":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
+        field: "",
+        direction: "asc",
+        sortType: "string",
+      };
+    case "merge":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "state1" },
+        rightInput: { mode: "name", value: "" },
+        output: { mode: "name", value: "state1" },
+        leftKey: "id",
+        rightKey: "id",
+        joinKind: "inner",
+      };
+    case "template":
+      return {
+        id,
+        type,
+        description: "",
+        template: "Hello {{state1}}",
+        output: { mode: "name", value: "state1" },
+      };
+    case "regex":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
+        pattern: "",
+        flags: "g",
+        mode: "match",
+        replacement: "",
+      };
+    case "jsonpath":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
+        path: "",
+      };
+    case "math":
+      return {
+        id,
+        type,
+        description: "",
+        expression: "state1",
+        output: { mode: "name", value: "state1" },
+      };
+    case "schema_validate":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
+        errorOutput: { mode: "name", value: "" },
+        rules: [{ id: uuid(), field: "", type: "any" }],
+      };
+    case "encode":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
+        operation: "base64_encode",
       };
     case "canvas": {
       const elementId = uuid();

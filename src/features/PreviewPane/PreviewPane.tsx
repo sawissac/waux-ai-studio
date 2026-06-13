@@ -19,6 +19,8 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { useDebouncedCallback } from "use-debounce";
 
+import { ErrorBoundary } from "@/components/ui/error-boundary";
+
 function preprocessContent(content: string): string {
   if (!content) {
     return "";
@@ -55,6 +57,33 @@ function normalizeViewportUrl(raw: string): string {
   } catch {
     return "";
   }
+}
+
+/**
+ * Resolve a Select node's runtime options. When `bound` (the value of its
+ * options-binding state slot) is an array it wins — strings become
+ * `value === label`, `{ value, label }` objects are passed through — otherwise
+ * the node's static `options` list is used.
+ */
+function resolveSelectOptions(
+  node: SelectNode,
+  bound: unknown,
+): { value: string; label: string }[] {
+  if (Array.isArray(bound)) {
+    return bound.map((o) => {
+      if (o && typeof o === "object") {
+        const rec = o as Record<string, unknown>;
+        const value = String(rec.value ?? rec.label ?? "");
+        return { value, label: String(rec.label ?? rec.value ?? value) };
+      }
+      const value = String(o ?? "");
+      return { value, label: value };
+    });
+  }
+  return node.options.map((o: SelectOption) => ({
+    value: o.value,
+    label: o.label || o.value,
+  }));
 }
 
 const katexSchema = {
@@ -129,7 +158,11 @@ function MarkdownView({ content }: { content: string }) {
 }
 
 import { CodeEditor } from "@/components/ui/code-editor";
-import { EDITOR_HEIGHTS, VIEWPORT_DEVICES } from "@/constants/tool-builder";
+import {
+  DATE_INPUT_TYPE,
+  EDITOR_HEIGHTS,
+  VIEWPORT_DEVICES,
+} from "@/constants/tool-builder";
 import { ConvertHtmlSite } from "@/features/PreviewPane/components/ConvertHtmlSite";
 import { DataTable } from "@/features/PreviewPane/components/DataTable";
 import {
@@ -138,6 +171,7 @@ import {
 } from "@/features/PreviewPane/components/DeviceFrame";
 import { ThemedSite } from "@/features/PreviewPane/components/ThemedSite";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
+import { useTranslation } from "@/hooks/useTranslation";
 import { parseCsv } from "@/lib/csv";
 import {
   changeChain,
@@ -150,6 +184,9 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   CsvNode,
+  FileNode,
+  SelectNode,
+  SelectOption,
   StateNode,
   Tool,
   ViewportDevice,
@@ -188,19 +225,20 @@ function PreviewOffNotice({
   height: number;
   onEnable: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       style={{ height }}
       className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/50 text-center text-xs text-muted-foreground"
     >
       <EyeOff size={20} className="opacity-30" />
-      <span>Live preview off</span>
+      <span>{t("preview.off")}</span>
       <button
         type="button"
         onClick={onEnable}
         className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-[11px] font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
       >
-        <Eye size={12} /> Enable preview
+        <Eye size={12} /> {t("preview.enable")}
       </button>
     </div>
   );
@@ -226,6 +264,7 @@ export function PreviewPane({
   stateNode: StateNode | null;
 }) {
   const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   const [runtime, setRuntime] = useState<StateMap>(() =>
     initialStateMap(stateNode),
   );
@@ -284,15 +323,22 @@ export function PreviewPane({
     });
   }, [stateKey]);
 
-  /** Write `value` to `name`, then run the code + AI chain. */
-  const trigger = async (name: string, value: string) => {
+  /**
+   * Write `value` to `name`, then run the code + AI chain. When `targets` is
+   * non-empty, only those code/AI nodes run.
+   */
+  const trigger = async (name: string, value: string, targets?: string[]) => {
     const startingState = { ...runtime, [name]: value };
     setRuntime(startingState);
     setRunError(null);
     setRunning(true);
     try {
-      const nextState = await runChain(tool, startingState, stateNode, (msg) =>
-        setRunError(msg),
+      const nextState = await runChain(
+        tool,
+        startingState,
+        stateNode,
+        (msg) => setRunError(msg),
+        targets,
       );
       setRuntime(nextState);
     } finally {
@@ -359,6 +405,41 @@ export function PreviewPane({
     debouncedChange(nextState);
   };
 
+  /**
+   * Read an uploaded file with the encoding `node.outputFormat` requires and
+   * write the encoded string to the node's bound state slot, then run the live
+   * `change` chain. Used by both the File upload (text/base64/dataurl) and the
+   * Image upload (always a data URL) nodes.
+   */
+  const loadFile = async (
+    name: string,
+    file: File,
+    format: FileNode["outputFormat"],
+  ) => {
+    if (!name) {
+      return;
+    }
+    let encoded: string;
+    if (format === "text") {
+      encoded = await file.text();
+    } else {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      // `base64` strips the `data:…;base64,` prefix; `dataurl` keeps it.
+      encoded =
+        format === "base64"
+          ? dataUrl.replace(/^data:[^;]*;base64,/, "")
+          : dataUrl;
+    }
+    const nextState = { ...runtime, [name]: encoded };
+    setRuntime(nextState);
+    debouncedChange(nextState);
+  };
+
   const aiMarkdownNodes = useMemo(
     () =>
       tool.nodes.filter(
@@ -382,13 +463,25 @@ export function PreviewPane({
 
   return (
     <div className="mt-10 font-display">
-      <div className="mb-4 flex items-center gap-2 border-b border-border/50 pb-3 text-sm font-semibold text-foreground">
-        Preview
+      <div className="mb-5 flex items-center gap-3 border-2 border-foreground bg-card px-3 py-2.5 shadow-nb">
+        <span className="grid size-8 shrink-0 place-items-center border-2 border-foreground bg-primary text-primary-foreground shadow-nb-sm">
+          <Eye size={16} aria-hidden />
+        </span>
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className="text-sm font-bold">{t("preview.title")}</span>
+          <span className="truncate text-[11px] text-muted-foreground">
+            {t("preview.subtitle")}
+          </span>
+        </div>
+        <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 border-2 border-foreground bg-background px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow-nb-sm">
+          <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden />
+          {t("preview.live")}
+        </span>
       </div>
       {running && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <Loader2 size={13} className="animate-spin" />
-          Running chain…
+          {t("preview.running")}
         </div>
       )}
       {runError && (
@@ -402,48 +495,904 @@ export function PreviewPane({
           {renderNodes.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/50 py-12 text-center text-sm text-muted-foreground">
               <Eye size={24} className="opacity-20" />
-              <div>Add an input node to render a preview.</div>
+              <div>{t("preview.empty")}</div>
             </div>
           ) : (
-            <div className="flex flex-col gap-6">
-              {renderNodes.map((node) => {
-                if (node.type === "canvas") {
-                  return (
-                    <div
-                      key={node.id}
-                      className="rounded-xl border border-border/50 bg-background/50 p-4 shadow-sm backdrop-blur-sm [&_h4]:mb-1 [&_h4]:font-semibold [&_p]:text-sm [&_p]:text-muted-foreground"
-                      dangerouslySetInnerHTML={{ __html: node.html }}
-                    />
-                  );
-                }
+            <ErrorBoundary
+              resetKeys={[renderNodes.map((n) => n.id).join(",")]}
+              fallback={(_e, reset) => (
+                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-destructive/40 py-10 text-center text-sm text-muted-foreground">
+                  <div>Preview hit an error.</div>
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="rounded-md border px-2 py-1 text-xs font-medium hover:bg-accent"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+            >
+              <div className="flex flex-col gap-6">
+                {renderNodes.map((node, nodeIndex) => {
+                  if (node.type === "canvas") {
+                    return (
+                      <div
+                        key={node.id}
+                        className="rounded-xl border border-border/50 bg-background/50 p-4 shadow-sm backdrop-blur-sm [&_h4]:mb-1 [&_h4]:font-semibold [&_p]:text-sm [&_p]:text-muted-foreground"
+                        dangerouslySetInnerHTML={{ __html: node.html }}
+                      />
+                    );
+                  }
 
-                if (node.type === "button") {
-                  return (
-                    <div key={node.id} className="flex flex-col gap-2">
-                      {node.fieldLabel && (
+                  if (node.type === "button") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => runNow(node.targets)}
+                            disabled={running}
+                            className="inline-flex h-10 shrink-0 items-center justify-center border-2 border-foreground bg-primary px-4 text-sm font-bold text-primary-foreground shadow-nb nb-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+                          >
+                            {node.buttonText}
+                          </button>
+                          {node.resetEnabled && (
+                            <button
+                              type="button"
+                              onClick={() => resetNow(node.resetTargets)}
+                              className="inline-flex h-10 shrink-0 items-center justify-center border-2 border-foreground bg-background px-4 text-sm font-bold shadow-nb nb-press hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                            >
+                              {node.resetText}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "convert_html") {
+                    const sourceVp = (
+                      node.source
+                        ? tool.nodes.find(
+                            (n) =>
+                              n.id === node.source && n.type === "viewport",
+                          )
+                        : tool.nodes.find((n) => n.type === "viewport")
+                    ) as ViewportNode | undefined;
+                    let sourceUrl = "";
+                    if (sourceVp) {
+                      const vpName = resolveBinding(
+                        sourceVp.binding,
+                        stateNode,
+                      );
+                      const vpRaw = vpName ? runtime[vpName] : "";
+                      const vpOverride = typeof vpRaw === "string" ? vpRaw : "";
+                      sourceUrl = normalizeViewportUrl(
+                        vpOverride || sourceVp.url,
+                      );
+                    }
+                    const outName = resolveBinding(node.binding, stateNode);
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        {node.previewEnabled ? (
+                          <ConvertHtmlSite
+                            url={sourceUrl}
+                            height={
+                              node.editorHeight ??
+                              EDITOR_HEIGHTS.defaults.convert_html
+                            }
+                            hasSource={!!sourceVp}
+                            device={previewDevice}
+                            onDeviceChange={setPreviewDevice}
+                            outputName={outName}
+                            onHtml={(html) => {
+                              if (!outName) {
+                                return;
+                              }
+                              setRuntime((prev) => {
+                                const nextState = { ...prev, [outName]: html };
+                                debouncedChange(nextState);
+                                return nextState;
+                              });
+                            }}
+                          />
+                        ) : (
+                          <PreviewOffNotice
+                            height={
+                              node.editorHeight ??
+                              EDITOR_HEIGHTS.defaults.convert_html
+                            }
+                            onEnable={() =>
+                              updateNode(node.id, { previewEnabled: true })
+                            }
+                          />
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "themed") {
+                    const htmlName = resolveBinding(node.binding, stateNode);
+                    const htmlRaw = htmlName ? runtime[htmlName] : "";
+                    const html = typeof htmlRaw === "string" ? htmlRaw : "";
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        {node.previewEnabled ? (
+                          <ThemedSite
+                            html={html}
+                            height={
+                              node.editorHeight ??
+                              EDITOR_HEIGHTS.defaults.themed
+                            }
+                            hasBinding={!!htmlName}
+                            device={previewDevice}
+                            onDeviceChange={setPreviewDevice}
+                          />
+                        ) : (
+                          <PreviewOffNotice
+                            height={
+                              node.editorHeight ??
+                              EDITOR_HEIGHTS.defaults.themed
+                            }
+                            onEnable={() =>
+                              updateNode(node.id, { previewEnabled: true })
+                            }
+                          />
+                        )}
+                      </div>
+                    );
+                  }
+
+                  const name = resolveBinding(node.binding, stateNode);
+
+                  if (node.type === "viewport") {
+                    const raw = name ? runtime[name] : "";
+                    const override = typeof raw === "string" ? raw : "";
+                    const src = normalizeViewportUrl(override || node.url);
+                    const height =
+                      node.editorHeight ?? EDITOR_HEIGHTS.defaults.viewport;
+                    const device = previewDevice;
+                    const dims = VIEWPORT_DEVICES.find(
+                      (d) => d.value === device && d.width,
+                    );
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                          {node.previewEnabled && (
+                            <DeviceToggle
+                              value={device}
+                              onChange={setPreviewDevice}
+                            />
+                          )}
+                        </div>
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        {!node.previewEnabled ? (
+                          <PreviewOffNotice
+                            height={height}
+                            onEnable={() =>
+                              updateNode(node.id, { previewEnabled: true })
+                            }
+                          />
+                        ) : src ? (
+                          <>
+                            <DeviceFrame
+                              src={src}
+                              title={
+                                node.fieldLabel || t("preview.viewport.title")
+                              }
+                              device={device}
+                              height={height}
+                            />
+                            <p className="truncate font-mono text-[11px] text-muted-foreground">
+                              {src}
+                              {dims && ` · ${dims.width}×${dims.height}`}
+                            </p>
+                          </>
+                        ) : (
+                          <div
+                            style={{ height }}
+                            className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/50 text-xs text-muted-foreground"
+                          >
+                            <Globe size={20} className="opacity-30" />
+                            {override || node.url
+                              ? t("preview.viewport.invalid")
+                              : t("preview.viewport.setUrl")}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "number") {
+                    const raw = runtime[name];
+                    const num = Number(raw);
+                    const value = Number.isFinite(num) ? num : node.min;
+                    const write = (v: number) => {
+                      const nextState = { ...runtime, [name]: String(v) };
+                      setRuntime(nextState);
+                      debouncedChange(nextState);
+                    };
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
                         <label className="text-sm font-semibold">
                           {node.fieldLabel}
                         </label>
-                      )}
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min={node.min}
+                            max={node.max}
+                            step={node.step}
+                            value={value}
+                            onChange={(e) => write(Number(e.target.value))}
+                            className="h-2 flex-1 cursor-pointer accent-primary"
+                          />
+                          <input
+                            type="number"
+                            min={node.min}
+                            max={node.max}
+                            step={node.step}
+                            value={value}
+                            onChange={(e) => write(Number(e.target.value))}
+                            className="h-10 w-24 shrink-0 rounded-lg border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "select") {
+                    const optName = resolveBinding(
+                      node.optionsBinding,
+                      stateNode,
+                    );
+                    const bound = optName ? runtime[optName] : undefined;
+                    const options = resolveSelectOptions(node, bound);
+                    const current = runtime[name] ?? "";
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        <select
+                          value={String(current)}
+                          onChange={(e) => {
+                            const nextState = {
+                              ...runtime,
+                              [name]: e.target.value,
+                            };
+                            setRuntime(nextState);
+                            debouncedChange(nextState);
+                          }}
+                          className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                          <option value="">
+                            {t("preview.select.placeholder")}
+                          </option>
+                          {options.map((o, i) => (
+                            <option key={`${o.value}-${i}`} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "toggle") {
+                    const checked =
+                      runtime[name] === "true" || runtime[name] === true;
+                    return (
+                      <div
+                        key={node.id}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <div className="flex min-w-0 flex-col">
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                          {node.description && (
+                            <p className="text-xs text-muted-foreground">
+                              {node.description}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={checked}
+                          onClick={() => {
+                            const nextState = {
+                              ...runtime,
+                              [name]: String(!checked),
+                            };
+                            setRuntime(nextState);
+                            debouncedChange(nextState);
+                          }}
+                          className={cn(
+                            "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-foreground transition-colors duration-(--motion-duration-fast)",
+                            checked ? "bg-primary" : "bg-muted",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block size-4 transform rounded-full bg-background shadow-sm transition-transform duration-(--motion-duration-fast)",
+                              checked ? "translate-x-5" : "translate-x-0.5",
+                            )}
+                          />
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "date") {
+                    const current = runtime[name] ?? "";
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        <input
+                          type={DATE_INPUT_TYPE[node.mode]}
+                          value={String(current)}
+                          onChange={(e) => {
+                            const nextState = {
+                              ...runtime,
+                              [name]: e.target.value,
+                            };
+                            setRuntime(nextState);
+                            debouncedChange(nextState);
+                          }}
+                          className="h-10 w-fit rounded-lg border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "file") {
+                    const has = !!runtime[name];
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
+                          <Upload size={14} className="shrink-0" />
+                          <span className="max-w-60 truncate">
+                            {has
+                              ? t("preview.file.loaded")
+                              : t("preview.file.choose")}
+                          </span>
+                          <input
+                            type="file"
+                            accept={node.accept || undefined}
+                            className="sr-only"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                loadFile(name, file, node.outputFormat);
+                              }
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "image") {
+                    const raw = runtime[name];
+                    const src = typeof raw === "string" ? raw : "";
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
+                          <Upload size={14} className="shrink-0" />
+                          <span className="max-w-60 truncate">
+                            {src
+                              ? t("preview.image.change")
+                              : t("preview.image.choose")}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                loadFile(name, file, "dataurl");
+                              }
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                        {src && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={src}
+                            alt={node.fieldLabel}
+                            className="max-h-64 w-fit max-w-full rounded-xl border border-input object-contain shadow-sm"
+                          />
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "textarea") {
+                    const isMarkdown = markdownStates.has(name);
+                    const currentValue = runtime[name] ?? "";
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        {isMarkdown && currentValue ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm">
+                            <MarkdownView content={currentValue} />
+                          </div>
+                        ) : (
+                          <textarea
+                            style={{
+                              height:
+                                node.editorHeight ??
+                                EDITOR_HEIGHTS.defaults.textarea,
+                            }}
+                            placeholder={node.placeholder}
+                            value={currentValue}
+                            onChange={(e) => {
+                              const nextState = {
+                                ...runtime,
+                                [name]: e.target.value,
+                              };
+                              setRuntime(nextState);
+                              debouncedChange(nextState);
+                            }}
+                            className="w-full resize-y rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                          />
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "json") {
+                    const raw = runtime[name];
+                    // Non-string state (e.g. a code node wrote an object) is
+                    // surfaced pretty-printed so the user can keep editing it.
+                    const currentValue =
+                      typeof raw === "string"
+                        ? raw
+                        : raw === null || raw === undefined
+                          ? ""
+                          : JSON.stringify(raw, null, 2);
+                    let jsonError: string | null = null;
+                    if (currentValue.trim()) {
+                      try {
+                        JSON.parse(currentValue);
+                      } catch (e) {
+                        jsonError = e instanceof Error ? e.message : String(e);
+                      }
+                    }
+                    return (
+                      // Key by position so a reorder remounts Monaco instead of
+                      // React reparenting its live DOM (which leaves Monaco's
+                      // scheduled render pointing at a detached node → "domNode"
+                      // undefined crash).
+                      <div
+                        key={`${node.id}-${nodeIndex}`}
+                        className="flex flex-col gap-2"
+                      >
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <CodeEditor
+                          language="json"
+                          height={
+                            node.editorHeight ?? EDITOR_HEIGHTS.defaults.json
+                          }
+                          aiEnabled={false}
+                          autoFocus={false}
+                          value={currentValue}
+                          onChange={(v) => {
+                            const nextState = { ...runtime, [name]: v };
+                            setRuntime(nextState);
+                            debouncedChange(nextState);
+                          }}
+                        />
+                        {jsonError && (
+                          <p className="flex items-start gap-1.5 text-[11px] text-destructive">
+                            <AlertTriangle
+                              size={12}
+                              className="mt-px shrink-0"
+                            />
+                            <span className="min-w-0 wrap-break-word">
+                              {t("preview.json.invalid", { msg: jsonError })}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "csv") {
+                    const meta = csvMeta[node.id];
+                    const data = runtime[name];
+                    const rows = Array.isArray(data) ? data : [];
+                    const fields = (meta?.fields ?? []).slice(0, 6);
+                    const sample = rows.slice(0, 5);
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
+                          <Upload size={14} className="shrink-0" />
+                          <span className="max-w-60 truncate">
+                            {meta?.fileName ?? t("preview.csv.choose")}
+                          </span>
+                          <input
+                            type="file"
+                            accept=".csv,text/csv"
+                            className="sr-only"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                loadCsv(node, file);
+                              }
+                              // Allow re-uploading the same file.
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                        {meta?.error && (
+                          <p className="flex items-start gap-1.5 text-[11px] text-destructive">
+                            <AlertTriangle
+                              size={12}
+                              className="mt-px shrink-0"
+                            />
+                            <span className="min-w-0 wrap-break-word">
+                              {t("preview.csv.invalid", { msg: meta.error })}
+                            </span>
+                          </p>
+                        )}
+                        {meta && !meta.error && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("preview.csv.summary", {
+                              rows: meta.rowCount,
+                              cols: meta.fields.length,
+                            })}
+                          </p>
+                        )}
+                        {sample.length > 0 && fields.length > 0 && (
+                          <div className="overflow-x-auto rounded-xl border border-input shadow-sm">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-border/60 bg-muted/40 text-left">
+                                  {fields.map((f) => (
+                                    <th
+                                      key={f}
+                                      className="max-w-40 truncate px-2.5 py-1.5 font-semibold"
+                                    >
+                                      {f}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {sample.map((row, ri) => (
+                                  <tr
+                                    key={ri}
+                                    className="border-b border-border/40 last:border-0"
+                                  >
+                                    {fields.map((f, ci) => {
+                                      const cell = node.hasHeader
+                                        ? (row as Record<string, unknown>)[f]
+                                        : (row as unknown[])[ci];
+                                      return (
+                                        <td
+                                          key={f}
+                                          className="max-w-40 truncate px-2.5 py-1.5 text-muted-foreground"
+                                        >
+                                          {cell === null || cell === undefined
+                                            ? ""
+                                            : String(cell)}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {rows.length > sample.length && (
+                              <div className="border-t border-border/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                                {t("preview.csv.more", {
+                                  n: rows.length - sample.length,
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "table") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <DataTable
+                          value={runtime[name]}
+                          pageSize={node.pageSize}
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "code_input") {
+                    const raw = runtime[name];
+                    const currentValue =
+                      typeof raw === "string"
+                        ? raw
+                        : raw === null || raw === undefined
+                          ? ""
+                          : String(raw);
+                    return (
+                      // Position-keyed: remount Monaco on reorder (see json branch).
+                      <div
+                        key={`${node.id}-${nodeIndex}`}
+                        className="flex flex-col gap-2"
+                      >
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <CodeEditor
+                          language={node.language}
+                          height={
+                            node.editorHeight ??
+                            EDITOR_HEIGHTS.defaults.code_input
+                          }
+                          aiEnabled={false}
+                          autoFocus={false}
+                          value={currentValue}
+                          onChange={(v) => {
+                            const nextState = { ...runtime, [name]: v };
+                            setRuntime(nextState);
+                            debouncedChange(nextState);
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "markdown") {
+                    const currentValue = runtime[name] ?? "";
+                    const mode = mdMode[node.id] ?? "write";
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                          <div className="inline-flex shrink-0 rounded-lg border border-border/60 bg-muted/40 p-0.5 text-xs">
+                            {(["write", "preview"] as const).map((m) => (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() =>
+                                  setMdMode((prev) => ({
+                                    ...prev,
+                                    [node.id]: m,
+                                  }))
+                                }
+                                className={cn(
+                                  "rounded-md px-2.5 py-1 font-medium capitalize transition-colors duration-(--motion-duration-fast)",
+                                  mode === m
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground",
+                                )}
+                              >
+                                {m}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        {mode === "preview" ? (
+                          <div
+                            style={{
+                              minHeight:
+                                node.editorHeight ??
+                                EDITOR_HEIGHTS.defaults.markdown,
+                            }}
+                            className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm"
+                          >
+                            {currentValue ? (
+                              <MarkdownView content={currentValue} />
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {t("preview.markdown.empty")}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <textarea
+                            style={{
+                              height:
+                                node.editorHeight ??
+                                EDITOR_HEIGHTS.defaults.markdown,
+                            }}
+                            placeholder={node.placeholder}
+                            value={currentValue}
+                            onChange={(e) => {
+                              const nextState = {
+                                ...runtime,
+                                [name]: e.target.value,
+                              };
+                              setRuntime(nextState);
+                              debouncedChange(nextState);
+                            }}
+                            className="w-full resize-y rounded-xl border border-input bg-transparent px-4 py-3 font-mono text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                          />
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // text_run
+                  const value = inputs[node.id] ?? "";
+                  const submit = () => {
+                    trigger(name, value, node.targets);
+                    if (node.resetEnabled) {
+                      setInput(node.id, "");
+                    }
+                  };
+
+                  return (
+                    <div key={node.id} className="flex flex-col gap-2">
+                      <label className="text-sm font-semibold">
+                        {node.fieldLabel}
+                      </label>
                       {node.description && (
-                        <p className="-mt-1 text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground -mt-1">
                           {node.description}
                         </p>
                       )}
                       <div className="flex flex-wrap items-center gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() => runNow(node.targets)}
-                          disabled={running}
-                          className="inline-flex h-10 shrink-0 items-center justify-center border-2 border-foreground bg-primary px-4 text-sm font-bold text-primary-foreground shadow-nb nb-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-                        >
-                          {node.buttonText}
-                        </button>
+                        <input
+                          value={value}
+                          placeholder={node.placeholder}
+                          onChange={(e) => {
+                            const newVal = e.target.value;
+                            setInput(node.id, newVal);
+                            const nextState = { ...runtime, [name]: newVal };
+                            setRuntime(nextState);
+                            debouncedChange(nextState);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && node.runEnabled) {
+                              submit();
+                            }
+                          }}
+                          className="h-10 flex-1 min-w-50 rounded-lg border border-input bg-transparent px-3.5 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        {node.runEnabled && (
+                          <button
+                            type="button"
+                            onClick={submit}
+                            className="h-10 shrink-0 inline-flex items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                          >
+                            {node.buttonText}
+                          </button>
+                        )}
                         {node.resetEnabled && (
                           <button
                             type="button"
-                            onClick={() => resetNow(node.resetTargets)}
-                            className="inline-flex h-10 shrink-0 items-center justify-center border-2 border-foreground bg-background px-4 text-sm font-bold shadow-nb nb-press hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                            onClick={async () => {
+                              setInput(node.id, "");
+                              const startingState = { ...runtime };
+                              const nextState = await resetChain(
+                                tool,
+                                startingState,
+                                node.resetTargets,
+                              );
+                              setRuntime(nextState);
+                            }}
+                            className="h-10 shrink-0 inline-flex items-center justify-center rounded-lg border border-input bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                           >
                             {node.resetText}
                           </button>
@@ -451,594 +1400,29 @@ export function PreviewPane({
                       </div>
                     </div>
                   );
-                }
-
-                if (node.type === "convert_html") {
-                  const sourceVp = (
-                    node.source
-                      ? tool.nodes.find(
-                          (n) => n.id === node.source && n.type === "viewport",
-                        )
-                      : tool.nodes.find((n) => n.type === "viewport")
-                  ) as ViewportNode | undefined;
-                  let sourceUrl = "";
-                  if (sourceVp) {
-                    const vpName = resolveBinding(sourceVp.binding, stateNode);
-                    const vpRaw = vpName ? runtime[vpName] : "";
-                    const vpOverride = typeof vpRaw === "string" ? vpRaw : "";
-                    sourceUrl = normalizeViewportUrl(
-                      vpOverride || sourceVp.url,
-                    );
-                  }
-                  const outName = resolveBinding(node.binding, stateNode);
-                  return (
-                    <div key={node.id} className="flex flex-col gap-2">
-                      {node.fieldLabel && (
-                        <label className="text-sm font-semibold">
-                          {node.fieldLabel}
-                        </label>
-                      )}
-                      {node.description && (
-                        <p className="text-xs text-muted-foreground -mt-1">
-                          {node.description}
-                        </p>
-                      )}
-                      {node.previewEnabled ? (
-                        <ConvertHtmlSite
-                          url={sourceUrl}
-                          height={
-                            node.editorHeight ??
-                            EDITOR_HEIGHTS.defaults.convert_html
-                          }
-                          hasSource={!!sourceVp}
-                          device={previewDevice}
-                          onDeviceChange={setPreviewDevice}
-                          outputName={outName}
-                          onHtml={(html) => {
-                            if (!outName) {
-                              return;
-                            }
-                            setRuntime((prev) => {
-                              const nextState = { ...prev, [outName]: html };
-                              debouncedChange(nextState);
-                              return nextState;
-                            });
-                          }}
-                        />
-                      ) : (
-                        <PreviewOffNotice
-                          height={
-                            node.editorHeight ??
-                            EDITOR_HEIGHTS.defaults.convert_html
-                          }
-                          onEnable={() =>
-                            updateNode(node.id, { previewEnabled: true })
-                          }
-                        />
-                      )}
-                    </div>
-                  );
-                }
-
-                if (node.type === "themed") {
-                  const htmlName = resolveBinding(node.binding, stateNode);
-                  const htmlRaw = htmlName ? runtime[htmlName] : "";
-                  const html = typeof htmlRaw === "string" ? htmlRaw : "";
-                  return (
-                    <div key={node.id} className="flex flex-col gap-2">
-                      {node.fieldLabel && (
-                        <label className="text-sm font-semibold">
-                          {node.fieldLabel}
-                        </label>
-                      )}
-                      {node.description && (
-                        <p className="text-xs text-muted-foreground -mt-1">
-                          {node.description}
-                        </p>
-                      )}
-                      {node.previewEnabled ? (
-                        <ThemedSite
-                          html={html}
-                          height={
-                            node.editorHeight ?? EDITOR_HEIGHTS.defaults.themed
-                          }
-                          hasBinding={!!htmlName}
-                          device={previewDevice}
-                          onDeviceChange={setPreviewDevice}
-                        />
-                      ) : (
-                        <PreviewOffNotice
-                          height={
-                            node.editorHeight ?? EDITOR_HEIGHTS.defaults.themed
-                          }
-                          onEnable={() =>
-                            updateNode(node.id, { previewEnabled: true })
-                          }
-                        />
-                      )}
-                    </div>
-                  );
-                }
-
-                const name = resolveBinding(node.binding, stateNode);
-
-                if (node.type === "viewport") {
-                  const raw = name ? runtime[name] : "";
-                  const override = typeof raw === "string" ? raw : "";
-                  const src = normalizeViewportUrl(override || node.url);
-                  const height =
-                    node.editorHeight ?? EDITOR_HEIGHTS.defaults.viewport;
-                  const device = previewDevice;
-                  const dims = VIEWPORT_DEVICES.find(
-                    (d) => d.value === device && d.width,
-                  );
-                  return (
-                    <div key={node.id} className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <label className="text-sm font-semibold">
-                          {node.fieldLabel}
-                        </label>
-                        {node.previewEnabled && (
-                          <DeviceToggle
-                            value={device}
-                            onChange={setPreviewDevice}
-                          />
-                        )}
-                      </div>
-                      {node.description && (
-                        <p className="text-xs text-muted-foreground -mt-1">
-                          {node.description}
-                        </p>
-                      )}
-                      {!node.previewEnabled ? (
-                        <PreviewOffNotice
-                          height={height}
-                          onEnable={() =>
-                            updateNode(node.id, { previewEnabled: true })
-                          }
-                        />
-                      ) : src ? (
-                        <>
-                          <DeviceFrame
-                            src={src}
-                            title={node.fieldLabel || "Website viewport"}
-                            device={device}
-                            height={height}
-                          />
-                          <p className="truncate font-mono text-[11px] text-muted-foreground">
-                            {src}
-                            {dims && ` · ${dims.width}×${dims.height}`}
-                          </p>
-                        </>
-                      ) : (
-                        <div
-                          style={{ height }}
-                          className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/50 text-xs text-muted-foreground"
-                        >
-                          <Globe size={20} className="opacity-30" />
-                          {override || node.url
-                            ? "Invalid URL — only http(s) pages can be embedded."
-                            : "Set a URL to load a website here."}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                if (node.type === "textarea") {
-                  const isMarkdown = markdownStates.has(name);
-                  const currentValue = runtime[name] ?? "";
+                })}
+                {aiMarkdownNodes.map((node) => {
+                  const name = resolveBinding(node.output, stateNode);
+                  const content = name ? (runtime[name] ?? "") : "";
                   return (
                     <div key={node.id} className="flex flex-col gap-2">
                       <label className="text-sm font-semibold">
-                        {node.fieldLabel}
+                        {t("preview.ai.title")}
                       </label>
-                      {node.description && (
-                        <p className="text-xs text-muted-foreground -mt-1">
-                          {node.description}
-                        </p>
-                      )}
-                      {isMarkdown && currentValue ? (
+                      {content ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm">
-                          <MarkdownView content={currentValue} />
+                          <MarkdownView content={content} />
                         </div>
                       ) : (
-                        <textarea
-                          style={{
-                            height:
-                              node.editorHeight ??
-                              EDITOR_HEIGHTS.defaults.textarea,
-                          }}
-                          placeholder={node.placeholder}
-                          value={currentValue}
-                          onChange={(e) => {
-                            const nextState = {
-                              ...runtime,
-                              [name]: e.target.value,
-                            };
-                            setRuntime(nextState);
-                            debouncedChange(nextState);
-                          }}
-                          className="w-full resize-y rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-                        />
-                      )}
-                    </div>
-                  );
-                }
-
-                if (node.type === "json") {
-                  const raw = runtime[name];
-                  // Non-string state (e.g. a code node wrote an object) is
-                  // surfaced pretty-printed so the user can keep editing it.
-                  const currentValue =
-                    typeof raw === "string"
-                      ? raw
-                      : raw === null || raw === undefined
-                        ? ""
-                        : JSON.stringify(raw, null, 2);
-                  let jsonError: string | null = null;
-                  if (currentValue.trim()) {
-                    try {
-                      JSON.parse(currentValue);
-                    } catch (e) {
-                      jsonError = e instanceof Error ? e.message : String(e);
-                    }
-                  }
-                  return (
-                    <div key={node.id} className="flex flex-col gap-2">
-                      <label className="text-sm font-semibold">
-                        {node.fieldLabel}
-                      </label>
-                      {node.description && (
-                        <p className="text-xs text-muted-foreground -mt-1">
-                          {node.description}
-                        </p>
-                      )}
-                      <CodeEditor
-                        language="json"
-                        height={
-                          node.editorHeight ?? EDITOR_HEIGHTS.defaults.json
-                        }
-                        aiEnabled={false}
-                        autoFocus={false}
-                        value={currentValue}
-                        onChange={(v) => {
-                          const nextState = { ...runtime, [name]: v };
-                          setRuntime(nextState);
-                          debouncedChange(nextState);
-                        }}
-                      />
-                      {jsonError && (
-                        <p className="flex items-start gap-1.5 text-[11px] text-destructive">
-                          <AlertTriangle size={12} className="mt-px shrink-0" />
-                          <span className="min-w-0 wrap-break-word">
-                            Invalid JSON: {jsonError}
-                          </span>
-                        </p>
-                      )}
-                    </div>
-                  );
-                }
-
-                if (node.type === "csv") {
-                  const meta = csvMeta[node.id];
-                  const data = runtime[name];
-                  const rows = Array.isArray(data) ? data : [];
-                  const fields = (meta?.fields ?? []).slice(0, 6);
-                  const sample = rows.slice(0, 5);
-                  return (
-                    <div key={node.id} className="flex flex-col gap-2">
-                      <label className="text-sm font-semibold">
-                        {node.fieldLabel}
-                      </label>
-                      {node.description && (
-                        <p className="text-xs text-muted-foreground -mt-1">
-                          {node.description}
-                        </p>
-                      )}
-                      <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
-                        <Upload size={14} className="shrink-0" />
-                        <span className="max-w-60 truncate">
-                          {meta?.fileName ?? "Choose CSV file…"}
-                        </span>
-                        <input
-                          type="file"
-                          accept=".csv,text/csv"
-                          className="sr-only"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              loadCsv(node, file);
-                            }
-                            // Allow re-uploading the same file.
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
-                      {meta?.error && (
-                        <p className="flex items-start gap-1.5 text-[11px] text-destructive">
-                          <AlertTriangle size={12} className="mt-px shrink-0" />
-                          <span className="min-w-0 wrap-break-word">
-                            Invalid CSV: {meta.error}
-                          </span>
-                        </p>
-                      )}
-                      {meta && !meta.error && (
-                        <p className="text-[11px] text-muted-foreground">
-                          {meta.rowCount} row{meta.rowCount === 1 ? "" : "s"} ·{" "}
-                          {meta.fields.length} column
-                          {meta.fields.length === 1 ? "" : "s"}
-                        </p>
-                      )}
-                      {sample.length > 0 && fields.length > 0 && (
-                        <div className="overflow-x-auto rounded-xl border border-input shadow-sm">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="border-b border-border/60 bg-muted/40 text-left">
-                                {fields.map((f) => (
-                                  <th
-                                    key={f}
-                                    className="max-w-40 truncate px-2.5 py-1.5 font-semibold"
-                                  >
-                                    {f}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {sample.map((row, ri) => (
-                                <tr
-                                  key={ri}
-                                  className="border-b border-border/40 last:border-0"
-                                >
-                                  {fields.map((f, ci) => {
-                                    const cell = node.hasHeader
-                                      ? (row as Record<string, unknown>)[f]
-                                      : (row as unknown[])[ci];
-                                    return (
-                                      <td
-                                        key={f}
-                                        className="max-w-40 truncate px-2.5 py-1.5 text-muted-foreground"
-                                      >
-                                        {cell === null || cell === undefined
-                                          ? ""
-                                          : String(cell)}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          {rows.length > sample.length && (
-                            <div className="border-t border-border/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-                              + {rows.length - sample.length} more row
-                              {rows.length - sample.length === 1 ? "" : "s"}
-                            </div>
-                          )}
+                        <div className="flex items-center justify-center rounded-xl border border-dashed border-border/50 py-8 text-xs text-muted-foreground">
+                          {t("preview.ai.empty")}
                         </div>
                       )}
                     </div>
                   );
-                }
-
-                if (node.type === "table") {
-                  return (
-                    <div key={node.id} className="flex flex-col gap-2">
-                      <label className="text-sm font-semibold">
-                        {node.fieldLabel}
-                      </label>
-                      {node.description && (
-                        <p className="text-xs text-muted-foreground -mt-1">
-                          {node.description}
-                        </p>
-                      )}
-                      <DataTable
-                        value={runtime[name]}
-                        pageSize={node.pageSize}
-                      />
-                    </div>
-                  );
-                }
-
-                if (node.type === "code_input") {
-                  const raw = runtime[name];
-                  const currentValue =
-                    typeof raw === "string"
-                      ? raw
-                      : raw === null || raw === undefined
-                        ? ""
-                        : String(raw);
-                  return (
-                    <div key={node.id} className="flex flex-col gap-2">
-                      <label className="text-sm font-semibold">
-                        {node.fieldLabel}
-                      </label>
-                      {node.description && (
-                        <p className="text-xs text-muted-foreground -mt-1">
-                          {node.description}
-                        </p>
-                      )}
-                      <CodeEditor
-                        language={node.language}
-                        height={
-                          node.editorHeight ??
-                          EDITOR_HEIGHTS.defaults.code_input
-                        }
-                        aiEnabled={false}
-                        autoFocus={false}
-                        value={currentValue}
-                        onChange={(v) => {
-                          const nextState = { ...runtime, [name]: v };
-                          setRuntime(nextState);
-                          debouncedChange(nextState);
-                        }}
-                      />
-                    </div>
-                  );
-                }
-
-                if (node.type === "markdown") {
-                  const currentValue = runtime[name] ?? "";
-                  const mode = mdMode[node.id] ?? "write";
-                  return (
-                    <div key={node.id} className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <label className="text-sm font-semibold">
-                          {node.fieldLabel}
-                        </label>
-                        <div className="inline-flex shrink-0 rounded-lg border border-border/60 bg-muted/40 p-0.5 text-xs">
-                          {(["write", "preview"] as const).map((m) => (
-                            <button
-                              key={m}
-                              type="button"
-                              onClick={() =>
-                                setMdMode((prev) => ({ ...prev, [node.id]: m }))
-                              }
-                              className={cn(
-                                "rounded-md px-2.5 py-1 font-medium capitalize transition-colors duration-(--motion-duration-fast)",
-                                mode === m
-                                  ? "bg-background text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground",
-                              )}
-                            >
-                              {m}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {node.description && (
-                        <p className="text-xs text-muted-foreground -mt-1">
-                          {node.description}
-                        </p>
-                      )}
-                      {mode === "preview" ? (
-                        <div
-                          style={{
-                            minHeight:
-                              node.editorHeight ??
-                              EDITOR_HEIGHTS.defaults.markdown,
-                          }}
-                          className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm"
-                        >
-                          {currentValue ? (
-                            <MarkdownView content={currentValue} />
-                          ) : (
-                            <span className="text-muted-foreground">
-                              Nothing to preview yet.
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <textarea
-                          style={{
-                            height:
-                              node.editorHeight ??
-                              EDITOR_HEIGHTS.defaults.markdown,
-                          }}
-                          placeholder={node.placeholder}
-                          value={currentValue}
-                          onChange={(e) => {
-                            const nextState = {
-                              ...runtime,
-                              [name]: e.target.value,
-                            };
-                            setRuntime(nextState);
-                            debouncedChange(nextState);
-                          }}
-                          className="w-full resize-y rounded-xl border border-input bg-transparent px-4 py-3 font-mono text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-                        />
-                      )}
-                    </div>
-                  );
-                }
-
-                // text_run
-                const value = inputs[node.id] ?? "";
-                const submit = () => {
-                  trigger(name, value);
-                  if (node.resetEnabled) {
-                    setInput(node.id, "");
-                  }
-                };
-
-                return (
-                  <div key={node.id} className="flex flex-col gap-2">
-                    <label className="text-sm font-semibold">
-                      {node.fieldLabel}
-                    </label>
-                    {node.description && (
-                      <p className="text-xs text-muted-foreground -mt-1">
-                        {node.description}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <input
-                        value={value}
-                        placeholder={node.placeholder}
-                        onChange={(e) => {
-                          const newVal = e.target.value;
-                          setInput(node.id, newVal);
-                          const nextState = { ...runtime, [name]: newVal };
-                          setRuntime(nextState);
-                          debouncedChange(nextState);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && node.runEnabled) {
-                            submit();
-                          }
-                        }}
-                        className="h-10 flex-1 min-w-50 rounded-lg border border-input bg-transparent px-3.5 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                      {node.runEnabled && (
-                        <button
-                          type="button"
-                          onClick={submit}
-                          className="h-10 shrink-0 inline-flex items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-                        >
-                          {node.buttonText}
-                        </button>
-                      )}
-                      {node.resetEnabled && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            setInput(node.id, "");
-                            const startingState = { ...runtime };
-                            const nextState = await resetChain(
-                              tool,
-                              startingState,
-                            );
-                            setRuntime(nextState);
-                          }}
-                          className="h-10 shrink-0 inline-flex items-center justify-center rounded-lg border border-input bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-                        >
-                          {node.resetText}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              {aiMarkdownNodes.map((node) => {
-                const name = resolveBinding(node.output, stateNode);
-                const content = name ? (runtime[name] ?? "") : "";
-                return (
-                  <div key={node.id} className="flex flex-col gap-2">
-                    <label className="text-sm font-semibold">AI Response</label>
-                    {content ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm">
-                        <MarkdownView content={content} />
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center rounded-xl border border-dashed border-border/50 py-8 text-xs text-muted-foreground">
-                        AI response will appear here after running the chain.
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                })}
+              </div>
+            </ErrorBoundary>
           )}
         </div>
       </div>

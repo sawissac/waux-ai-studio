@@ -15,12 +15,16 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { FlaskConical, Plus } from "lucide-react";
+import { useState } from "react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NodeCard } from "@/features/NodeCard";
+import { NODE_DND_MIME } from "@/features/PalettePanel";
 import { PreviewPane } from "@/features/PreviewPane";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
-import type { EditorPlacement, Tool } from "@/types/tool-builder";
+import { useTranslation } from "@/hooks/useTranslation";
+import { cn } from "@/lib/utils";
+import type { EditorPlacement, Tool, ToolNodeType } from "@/types/tool-builder";
 
 const PLACEMENTS: EditorPlacement[] = ["panel", "inline"];
 
@@ -39,12 +43,36 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
     stateNode,
     selectedNodeId,
     editorPlacement,
+    addNode,
     selectNode,
     deleteNode,
     clearNodeSelection,
     setEditorPlacement,
     reorderNodes,
   } = useToolBuilder();
+  const { t } = useTranslation();
+
+  const [dropActive, setDropActive] = useState(false);
+
+  /** Accept a node-type drag originating from the palette. */
+  function handleDragOver(e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes(NODE_DND_MIME)) {
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDropActive(true);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    const type = e.dataTransfer.getData(NODE_DND_MIME);
+    setDropActive(false);
+    if (!type) {
+      return;
+    }
+    e.preventDefault();
+    addNode(type as ToolNodeType);
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -69,7 +97,7 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b-2 border-foreground px-4">
-        <span className="text-sm font-bold">Builder</span>
+        <span className="text-sm font-bold">{t("builder.title")}</span>
         <span className="truncate font-mono text-xs text-muted-foreground">
           {tool.name}
         </span>
@@ -86,7 +114,7 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
                   value={p}
                   className="text-[11px] capitalize"
                 >
-                  {p}
+                  {t(`builder.placement.${p}`)}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -94,17 +122,26 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 sm:p-6">
+      <div
+        className="flex-1 overflow-auto p-4 sm:p-6"
+        onDragOver={handleDragOver}
+        onDragLeave={() => setDropActive(false)}
+        onDrop={handleDrop}
+      >
         <div className="mx-auto max-w-2xl">
           {empty ? (
-            <div className="flex flex-col items-center gap-2 border-2 border-dashed border-foreground py-14 text-center">
+            <div
+              className={cn(
+                "flex flex-col items-center gap-2 border-2 border-dashed border-foreground py-14 text-center transition-colors duration-(--motion-duration-fast)",
+                dropActive && "border-primary bg-accent",
+              )}
+            >
               <span className="grid size-11 place-items-center border-2 border-foreground bg-primary text-primary-foreground shadow-nb-sm">
                 <FlaskConical size={22} />
               </span>
-              <div className="text-sm font-bold">This tool is empty</div>
+              <div className="text-sm font-bold">{t("builder.emptyTitle")}</div>
               <div className="max-w-xs text-xs text-muted-foreground">
-                Add nodes from the <b>Select Inputs</b> panel. Start with a
-                State Control.
+                {t("builder.emptyBody")}
               </div>
             </div>
           ) : (
@@ -129,6 +166,7 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
                       )}
                       <NodeCard
                         node={node}
+                        orderIndex={i}
                         stateNode={stateNode}
                         selected={node.id === selectedNodeId}
                         placement={editorPlacement}
@@ -146,9 +184,13 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
               <button
                 type="button"
                 onClick={clearNodeSelection}
-                className="inline-flex h-14 items-center justify-center gap-1.5 border-2 border-dashed border-foreground text-sm font-bold text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground"
+                className={cn(
+                  "inline-flex h-14 items-center justify-center gap-1.5 border-2 border-dashed border-foreground text-sm font-bold text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground",
+                  dropActive && "border-primary bg-accent text-foreground",
+                )}
               >
-                <Plus size={15} /> Add input
+                <Plus size={15} />{" "}
+                {dropActive ? t("builder.dropToAdd") : t("builder.addInput")}
               </button>
             </div>
           )}

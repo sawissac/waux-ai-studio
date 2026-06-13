@@ -6,6 +6,7 @@ import { GripVertical, Trash2 } from "lucide-react";
 
 import { ACCENT_CLASSES, NODE_META } from "@/constants/tool-builder";
 import { NodeEditor } from "@/features/NodeEditor";
+import { useTranslation } from "@/hooks/useTranslation";
 import { nodeSubtitle } from "@/lib/tool-builder-runtime";
 import { cn } from "@/lib/utils";
 import type {
@@ -30,6 +31,7 @@ import type {
  */
 export function NodeCard({
   node,
+  orderIndex,
   stateNode,
   selected,
   placement,
@@ -37,17 +39,17 @@ export function NodeCard({
   onDelete,
 }: {
   node: ToolNode;
+  orderIndex: number;
   stateNode: StateNode | null;
   selected: boolean;
   placement: EditorPlacement;
   onSelect: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const meta = NODE_META[node.type];
   const Icon = meta.icon;
   const subtitle = nodeSubtitle(node, stateNode);
-
-  const showInline = selected && placement === "inline";
 
   const {
     attributes,
@@ -57,6 +59,11 @@ export function NodeCard({
     transition,
     isDragging,
   } = useSortable({ id: node.id });
+
+  // Don't render the inline Monaco editor while this card is mid-drag — no
+  // point laying it out under a dnd-kit transform. (CodeEditor also guards its
+  // own layout against disposal, so this is just an optimization.)
+  const showInline = selected && placement === "inline" && !isDragging;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -99,7 +106,9 @@ export function NodeCard({
           <Icon size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">@{meta.label}</div>
+          <div className="truncate text-sm font-semibold">
+            @{t(`node.${node.type}.label`)}
+          </div>
           {subtitle && (
             <div className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
               <span>{subtitle.label}</span>
@@ -113,7 +122,7 @@ export function NodeCard({
         </div>
         <button
           type="button"
-          aria-label="Delete node"
+          aria-label={t("node.delete")}
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
@@ -126,7 +135,10 @@ export function NodeCard({
 
       {showInline && (
         <div className="nb-surface mt-2 p-3 duration-(--motion-duration-base) animate-in fade-in slide-in-from-top-1">
-          <NodeEditor node={node} placement="inline" />
+          {/* Key by position: remount the inline Monaco on reorder rather than
+              letting React reparent its live DOM (stale scheduled render →
+              "domNode" undefined crash). */}
+          <NodeEditor key={orderIndex} node={node} placement="inline" />
         </div>
       )}
     </div>

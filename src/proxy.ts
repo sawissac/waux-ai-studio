@@ -49,13 +49,18 @@ export async function proxy(request: NextRequest) {
   // private hosts rejected).
   const isSiteProxy =
     pathname === "/api/site-proxy" || pathname.startsWith("/api/site-proxy/");
+  // Password-reset flow: the request form and the email-link callback both run
+  // before a session exists, so they must be reachable while unauthenticated.
+  const isAuthFlow =
+    pathname === "/forgot-password" || pathname.startsWith("/auth/");
 
   if (
     !user &&
     pathname !== "/login" &&
     !isSharePage &&
     !isSharedApi &&
-    !isSiteProxy
+    !isSiteProxy &&
+    !isAuthFlow
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

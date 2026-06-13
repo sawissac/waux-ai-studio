@@ -1,6 +1,6 @@
 # Project Structure — File Placement Rules
 
-Last updated: 2026-06-10
+Last updated: 2026-06-12
 
 Where each file type lives. Next.js 16 App Router + TypeScript.
 
@@ -96,10 +96,12 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
 - `BuilderPanel/` — center node-chain builder; composes `NodeCard` + `PreviewPane` features
 - `NodeCard/` — single node row; composes the `NodeEditor` feature
 - `NodeEditor/` — node config form (shared by `NodeCard` and `ToolBuilder`)
-- `PalettePanel/` — right "Select Inputs" node palette
+- `PalettePanel/` — right "Node" panel
 - `PreviewPane/` — live preview renderer
   - `components/DataTable.tsx` — Table-node renderer (TanStack Table + Virtual: kind-aware sorting, column resizing, 30/50/100 pagination)
 - `SharedToolView/` — public share view. Fetches a shared tool via `/api/shared/[toolId]` and renders only `PreviewPane`. No builder UI. Mounted by `app/(full-frame-public)/[toolId]/page.tsx`.
+- `Settings/` — user settings. Exposes `SettingsButton` (gear trigger + dialog) mounted in `Topbar`. Renders the available-settings catalog (`@/constants/settings`); reads/writes via `@/hooks/useAppConfig`. Persistence + theme application live in `@/providers/AppConfigProvider`.
+  - `components/SettingToggle.tsx` — feature-private on/off switch.
 
 Tool Builder shared domain (consumed by the features above):
 `@/stores/slices/toolBuilderSlice` (state), `@/hooks/useToolBuilder` (state/actions
@@ -153,7 +155,7 @@ Rule: one slice per state concern. File name `<feature><Concern>Slice.ts`.
 
 - `store.ts` — `makeStore()` factory (per-request store) + `RootState`/`AppDispatch`/`AppStore` types. Registers each slice in its `reducer` map.
 - `hooks.ts` — typed `useAppDispatch`, `useAppSelector`, `useAppStore`
-- `slices/appConfigSlice.ts` — global `appConfig` (theme, locale, sidebarCollapsed, hydrated). Mounted via `StoreProvider` in `src/app/layout.tsx`
+- `slices/appConfigSlice.ts` — global `appConfig` / user settings (theme, locale, sidebarCollapsed, reducedMotion, autoSave, confirmBeforeDelete, hydrated). Accessed via `@/hooks/useAppConfig`; persisted + applied by `@/providers/AppConfigProvider`. Mounted via `StoreProvider` in `src/app/layout.tsx`
 - `slices/toolBuilderSlice.ts` — Tool Builder state (tools, selection, editor placement, search, loadState). Mounted at `state.toolBuilder`; never read directly — go through `@/hooks/useToolBuilder`. Exports `hydrateTools` + `setLoadState` for the sync hook.
 
 > **Slice ownership**: all state slices live in `src/stores/slices/`. Components never read slices directly — they go through a hook in `src/hooks/` (see the hooks rule). Tool Builder's state is shared by every panel feature, so its slice + access hook are shared, not co-located in one feature.
@@ -177,6 +179,7 @@ Rule: all `"use client"`. Composed in `src/app/layout.tsx`.
 
 - `StoreProvider.tsx` — Redux store provider (per-request store via `useRef`)
 - `QueryProvider.tsx` — TanStack Query provider (ref-stable `QueryClient`)
+- `AppConfigProvider.tsx` — hydrates `appConfig` from localStorage, applies theme (`.dark` + `color-scheme`, tracking the OS preference while `system`), reflects reduced-motion/locale onto `<html>`, and mirrors settings back to localStorage. Composed inside `StoreProvider` in `src/app/layout.tsx`.
 
 ---
 
@@ -195,6 +198,8 @@ Rule: feature-only hooks stay inside feature folder, not here. Query/mutation ho
 - `useToolBuilder.ts` — single access point for Tool Builder state + actions (reads `state.toolBuilder`, returns derived values + bound dispatchers). All panel features use it; components never touch the slice or `useAppSelector` directly.
 - `useAuth.ts` — returns `{ user, loading }` for the signed-in Supabase user; subscribes to `onAuthStateChange`.
 - `useToolsSync.ts` — fetches tools + nodes from Supabase via TanStack Query and dispatches `hydrateTools` into the Redux slice on mount. Called once at the top of `ToolBuilder`.
+- `useAppConfig.ts` — single access point for global app config / user settings (`state.appConfig`): returns current values + bound setters (incl. catalog-driven `setToggle`). Used by `Settings` and `AppConfigProvider`; components never read the slice directly.
+- `useTranslation.ts` — returns `t(key)` resolving `@/constants/i18n` strings for the active locale (from `useAppConfig`), with `en` fallback. Used by any feature rendering user-facing text (`Topbar`, `Settings`).
 
 > **Example usage** (target convention):
 >
@@ -256,6 +261,8 @@ Rule: never hardcode route strings in JSX — use `Routes.X`. Use `.tsx` only wh
 ### Current constants
 
 - `tool-builder.tsx` — node catalog (`NODE_META`, `ACCENT_CLASSES`, `PALETTE_GROUPS`), the `createNode()` factory, and `uuid()`. `.tsx` because entries reference lucide icon components.
+- `settings.tsx` — available-settings catalog (`THEME_OPTIONS`, `LOCALE_OPTIONS`, `TOGGLE_SETTINGS`, `SETTINGS_STORAGE_KEY`) consumed by the `Settings` feature. Labels are `MessageKey`s resolved at render. `.tsx` because options carry lucide icons.
+- `i18n.ts` — in-house i18n message catalog (`MESSAGES` per `AppLocale`, `MessageKey` type). Hardcoded `en` + `my` (Burmese) dictionaries; `en` is the source-of-truth key set (the `my: Record<MessageKey, string>` value type forces parity). Covers Topbar, Settings, PreviewPane, the Tools/Builder/Node panels (chrome + node-catalog labels/blurbs), and the full NodeEditor detail form (field labels, helper text, toggles, targets, dialogs). Only author-supplied content (a node's own fieldLabel/description/buttonText) stays untranslated. Resolved via `@/hooks/useTranslation`.
 
 ---
 

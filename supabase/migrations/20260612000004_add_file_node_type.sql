@@ -1,0 +1,11 @@
+-- ---------------------------------------------------------------------------
+-- Add the `file` node type.
+--
+-- `file` — generic file upload. The chosen file is encoded per `outputFormat`
+--          (text | base64 | dataurl) and the encoded string is written to the
+--          bound state slot. Config also carries an `accept` filter.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'file';

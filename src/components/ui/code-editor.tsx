@@ -5,6 +5,7 @@ import { Loader2, Send, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { ModelCombobox } from "@/components/ui/model-combobox";
 import {
   Select,
@@ -520,6 +521,7 @@ export function CodeEditor({
   const registered = useRef<Set<string>>(new Set());
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
+  const disposedRef = useRef(false);
 
   const [chatOpen, setChatOpen] = useState(false);
   const [provider, setProvider] = useState<AiProvider>(aiProvider ?? "gemini");
@@ -672,6 +674,35 @@ export function CodeEditor({
     (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
+      disposedRef.current = false;
+
+      // Manual, disposal-safe layout. `automaticLayout: true` drives Monaco's
+      // own ResizeObserver, which can fire mid-paint while a parent dnd-kit
+      // transform reflows the editor — rendering against a detached view and
+      // throwing "Cannot read properties of undefined (reading 'domNode')".
+      // We observe the container ourselves and bail once the editor is gone.
+      const dom = editor.getDomNode();
+      const parent = dom?.parentElement;
+      let raf = 0;
+      const ro = parent
+        ? new ResizeObserver(() => {
+            cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => {
+              if (disposedRef.current || !editorRef.current) {
+                return;
+              }
+              editor.layout();
+            });
+          })
+        : null;
+      if (parent && ro) {
+        ro.observe(parent);
+      }
+      editor.onDidDispose(() => {
+        disposedRef.current = true;
+        cancelAnimationFrame(raf);
+        ro?.disconnect();
+      });
 
       // Track the current selection so the AI panel can scope answers to it.
       editor.onDidChangeCursorSelection(() => {
@@ -767,70 +798,90 @@ export function CodeEditor({
         )}
       </div>
       <div className="relative flex-1">
-        <Editor
-          height={height}
-          language={language}
-          value={value}
-          onChange={(v) => {
-            onChange(v ?? "");
-            debouncedJsonFormat();
-          }}
-          onMount={handleMount}
-          theme="vs-dark"
-          loading={
-            <div className="flex h-full items-center justify-center bg-[#1e1e1e] text-xs text-neutral-500">
-              Loading editor…
+        <ErrorBoundary
+          resetKeys={[language, readOnly]}
+          fallback={(_err, reset) => (
+            <div
+              className="flex items-center justify-center gap-2 bg-[#1e1e1e] text-xs text-neutral-400"
+              style={{ height }}
+            >
+              <span>Editor hiccup.</span>
+              <button
+                type="button"
+                onClick={reset}
+                className="rounded-md border border-neutral-600 px-2 py-0.5 font-medium hover:bg-neutral-800"
+              >
+                Reload editor
+              </button>
             </div>
-          }
-          options={{
-            readOnly,
-            minimap: { enabled: false },
-            fontSize: 13,
-            lineHeight: 20,
-            fontFamily:
-              "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace",
-            fontLigatures: true,
-            tabSize: 2,
-            wordWrap: "off",
-            scrollBeyondLastLine: false,
-            automaticLayout: true,
-            padding: { top: 12, bottom: 12 },
-            lineNumbers: "on",
-            glyphMargin: false,
-            folding: true,
-            bracketPairColorization: { enabled: true },
-            suggest: {
-              showSnippets: true,
-              snippetsPreventQuickSuggestions: false,
-              showWords: true,
-            },
-            quickSuggestions: {
-              other: true,
-              comments: false,
-              strings: true,
-            },
-            acceptSuggestionOnCommitCharacter: true,
-            suggestOnTriggerCharacters: true,
-            parameterHints: { enabled: true },
-            autoClosingBrackets: "always",
-            autoClosingQuotes: "always",
-            autoIndent: "full",
-            formatOnPaste: true,
-            formatOnType: true,
-            renderWhitespace: "none",
-            smoothScrolling: true,
-            cursorBlinking: "smooth",
-            cursorSmoothCaretAnimation: "on",
-            renderLineHighlight: "line",
-            overviewRulerBorder: false,
-            hideCursorInOverviewRuler: true,
-            scrollbar: {
-              verticalScrollbarSize: 8,
-              horizontalScrollbarSize: 8,
-              verticalSliderSize: 8,
-            },
-          }}
-        />
+          )}
+        >
+          <Editor
+            height={height}
+            language={language}
+            value={value}
+            onChange={(v) => {
+              onChange(v ?? "");
+              debouncedJsonFormat();
+            }}
+            onMount={handleMount}
+            theme="vs-dark"
+            loading={
+              <div className="absolute inset-0 flex items-center justify-center bg-[#1e1e1e] text-xs text-neutral-500">
+                Loading editor…
+              </div>
+            }
+            options={{
+              readOnly,
+              minimap: { enabled: false },
+              fontSize: 13,
+              lineHeight: 20,
+              fontFamily:
+                "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace",
+              fontLigatures: true,
+              tabSize: 2,
+              wordWrap: "off",
+              scrollBeyondLastLine: false,
+              // Layout handled manually in handleMount (disposal-safe). See note there.
+              automaticLayout: false,
+              padding: { top: 12, bottom: 12 },
+              lineNumbers: "on",
+              glyphMargin: false,
+              folding: true,
+              bracketPairColorization: { enabled: true },
+              suggest: {
+                showSnippets: true,
+                snippetsPreventQuickSuggestions: false,
+                showWords: true,
+              },
+              quickSuggestions: {
+                other: true,
+                comments: false,
+                strings: true,
+              },
+              acceptSuggestionOnCommitCharacter: true,
+              suggestOnTriggerCharacters: true,
+              parameterHints: { enabled: true },
+              autoClosingBrackets: "always",
+              autoClosingQuotes: "always",
+              autoIndent: "full",
+              formatOnPaste: true,
+              formatOnType: true,
+              renderWhitespace: "none",
+              smoothScrolling: true,
+              cursorBlinking: "smooth",
+              cursorSmoothCaretAnimation: "on",
+              renderLineHighlight: "line",
+              overviewRulerBorder: false,
+              hideCursorInOverviewRuler: true,
+              scrollbar: {
+                verticalScrollbarSize: 8,
+                horizontalScrollbarSize: 8,
+                verticalSliderSize: 8,
+              },
+            }}
+          />
+        </ErrorBoundary>
         {chatOpen && (
           <div className="absolute right-0 top-0 bottom-0 z-10 flex w-[340px] max-w-[80%] flex-col border-l bg-background shadow-xl">
             <div className="flex items-center gap-2 border-b px-2.5 py-2">

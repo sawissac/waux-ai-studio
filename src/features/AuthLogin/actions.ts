@@ -1,8 +1,21 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+
+/** Resolve the public site origin from request headers (proto + host). */
+async function getOrigin(): Promise<string> {
+  const h = await headers();
+  const origin = h.get("origin");
+  if (origin) {
+    return origin;
+  }
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
 
 /**
  * Sign in with email + password.
@@ -39,6 +52,50 @@ export async function signUp(
   }
 
   return undefined;
+}
+
+/**
+ * Send a password-reset email. The link lands on `/auth/callback`, which
+ * exchanges the recovery code for a session and forwards to `/reset-password`.
+ *
+ * Returns `{ error }` on failure; `undefined` on success so the client can show
+ * a "check your email" state. Note: Supabase does not reveal whether the email
+ * exists, so success here does not confirm an account.
+ */
+export async function requestPasswordReset(
+  email: string,
+): Promise<{ error: string } | undefined> {
+  const supabase = await createClient();
+  const origin = await getOrigin();
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/callback?next=/reset-password`,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return undefined;
+}
+
+/**
+ * Set a new password for the currently authenticated (recovery-session) user.
+ * Reached only after `/auth/callback` established the recovery session.
+ *
+ * Returns `{ error }` on failure; redirects to `/` on success.
+ */
+export async function updatePassword(
+  password: string,
+): Promise<{ error: string } | undefined> {
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  redirect("/");
 }
 
 /**

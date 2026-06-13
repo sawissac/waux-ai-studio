@@ -19,8 +19,12 @@ async function fetchAllTools(): Promise<Tool[]> {
     .select("id, name, position")
     .order("position");
 
-  if (error) {throw error;}
-  if (!toolRows?.length) {return [];}
+  if (error) {
+    throw error;
+  }
+  if (!toolRows?.length) {
+    return [];
+  }
 
   const toolIds = toolRows.map((t) => t.id);
 
@@ -30,7 +34,9 @@ async function fetchAllTools(): Promise<Tool[]> {
     .in("tool_id", toolIds)
     .order("position");
 
-  if (nodeError) {throw nodeError;}
+  if (nodeError) {
+    throw nodeError;
+  }
 
   return toolRows.map((t) => ({
     id: t.id,
@@ -64,7 +70,9 @@ async function persistTools(tools: Tool[], userId: string): Promise<void> {
       position: i,
     }));
     const { error } = await supabase.from("tools").upsert(toolRows);
-    if (error) {throw error;}
+    if (error) {
+      throw error;
+    }
   }
 
   // 2a. Delete all existing nodes for these tools
@@ -73,7 +81,9 @@ async function persistTools(tools: Tool[], userId: string): Promise<void> {
       .from("tool_nodes")
       .delete()
       .in("tool_id", toolIds);
-    if (error) {throw error;}
+    if (error) {
+      throw error;
+    }
   }
 
   // 2b. Re-insert all nodes
@@ -89,20 +99,26 @@ async function persistTools(tools: Tool[], userId: string): Promise<void> {
   );
   if (nodeRows.length > 0) {
     const { error } = await supabase.from("tool_nodes").insert(nodeRows);
-    if (error) {throw error;}
+    if (error) {
+      throw error;
+    }
   }
 
   // 3. Delete tools in DB that are no longer in the Redux list
   const { data: dbTools, error: fetchError } = await supabase
     .from("tools")
     .select("id");
-  if (fetchError) {throw fetchError;}
+  if (fetchError) {
+    throw fetchError;
+  }
   const orphanIds = (dbTools ?? [])
     .map((t) => t.id)
     .filter((id) => !toolIds.includes(id));
   if (orphanIds.length > 0) {
     const { error } = await supabase.from("tools").delete().in("id", orphanIds);
-    if (error) {throw error;}
+    if (error) {
+      throw error;
+    }
   }
 }
 
@@ -133,17 +149,17 @@ export function useToolsSync() {
   useEffect(() => {
     if (isLoading) {
       dispatch(setLoadState("loading"));
-    }
-  }, [isLoading, dispatch]);
-
-  useEffect(() => {
-    if (data) {
+    } else if (data) {
       dispatch(hydrateTools(data));
+    } else {
+      dispatch(setLoadState("idle"));
     }
-  }, [data, dispatch]);
+  }, [isLoading, data, dispatch]);
 
   const saveTools = useCallback(async () => {
-    if (saveState === "saving") {return;}
+    if (saveState === "saving") {
+      return;
+    }
 
     if (savedTimerRef.current) {
       clearTimeout(savedTimerRef.current);

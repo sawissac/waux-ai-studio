@@ -1,27 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 /**
  * Subscribe to a CSS media query and report whether it currently matches.
  *
- * SSR-safe: returns `false` on the server and the first client render, then
- * syncs to the real value after mount (so layouts gated on this hook settle on
- * hydration without reading `window` during render).
+ * Backed by `useSyncExternalStore` so the *first* client render already reflects
+ * the real `matchMedia` result — there is no post-mount sync, so layouts gated
+ * on this hook never flash/shift between the initial paint and hydration. On the
+ * server (and during hydration) it falls back to `defaultMatches`.
  *
  * @param query CSS media query, e.g. `"(min-width: 1024px)"`.
+ * @param defaultMatches Value used for the server snapshot (no `window`).
  * @returns `true` when the query matches.
  */
-export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false);
+export function useMediaQuery(query: string, defaultMatches = false): boolean {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    },
+    [query],
+  );
 
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const onChange = () => setMatches(mql.matches);
-    onChange();
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, [query]);
-
-  return matches;
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(query).matches,
+    () => defaultMatches,
+  );
 }

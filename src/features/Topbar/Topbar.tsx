@@ -6,7 +6,9 @@ import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
 import { signOut } from "@/features/AuthLogin";
+import { SettingsButton } from "@/features/Settings";
 import type { SaveState } from "@/hooks/useToolsSync";
+import { useTranslation } from "@/hooks/useTranslation";
 
 /**
  * App top bar — wordmark, open-tool breadcrumb, tool count, save action, and sign-out.
@@ -28,6 +30,7 @@ export function Topbar({
   saveState: SaveState;
 }) {
   const [pending, startTransition] = useTransition();
+  const { t } = useTranslation();
 
   function handleSignOut() {
     startTransition(() => signOut());
@@ -41,7 +44,7 @@ export function Topbar({
     <div className="flex items-center gap-2 border-b-2 border-foreground bg-card px-4 py-2.5">
       <div className="flex items-center gap-2 text-sm font-bold">
         <Logo size={24} />
-        Tool Builder
+        Toolkit Studio
       </div>
       {toolName && (
         <span className="truncate text-sm text-muted-foreground">
@@ -51,13 +54,13 @@ export function Topbar({
 
       <div className="ml-auto flex items-center gap-2">
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
-          <Boxes size={12} /> {toolCount} tools
+          <Boxes size={12} /> {toolCount} {t("topbar.tools")}
         </span>
 
         <Button
           variant="outline"
           size="sm"
-          aria-label="Save tools"
+          aria-label={t("topbar.save")}
           disabled={isSaving}
           onClick={onSave}
           className={[
@@ -77,18 +80,20 @@ export function Topbar({
             <CloudUpload className="size-3" />
           )}
           {isSaving
-            ? "Saving…"
+            ? t("topbar.saving")
             : isSaved
-              ? "Saved"
+              ? t("topbar.saved")
               : isError
-                ? "Error"
-                : "Save"}
+                ? t("topbar.error")
+                : t("topbar.save")}
         </Button>
+
+        <SettingsButton />
 
         <Button
           variant="outline"
           size="icon-sm"
-          aria-label="Sign out"
+          aria-label={t("topbar.signOut")}
           disabled={pending}
           onClick={handleSignOut}
           className="size-7 bg-destructive text-white hover:bg-destructive hover:text-white"

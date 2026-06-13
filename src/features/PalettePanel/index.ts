@@ -1,2 +1,2 @@
 /** PalettePanel — feature public surface. */
-export { PalettePanel } from "./PalettePanel";
+export { NODE_DND_MIME,PalettePanel } from "./PalettePanel";

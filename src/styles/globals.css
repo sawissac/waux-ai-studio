@@ -235,3 +235,46 @@
     transform: none;
   }
 }
+
+/* =========================================================================
+   NEUBRUTALISM SCROLLBAR — hard border, sharp corners, flat fill, no blur.
+   Firefox uses scrollbar-color/width; WebKit/Blink use ::-webkit-scrollbar.
+   ========================================================================= */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--foreground) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--muted);
+  border-left: var(--nb-border-width) solid var(--foreground);
+}
+
+::-webkit-scrollbar-track:horizontal {
+  border-left: none;
+  border-top: var(--nb-border-width) solid var(--foreground);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--foreground);
+  border: var(--nb-border-width) solid var(--foreground);
+  /* Sharp blocks — no rounding. */
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--ring);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--muted);
+}

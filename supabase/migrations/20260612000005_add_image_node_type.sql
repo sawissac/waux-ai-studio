@@ -1,0 +1,11 @@
+-- ---------------------------------------------------------------------------
+-- Add the `image` node type.
+--
+-- `image` — image upload with a live thumbnail. The chosen image is written to
+--           the bound state slot as a `data:` URL — ready to feed an AI vision
+--           prompt or render in a Canvas / Markdown node.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'image';

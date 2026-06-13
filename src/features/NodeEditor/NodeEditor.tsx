@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChevronDown,
   ChevronLeft,
   Copy,
   MoreHorizontal,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -33,17 +35,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { MessageKey } from "@/constants/i18n";
 import {
   ACCENT_CLASSES,
   CODE_INPUT_LANGUAGES,
+  DATE_MODES,
   EDITOR_HEIGHTS,
+  ENCODE_OPERATIONS,
+  FILE_OUTPUT_FORMATS,
+  FILTER_OPERATORS,
+  HTTP_METHODS,
+  HTTP_RESPONSE_TYPES,
+  JOIN_KINDS,
   NODE_META,
+  REGEX_MODES,
+  SCHEMA_TYPES,
+  SORT_DIRECTIONS,
+  SORT_TYPES,
   TABLE_PAGE_SIZES,
   uuid,
+  VALUELESS_FILTER_OPERATORS,
   VIEWPORT_DEVICES,
 } from "@/constants/tool-builder";
 import { useProviderModels } from "@/hooks/useProviderModels";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
+import { useTranslation } from "@/hooks/useTranslation";
 import { cn } from "@/lib/utils";
 import type {
   AiNode,
@@ -52,17 +68,46 @@ import type {
   CodeInputNode,
   ConvertHtmlNode,
   CsvNode,
+  DateNode,
+  DateTimeMode,
   EditorPlacement,
+  EncodeNode,
+  EncodeOperation,
+  FileNode,
+  FileOutputFormat,
+  FilterNode,
+  FilterOperator,
   HtmlSanitizeNode,
+  HttpMethod,
+  HttpRequestNode,
+  HttpResponseType,
+  ImageNode,
+  JoinKind,
   JsonNode,
+  JsonPathNode,
+  MapNode,
   MarkdownNode,
+  MathNode,
+  MergeNode,
+  NumberNode,
+  RegexMode,
+  RegexNode,
+  SchemaRule,
+  SchemaValidateNode,
+  SelectNode,
+  SelectOption,
+  SortDirection,
+  SortNode,
+  SortType,
   StateEntry,
   StateNode,
   TableNode,
   TablePageSize,
+  TemplateNode,
   TextareaNode,
   TextRunNode,
   ThemedNode,
+  ToggleNode,
   ToolNode,
   ToolNodeType,
   TsTypeNode,
@@ -141,6 +186,7 @@ function StateSelect({
   onChange: (next: string) => void;
 }) {
   const { stateNode } = useToolBuilder();
+  const { t } = useTranslation();
   const states = stateNode?.states ?? [];
   return (
     <Select
@@ -150,7 +196,9 @@ function StateSelect({
     >
       <SelectTrigger className="h-8 w-full">
         <SelectValue
-          placeholder={states.length === 0 ? "— no state —" : "Pick state…"}
+          placeholder={
+            states.length === 0 ? t("field.noState") : t("field.pickState")
+          }
         />
       </SelectTrigger>
       <SelectContent>
@@ -170,6 +218,12 @@ function BindingControl({
 }: {
   node:
     | TextRunNode
+    | NumberNode
+    | SelectNode
+    | ToggleNode
+    | DateNode
+    | FileNode
+    | ImageNode
     | TextareaNode
     | MarkdownNode
     | JsonNode
@@ -178,11 +232,12 @@ function BindingControl({
     | CodeInputNode;
 }) {
   const { stateNode, updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   const states = stateNode?.states ?? [];
   const { value } = node.binding;
 
   return (
-    <Field label="State binding">
+    <Field label={t("field.stateBinding")}>
       <Select
         value={value || undefined}
         onValueChange={(v) =>
@@ -192,7 +247,9 @@ function BindingControl({
       >
         <SelectTrigger className="h-8 w-full">
           <SelectValue
-            placeholder={states.length === 0 ? "— no state —" : "Pick state…"}
+            placeholder={
+              states.length === 0 ? t("field.noState") : t("field.pickState")
+            }
           />
         </SelectTrigger>
         <SelectContent>
@@ -204,7 +261,7 @@ function BindingControl({
         </SelectContent>
       </Select>
       <p className="text-[11px] text-muted-foreground">
-        Which state this node reads from / writes to.
+        {t("field.stateBinding.help")}
       </p>
     </Field>
   );
@@ -228,9 +285,10 @@ function EditorHeightField({
     | ThemedNode;
 }) {
   const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   const fallback = EDITOR_HEIGHTS.defaults[node.type];
   return (
-    <Field label="Editor height (px)">
+    <Field label={t("field.editorHeight")}>
       <input
         type="number"
         min={EDITOR_HEIGHTS.min}
@@ -256,8 +314,10 @@ function EditorHeightField({
         className={inputCls}
       />
       <p className="text-[11px] text-muted-foreground">
-        Initial field height in the preview ({EDITOR_HEIGHTS.min}–
-        {EDITOR_HEIGHTS.max}px).
+        {t("field.editorHeight.help", {
+          min: EDITOR_HEIGHTS.min,
+          max: EDITOR_HEIGHTS.max,
+        })}
       </p>
     </Field>
   );
@@ -267,17 +327,21 @@ function EditorHeightField({
  * Run-target picker for a Button node. Lists the tool's code & AI nodes; the
  * button runs only the checked ones (in chain order). None checked = run all.
  */
-function describeRunnable(n: ToolNode): string {
+function describeRunnable(n: ToolNode, t: (key: MessageKey) => string): string {
   if (n.type === "code") {
-    return n.description?.trim() || "Code";
+    return n.description?.trim() || t("node.code.label");
   }
   if (n.type === "ai") {
-    return `AI · ${n.model || "default"}`;
+    return `${t("node.ai.label")} · ${n.model || "default"}`;
   }
-  if (n.type === "ts_type") {
-    return n.description?.trim() || "TS Type Converter";
+  if (
+    "description" in n &&
+    typeof n.description === "string" &&
+    n.description.trim()
+  ) {
+    return n.description.trim();
   }
-  return NODE_META[n.type].label;
+  return t(`node.${n.type}.label`);
 }
 
 /**
@@ -289,19 +353,22 @@ function describeRunnable(n: ToolNode): string {
 function TargetSelector({
   node,
   field,
-  label,
+  labelKey,
   kinds,
-  emptyHint,
-  verb,
+  emptyKey,
+  helpAllKey,
+  helpSomeKey,
 }: {
-  node: ButtonNode;
+  node: ButtonNode | TextRunNode;
   field: "targets" | "resetTargets";
-  label: string;
+  labelKey: MessageKey;
   kinds: ToolNodeType[];
-  emptyHint: string;
-  verb: string;
+  emptyKey: MessageKey;
+  helpAllKey: MessageKey;
+  helpSomeKey: MessageKey;
 }) {
   const { tool, updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   const eligible = (tool?.nodes ?? []).filter((n) => kinds.includes(n.type));
   const current = node[field] ?? [];
   const selected = new Set(current);
@@ -313,78 +380,111 @@ function TargetSelector({
     updateNode(node.id, { [field]: next });
   };
 
+  const triggerLabel =
+    current.length === 0
+      ? t("targets.all", { n: eligible.length })
+      : t("targets.selected", { n: current.length });
+
   return (
-    <Field label={label}>
+    <Field label={t(labelKey)}>
       {eligible.length === 0 ? (
         <p className="rounded-md border border-dashed px-2.5 py-2 text-[11px] text-muted-foreground">
-          {emptyHint}
+          {t(emptyKey)}
         </p>
       ) : (
-        <div className="flex flex-col gap-1">
-          {eligible.map((n, i) => {
-            const Icon = NODE_META[n.type].icon;
-            const on = selected.has(n.id);
-            return (
-              <button
-                key={n.id}
-                type="button"
-                onClick={() => toggle(n.id)}
-                className={cn(
-                  "flex items-center gap-2 rounded-md border-2 px-2.5 py-1.5 text-left text-xs transition-colors duration-(--motion-duration-fast)",
-                  on
-                    ? "border-foreground bg-primary text-primary-foreground"
-                    : "border-transparent bg-muted/40 hover:border-foreground/30",
-                )}
-              >
-                <span
-                  className={cn(
-                    "grid size-5 shrink-0 place-items-center border-2 border-current",
-                    ACCENT_CLASSES[NODE_META[n.type].accent],
-                    on && "bg-transparent",
-                  )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 rounded-md border-2 border-foreground bg-background px-2.5 py-1.5 text-left text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent data-[state=open]:bg-accent"
+            >
+              <span className="min-w-0 flex-1 truncate">{triggerLabel}</span>
+              <ChevronDown
+                size={14}
+                className="shrink-0 opacity-60 transition-transform duration-(--motion-duration-fast)"
+              />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="max-h-64 w-(--radix-dropdown-menu-trigger-width) min-w-(--radix-dropdown-menu-trigger-width) overflow-y-auto"
+          >
+            {eligible.map((n, i) => {
+              const Icon = NODE_META[n.type].icon;
+              return (
+                <DropdownMenuCheckboxItem
+                  key={n.id}
+                  checked={selected.has(n.id)}
+                  onSelect={() => toggle(n.id)}
                 >
-                  <Icon size={11} />
-                </span>
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {describeRunnable(n)}
-                </span>
-                <span className="shrink-0 font-mono opacity-60">#{i + 1}</span>
-              </button>
-            );
-          })}
-        </div>
+                  <span
+                    className={cn(
+                      "grid size-5 shrink-0 place-items-center border-2 border-current",
+                      ACCENT_CLASSES[NODE_META[n.type].accent],
+                    )}
+                  >
+                    <Icon size={11} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {describeRunnable(n, t)}
+                  </span>
+                  <span className="shrink-0 font-mono opacity-60">
+                    #{i + 1}
+                  </span>
+                </DropdownMenuCheckboxItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
       <p className="text-[11px] text-muted-foreground">
         {current.length === 0
-          ? `Nothing checked — ${verb} the whole chain.`
-          : `${verb[0].toUpperCase()}${verb.slice(1)}s ${current.length} selected node${current.length > 1 ? "s" : ""}, in chain order.`}
+          ? t(helpAllKey)
+          : t(helpSomeKey, { n: current.length })}
       </p>
     </Field>
   );
 }
 
-function RunTargets({ node }: { node: ButtonNode }) {
+function RunTargets({ node }: { node: ButtonNode | TextRunNode }) {
   return (
     <TargetSelector
       node={node}
       field="targets"
-      label="Run targets"
-      kinds={["code", "ts_type", "ai"]}
-      emptyHint="No code, TS type, or AI nodes in this tool yet. Add some to target them."
-      verb="run"
+      labelKey="targets.run"
+      kinds={[
+        "code",
+        "ts_type",
+        "http_request",
+        "filter",
+        "map",
+        "sort",
+        "merge",
+        "template",
+        "regex",
+        "jsonpath",
+        "math",
+        "schema_validate",
+        "encode",
+        "ai",
+      ]}
+      emptyKey="targets.run.empty"
+      helpAllKey="targets.help.runAll"
+      helpSomeKey="targets.help.runSome"
     />
   );
 }
 
-function ResetTargets({ node }: { node: ButtonNode }) {
+function ResetTargets({ node }: { node: ButtonNode | TextRunNode }) {
   return (
     <TargetSelector
       node={node}
       field="resetTargets"
-      label="Reset targets"
+      labelKey="targets.reset"
       kinds={["code"]}
-      emptyHint="No code nodes in this tool yet. Add some to target them."
-      verb="reset"
+      emptyKey="targets.reset.empty"
+      helpAllKey="targets.help.resetAll"
+      helpSomeKey="targets.help.resetSome"
     />
   );
 }
@@ -392,6 +492,7 @@ function ResetTargets({ node }: { node: ButtonNode }) {
 /** State Control editor — manage the shared state slots. */
 function StateEditor({ node }: { node: StateNode }) {
   const { updateNode, renameStateSlot } = useToolBuilder();
+  const { t } = useTranslation();
   const setStates = (states: StateEntry[]) => updateNode(node.id, { states });
 
   const [showDefaultFor, setShowDefaultFor] = useState<string | null>(null);
@@ -410,13 +511,15 @@ function StateEditor({ node }: { node: StateNode }) {
               {/* variable name */}
               <div className="flex-1 truncate rounded-md border border-transparent px-2.5 py-1.5 font-mono text-sm">
                 {s.name || (
-                  <span className="text-muted-foreground italic">unnamed</span>
+                  <span className="text-muted-foreground italic">
+                    {t("state.unnamed")}
+                  </span>
                 )}
               </div>
               {/* copy button */}
               <button
                 type="button"
-                aria-label="Copy variable name"
+                aria-label={t("state.copyName")}
                 onClick={() => navigator.clipboard.writeText(s.name)}
                 className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-95"
               >
@@ -427,7 +530,7 @@ function StateEditor({ node }: { node: StateNode }) {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    aria-label="Variable options"
+                    aria-label={t("state.options")}
                     className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-95"
                   >
                     <MoreHorizontal size={14} />
@@ -440,14 +543,14 @@ function StateEditor({ node }: { node: StateNode }) {
                       setRenameValue(s.name);
                     }}
                   >
-                    Rename variable
+                    {t("state.rename")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() =>
                       setShowDefaultFor(showDefaultFor === s.id ? null : s.id)
                     }
                   >
-                    Set default value
+                    {t("state.setDefault")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     variant="destructive"
@@ -455,7 +558,7 @@ function StateEditor({ node }: { node: StateNode }) {
                       setStates(node.states.filter((x) => x.id !== s.id))
                     }
                   >
-                    Remove variable
+                    {t("state.remove")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -465,7 +568,7 @@ function StateEditor({ node }: { node: StateNode }) {
               <div className="animate-in fade-in slide-in-from-top-1 duration-[var(--motion-duration-fast)]">
                 <input
                   value={s.value}
-                  placeholder="default value"
+                  placeholder={t("state.defaultPlaceholder")}
                   autoFocus
                   onChange={(e) =>
                     setStates(
@@ -492,7 +595,7 @@ function StateEditor({ node }: { node: StateNode }) {
         }}
         className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-[0.98]"
       >
-        <Plus size={14} /> Add state
+        <Plus size={14} /> {t("state.add")}
       </button>
 
       <Dialog
@@ -505,7 +608,7 @@ function StateEditor({ node }: { node: StateNode }) {
       >
         <DialogContent showCloseButton={false} className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Rename variable</DialogTitle>
+            <DialogTitle>{t("state.rename")}</DialogTitle>
           </DialogHeader>
           <input
             className={inputCls}
@@ -524,7 +627,7 @@ function StateEditor({ node }: { node: StateNode }) {
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameTarget(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               onClick={() => {
@@ -535,7 +638,7 @@ function StateEditor({ node }: { node: StateNode }) {
                 setRenameTarget(null);
               }}
             >
-              Rename
+              {t("common.rename")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -553,11 +656,12 @@ function AiEditor({
   placement: EditorPlacement;
 }) {
   const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   const models = useProviderModels(node.provider);
   const isPanel = placement === "panel";
   return (
     <div className={cn("flex flex-col gap-4", isPanel && "flex-1 min-h-0")}>
-      <Field label="Provider">
+      <Field label={t("ai.provider")}>
         <Select
           value={node.provider}
           onValueChange={(v) =>
@@ -573,7 +677,7 @@ function AiEditor({
           </SelectContent>
         </Select>
       </Field>
-      <Field label="Model">
+      <Field label={t("ai.model")}>
         <ModelCombobox
           value={node.model}
           onChange={(v) => updateNode(node.id, { model: v })}
@@ -586,10 +690,10 @@ function AiEditor({
           size="sm"
         />
         <p className="text-[11px] text-muted-foreground">
-          Pick from list or type any model id.
+          {t("ai.model.help")}
         </p>
       </Field>
-      <Field label="System instruction (optional)">
+      <Field label={t("ai.system")}>
         <textarea
           value={node.systemInstruction}
           onChange={(e) =>
@@ -599,7 +703,10 @@ function AiEditor({
           className={cn(inputCls, "h-auto resize-y py-2")}
         />
       </Field>
-      <Field label="Prompt" className={isPanel ? "flex-1 min-h-0" : undefined}>
+      <Field
+        label={t("ai.prompt")}
+        className={isPanel ? "flex-1 min-h-0" : undefined}
+      >
         <textarea
           value={node.prompt}
           onChange={(e) => updateNode(node.id, { prompt: e.target.value })}
@@ -607,11 +714,10 @@ function AiEditor({
           className={cn(inputCls, "h-auto min-h-24 resize-y py-2 font-mono")}
         />
         <p className="text-[11px] text-muted-foreground">
-          Use <code className="font-mono">{"{{stateName}}"}</code> to
-          interpolate state.
+          {t("ai.prompt.help")}
         </p>
       </Field>
-      <Field label="Output state">
+      <Field label={t("ai.output")}>
         <StateSelect
           value={node.output.value}
           onChange={(v) =>
@@ -619,12 +725,12 @@ function AiEditor({
           }
         />
         <p className="text-[11px] text-muted-foreground">
-          Model reply writes here.
+          {t("ai.output.help")}
         </p>
       </Field>
       <ToggleRow
-        label="Markdown output"
-        description="Render reply as Markdown in the preview."
+        label={t("ai.markdownOut")}
+        description={t("ai.markdownOut.desc")}
         checked={node.markdownOutput ?? false}
         onChange={(next) => updateNode(node.id, { markdownOutput: next })}
       />
@@ -635,17 +741,18 @@ function AiEditor({
 /** TS Type Converter editor — description, root name, input/output bindings. */
 function TsTypeEditor({ node }: { node: TsTypeNode }) {
   const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-4">
-      <Field label="Description">
+      <Field label={t("field.description")}>
         <input
           value={node.description ?? ""}
-          placeholder="What this converter is for"
+          placeholder={t("tstype.descPlaceholder")}
           onChange={(e) => updateNode(node.id, { description: e.target.value })}
           className={inputCls}
         />
       </Field>
-      <Field label="Root type name">
+      <Field label={t("tstype.root")}>
         <input
           value={node.rootName}
           placeholder="Root"
@@ -653,10 +760,10 @@ function TsTypeEditor({ node }: { node: TsTypeNode }) {
           className={cn(inputCls, "font-mono")}
         />
         <p className="text-[11px] text-muted-foreground">
-          Name of the generated top-level interface/type.
+          {t("tstype.root.help")}
         </p>
       </Field>
-      <Field label="Input state (JSON source)">
+      <Field label={t("tstype.input")}>
         <StateSelect
           value={node.input.value}
           onChange={(v) =>
@@ -664,10 +771,10 @@ function TsTypeEditor({ node }: { node: TsTypeNode }) {
           }
         />
         <p className="text-[11px] text-muted-foreground">
-          State slot holding the JSON to convert — bind a JSON input node here.
+          {t("tstype.input.help")}
         </p>
       </Field>
-      <Field label="Output state (TypeScript)">
+      <Field label={t("tstype.output")}>
         <StateSelect
           value={node.output.value}
           onChange={(v) =>
@@ -675,8 +782,7 @@ function TsTypeEditor({ node }: { node: TsTypeNode }) {
           }
         />
         <p className="text-[11px] text-muted-foreground">
-          Generated declarations write here. Updates live as the JSON changes;
-          invalid JSON keeps the last output (runs report the parse error).
+          {t("tstype.output.help")}
         </p>
       </Field>
     </div>
@@ -693,10 +799,11 @@ function PreviewToggleField({
   node: ViewportNode | ConvertHtmlNode | ThemedNode;
 }) {
   const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   return (
     <ToggleRow
-      label="Live preview"
-      description="Render the frame in the preview. Off by default — saves loading the page until you turn it on."
+      label={t("web.livePreview")}
+      description={t("web.livePreview.desc")}
       checked={node.previewEnabled ?? false}
       onChange={(next) => updateNode(node.id, { previewEnabled: next })}
     />
@@ -706,6 +813,7 @@ function PreviewToggleField({
 /** HTML Sanitize editor — description, input/output bindings, allowlist toggles. */
 function HtmlSanitizeEditor({ node }: { node: HtmlSanitizeNode }) {
   const { tool, updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   // The allowlist toggles are tool-wide: applying them to every HTML Sanitize
   // node keeps all sanitizers in a tool consistent.
   const syncAllSanitizers = (changes: Partial<HtmlSanitizeNode>) => {
@@ -717,15 +825,15 @@ function HtmlSanitizeEditor({ node }: { node: HtmlSanitizeNode }) {
   };
   return (
     <div className="flex flex-col gap-4">
-      <Field label="Description">
+      <Field label={t("field.description")}>
         <input
           value={node.description ?? ""}
-          placeholder="What this sanitizer is for"
+          placeholder={t("sanitize.descPlaceholder")}
           onChange={(e) => updateNode(node.id, { description: e.target.value })}
           className={inputCls}
         />
       </Field>
-      <Field label="Input state (HTML)">
+      <Field label={t("sanitize.input")}>
         <StateSelect
           value={node.input.value}
           onChange={(v) =>
@@ -733,11 +841,10 @@ function HtmlSanitizeEditor({ node }: { node: HtmlSanitizeNode }) {
           }
         />
         <p className="text-[11px] text-muted-foreground">
-          State slot holding the raw HTML — bind a Convert to HTML node&apos;s
-          output here.
+          {t("sanitize.input.help")}
         </p>
       </Field>
-      <Field label="Output state (clean HTML)">
+      <Field label={t("sanitize.output")}>
         <StateSelect
           value={node.output.value}
           onChange={(v) =>
@@ -745,26 +852,23 @@ function HtmlSanitizeEditor({ node }: { node: HtmlSanitizeNode }) {
           }
         />
         <p className="text-[11px] text-muted-foreground">
-          Sanitized HTML writes here. Updates live as the input changes — bind a
-          Themed node to recolor the cleaned page.
+          {t("sanitize.output.help")}
         </p>
       </Field>
       <ToggleRow
-        label="Keep styles"
-        description="Preserve <style> blocks, inline style, and class/id (keeps theming intact). Synced across all HTML Sanitize nodes."
+        label={t("sanitize.keepStyles")}
+        description={t("sanitize.keepStyles.desc")}
         checked={node.allowStyles}
         onChange={(next) => syncAllSanitizers({ allowStyles: next })}
       />
       <ToggleRow
-        label="Keep images"
-        description="Preserve <img>/<picture> and their src, including data: image URIs. Synced across all HTML Sanitize nodes."
+        label={t("sanitize.keepImages")}
+        description={t("sanitize.keepImages.desc")}
         checked={node.allowImages}
         onChange={(next) => syncAllSanitizers({ allowImages: next })}
       />
       <p className="text-[11px] text-muted-foreground">
-        Always strips scripts, event handlers, unsafe URL schemes, and embedding
-        tags (iframe / object / embed). Runs in the chain and live as the input
-        changes.
+        {t("sanitize.footer")}
       </p>
     </div>
   );
@@ -780,8 +884,9 @@ function DeviceSelectField({
   node: ViewportNode | ConvertHtmlNode | ThemedNode;
 }) {
   const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   return (
-    <Field label="Default screen">
+    <Field label={t("web.defaultScreen")}>
       <Select
         value={node.device ?? "responsive"}
         onValueChange={(v) =>
@@ -789,7 +894,7 @@ function DeviceSelectField({
         }
       >
         <SelectTrigger className="h-8 w-full">
-          <SelectValue placeholder="Pick screen…" />
+          <SelectValue placeholder={t("web.pickScreen")} />
         </SelectTrigger>
         <SelectContent>
           {VIEWPORT_DEVICES.map((d) => (
@@ -801,9 +906,7 @@ function DeviceSelectField({
         </SelectContent>
       </Select>
       <p className="text-[11px] text-muted-foreground">
-        Screen the preview opens with — end users can still switch between fill
-        / desktop / mobile. Fixed screens render at device width and scale to
-        fit (width simulation; the site still sees a desktop browser).
+        {t("web.defaultScreen.help")}
       </p>
     </Field>
   );
@@ -812,25 +915,26 @@ function DeviceSelectField({
 /** View Port editor — label, URL, height, optional URL-override binding. */
 function ViewportEditor({ node }: { node: ViewportNode }) {
   const { stateNode, updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   const states = stateNode?.states ?? [];
   return (
     <div className="flex flex-col gap-4">
-      <Field label="Field label">
+      <Field label={t("field.fieldLabel")}>
         <input
           value={node.fieldLabel}
           onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
           className={inputCls}
         />
       </Field>
-      <Field label="Description">
+      <Field label={t("field.description")}>
         <input
           value={node.description ?? ""}
-          placeholder="Optional helper text shown below the label"
+          placeholder={t("field.descPlaceholder")}
           onChange={(e) => updateNode(node.id, { description: e.target.value })}
           className={inputCls}
         />
       </Field>
-      <Field label="URL">
+      <Field label={t("viewport.url")}>
         <input
           value={node.url}
           placeholder="https://example.com"
@@ -838,14 +942,13 @@ function ViewportEditor({ node }: { node: ViewportNode }) {
           className={cn(inputCls, "font-mono")}
         />
         <p className="text-[11px] text-muted-foreground">
-          Page shown in the preview. A bare domain gets{" "}
-          <code className="font-mono">https://</code> prepended.
+          {t("viewport.url.help")}
         </p>
       </Field>
       <PreviewToggleField node={node} />
       <DeviceSelectField node={node} />
       <EditorHeightField node={node} />
-      <Field label="URL state (optional)">
+      <Field label={t("viewport.urlState")}>
         <Select
           value={node.binding.value || VIEWPORT_UNBOUND}
           onValueChange={(v) =>
@@ -855,10 +958,10 @@ function ViewportEditor({ node }: { node: ViewportNode }) {
           }
         >
           <SelectTrigger className="h-8 w-full">
-            <SelectValue placeholder="— none —" />
+            <SelectValue placeholder={t("field.none")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={VIEWPORT_UNBOUND}>— none —</SelectItem>
+            <SelectItem value={VIEWPORT_UNBOUND}>{t("field.none")}</SelectItem>
             {states.map((s) => (
               <SelectItem key={s.id} value={s.name}>
                 {s.name}
@@ -867,14 +970,11 @@ function ViewportEditor({ node }: { node: ViewportNode }) {
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          When the bound state holds a non-empty string it overrides the URL
-          above — bind a text input or write it from a code node.
+          {t("viewport.urlState.help")}
         </p>
       </Field>
       <p className="text-[11px] text-muted-foreground">
-        The page loads in a sandboxed iframe. Sites that forbid embedding
-        (X-Frame-Options / frame-ancestors) render blank — that is the remote
-        site&apos;s policy, not an error in your tool.
+        {t("viewport.footer")}
       </p>
     </div>
   );
@@ -886,25 +986,26 @@ const SOURCE_AUTO = "__auto__";
 /** Convert to HTML editor — label, source View Port, output state, height. */
 function ConvertHtmlEditor({ node }: { node: ConvertHtmlNode }) {
   const { tool, updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   const viewports = (tool?.nodes ?? []).filter((n) => n.type === "viewport");
   return (
     <div className="flex flex-col gap-4">
-      <Field label="Field label">
+      <Field label={t("field.fieldLabel")}>
         <input
           value={node.fieldLabel}
           onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
           className={inputCls}
         />
       </Field>
-      <Field label="Description">
+      <Field label={t("field.description")}>
         <input
           value={node.description ?? ""}
-          placeholder="Optional helper text shown below the label"
+          placeholder={t("field.descPlaceholder")}
           onChange={(e) => updateNode(node.id, { description: e.target.value })}
           className={inputCls}
         />
       </Field>
-      <Field label="Source View Port">
+      <Field label={t("convert.source")}>
         <Select
           value={node.source || SOURCE_AUTO}
           onValueChange={(v) =>
@@ -912,13 +1013,13 @@ function ConvertHtmlEditor({ node }: { node: ConvertHtmlNode }) {
           }
         >
           <SelectTrigger className="h-8 w-full">
-            <SelectValue placeholder="Pick View Port…" />
+            <SelectValue placeholder={t("convert.pickVp")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={SOURCE_AUTO}>Auto — first View Port</SelectItem>
+            <SelectItem value={SOURCE_AUTO}>{t("convert.auto")}</SelectItem>
             {viewports.map((v, i) => (
               <SelectItem key={v.id} value={v.id}>
-                #{i + 1} {v.fieldLabel || "View Port"}
+                #{i + 1} {v.fieldLabel || t("convert.vpFallback")}
                 {v.url ? ` · ${v.url}` : ""}
               </SelectItem>
             ))}
@@ -926,11 +1027,11 @@ function ConvertHtmlEditor({ node }: { node: ConvertHtmlNode }) {
         </Select>
         <p className="text-[11px] text-muted-foreground">
           {viewports.length === 0
-            ? "No View Port nodes yet — add one; this node copies its page."
-            : "Whose page gets copied. Tracks the View Port's URL, including state-driven overrides."}
+            ? t("convert.source.helpEmpty")
+            : t("convert.source.help")}
         </p>
       </Field>
-      <Field label="Output state (HTML)">
+      <Field label={t("convert.output")}>
         <StateSelect
           value={node.binding.value}
           onChange={(v) =>
@@ -938,18 +1039,13 @@ function ConvertHtmlEditor({ node }: { node: ConvertHtmlNode }) {
           }
         />
         <p className="text-[11px] text-muted-foreground">
-          The page&apos;s static HTML (CSS inlined) writes here — bind a Themed
-          node or read it from code nodes.
+          {t("convert.output.help")}
         </p>
       </Field>
       <PreviewToggleField node={node} />
       <DeviceSelectField node={node} />
       <EditorHeightField node={node} />
-      <p className="text-[11px] text-muted-foreground">
-        Copies the page&apos;s static layout server-side — HTML with its linked
-        CSS inlined, scripts removed — shows the snapshot, and offers a
-        copy-to-clipboard button in the preview.
-      </p>
+      <p className="text-[11px] text-muted-foreground">{t("convert.footer")}</p>
     </div>
   );
 }
@@ -957,24 +1053,25 @@ function ConvertHtmlEditor({ node }: { node: ConvertHtmlNode }) {
 /** Themed editor — label, HTML state binding, frame height. */
 function ThemedEditor({ node }: { node: ThemedNode }) {
   const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-4">
-      <Field label="Field label">
+      <Field label={t("field.fieldLabel")}>
         <input
           value={node.fieldLabel}
           onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
           className={inputCls}
         />
       </Field>
-      <Field label="Description">
+      <Field label={t("field.description")}>
         <input
           value={node.description ?? ""}
-          placeholder="Optional helper text shown below the label"
+          placeholder={t("field.descPlaceholder")}
           onChange={(e) => updateNode(node.id, { description: e.target.value })}
           className={inputCls}
         />
       </Field>
-      <Field label="HTML state">
+      <Field label={t("themed.htmlState")}>
         <StateSelect
           value={node.binding.value}
           onChange={(v) =>
@@ -982,17 +1079,1078 @@ function ThemedEditor({ node }: { node: ThemedNode }) {
           }
         />
         <p className="text-[11px] text-muted-foreground">
-          State slot holding the static page HTML to recolor — bind a Convert to
-          HTML node&apos;s output here. No View Port connection.
+          {t("themed.htmlState.help")}
         </p>
       </Field>
       <PreviewToggleField node={node} />
       <DeviceSelectField node={node} />
       <EditorHeightField node={node} />
-      <p className="text-[11px] text-muted-foreground">
-        Click any element in the preview to recolor it — every identical element
-        (same tag &amp; classes) updates too. Scripts removed.
-      </p>
+      <p className="text-[11px] text-muted-foreground">{t("themed.footer")}</p>
+    </div>
+  );
+}
+
+/** Shared label + description fields used by the simple input editors. */
+function LabelDescFields({
+  node,
+}: {
+  node: NumberNode | SelectNode | ToggleNode | DateNode | FileNode | ImageNode;
+}) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <>
+      <Field label={t("field.fieldLabel")}>
+        <input
+          value={node.fieldLabel}
+          onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label={t("field.description")}>
+        <input
+          value={node.description ?? ""}
+          placeholder={t("field.descPlaceholder")}
+          onChange={(e) => updateNode(node.id, { description: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+    </>
+  );
+}
+
+/** Number editor — label, description, min / max / step, state binding. */
+function NumberEditor({ node }: { node: NumberNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const numField = (key: "min" | "max" | "step", label: string) => (
+    <Field label={label}>
+      <input
+        type="number"
+        value={node[key]}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) {
+            updateNode(node.id, { [key]: n });
+          }
+        }}
+        className={inputCls}
+      />
+    </Field>
+  );
+  return (
+    <div className="flex flex-col gap-4">
+      <LabelDescFields node={node} />
+      <div className="grid grid-cols-3 gap-2">
+        {numField("min", t("number.min"))}
+        {numField("max", t("number.max"))}
+        {numField("step", t("number.step"))}
+      </div>
+      <BindingControl node={node} />
+      <p className="text-[11px] text-muted-foreground">{t("number.help")}</p>
+    </div>
+  );
+}
+
+/** Select editor — label, static options list, optional options-from-state binding. */
+function SelectEditor({ node }: { node: SelectNode }) {
+  const { stateNode, updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const states = stateNode?.states ?? [];
+  const setOptions = (options: SelectOption[]) =>
+    updateNode(node.id, { options });
+  return (
+    <div className="flex flex-col gap-4">
+      <LabelDescFields node={node} />
+      <Field label={t("select.options")}>
+        <div className="flex flex-col gap-1.5">
+          {node.options.map((o) => (
+            <div key={o.id} className="flex items-center gap-1.5">
+              <input
+                value={o.label}
+                placeholder={t("select.labelPlaceholder")}
+                onChange={(e) =>
+                  setOptions(
+                    node.options.map((x) =>
+                      x.id === o.id ? { ...x, label: e.target.value } : x,
+                    ),
+                  )
+                }
+                className={inputCls}
+              />
+              <input
+                value={o.value}
+                placeholder={t("select.valuePlaceholder")}
+                onChange={(e) =>
+                  setOptions(
+                    node.options.map((x) =>
+                      x.id === o.id ? { ...x, value: e.target.value } : x,
+                    ),
+                  )
+                }
+                className={cn(inputCls, "font-mono")}
+              />
+              <button
+                type="button"
+                aria-label={t("select.removeOption")}
+                onClick={() =>
+                  setOptions(node.options.filter((x) => x.id !== o.id))
+                }
+                className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setOptions([
+              ...node.options,
+              {
+                id: uuid(),
+                value: `option${node.options.length + 1}`,
+                label: `Option ${node.options.length + 1}`,
+              },
+            ])
+          }
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+        >
+          <Plus size={14} /> {t("select.addOption")}
+        </button>
+      </Field>
+      <Field label={t("select.optionsState")}>
+        <Select
+          value={node.optionsBinding.value || VIEWPORT_UNBOUND}
+          onValueChange={(v) =>
+            updateNode(node.id, {
+              optionsBinding: {
+                mode: "name",
+                value: v === VIEWPORT_UNBOUND ? "" : v,
+              },
+            })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue placeholder={t("field.none")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={VIEWPORT_UNBOUND}>{t("field.none")}</SelectItem>
+            {states.map((s) => (
+              <SelectItem key={s.id} value={s.name}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          {t("select.optionsState.help")}
+        </p>
+      </Field>
+      <BindingControl node={node} />
+    </div>
+  );
+}
+
+/** Toggle editor — label, description, state binding. */
+function ToggleEditor({ node }: { node: ToggleNode }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <LabelDescFields node={node} />
+      <BindingControl node={node} />
+      <p className="text-[11px] text-muted-foreground">{t("toggle.help")}</p>
+    </div>
+  );
+}
+
+/** Date / Time editor — label, picker mode, state binding. */
+function DateEditor({ node }: { node: DateNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <LabelDescFields node={node} />
+      <Field label={t("date.mode")}>
+        <Select
+          value={node.mode}
+          onValueChange={(v) =>
+            updateNode(node.id, { mode: v as DateTimeMode })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {DATE_MODES.map((m) => (
+              <SelectItem key={m.value} value={m.value}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          {t("date.mode.help")}
+        </p>
+      </Field>
+      <BindingControl node={node} />
+    </div>
+  );
+}
+
+/** File upload editor — label, output encoding, accept filter, state binding. */
+function FileEditor({ node }: { node: FileNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <LabelDescFields node={node} />
+      <Field label={t("file.format")}>
+        <Select
+          value={node.outputFormat}
+          onValueChange={(v) =>
+            updateNode(node.id, { outputFormat: v as FileOutputFormat })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FILE_OUTPUT_FORMATS.map((f) => (
+              <SelectItem key={f.value} value={f.value}>
+                {f.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          {t("file.format.help")}
+        </p>
+      </Field>
+      <Field label={t("file.accept")}>
+        <input
+          value={node.accept}
+          placeholder=".pdf,.txt,image/*"
+          onChange={(e) => updateNode(node.id, { accept: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("file.accept.help")}
+        </p>
+      </Field>
+      <BindingControl node={node} />
+    </div>
+  );
+}
+
+/** Image upload editor — label, description, state binding. */
+function ImageEditor({ node }: { node: ImageNode }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <LabelDescFields node={node} />
+      <BindingControl node={node} />
+      <p className="text-[11px] text-muted-foreground">{t("image.help")}</p>
+    </div>
+  );
+}
+
+/** Description field shared by the logic transform editors. */
+function DescriptionField({
+  node,
+}: {
+  node:
+    | HttpRequestNode
+    | FilterNode
+    | MapNode
+    | SortNode
+    | MergeNode
+    | TemplateNode
+    | RegexNode
+    | JsonPathNode
+    | MathNode
+    | SchemaValidateNode
+    | EncodeNode;
+}) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <Field label={t("field.description")}>
+      <input
+        value={node.description ?? ""}
+        placeholder={t("field.descPlaceholder")}
+        onChange={(e) => updateNode(node.id, { description: e.target.value })}
+        className={inputCls}
+      />
+    </Field>
+  );
+}
+
+/**
+ * Input / output state-slot picker pair shared by the logic transform editors.
+ * Generic over which binding fields the node exposes via render props.
+ */
+function InOutFields({
+  inValue,
+  outValue,
+  onIn,
+  onOut,
+  inLabel,
+  outLabel,
+}: {
+  inValue?: string;
+  outValue: string;
+  onIn?: (v: string) => void;
+  onOut: (v: string) => void;
+  inLabel?: string;
+  outLabel?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {onIn && (
+        <Field label={inLabel ?? t("logic.input")}>
+          <StateSelect value={inValue ?? ""} onChange={onIn} />
+        </Field>
+      )}
+      <Field label={outLabel ?? t("logic.output")}>
+        <StateSelect value={outValue} onChange={onOut} />
+      </Field>
+    </>
+  );
+}
+
+/** HTTP Request editor — method, URL, headers, body, response type, output. */
+function HttpRequestEditor({ node }: { node: HttpRequestNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const setHeaders = (headers: HttpRequestNode["headers"]) =>
+    updateNode(node.id, { headers });
+  const bodyless = node.method === "GET" || node.method === "DELETE";
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <Field label={t("http.method")}>
+        <Select
+          value={node.method}
+          onValueChange={(v) =>
+            updateNode(node.id, { method: v as HttpMethod })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {HTTP_METHODS.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={t("http.url")}>
+        <input
+          value={node.url}
+          placeholder="https://api.example.com/{{id}}"
+          onChange={(e) => updateNode(node.id, { url: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("http.url.help")}
+        </p>
+      </Field>
+      <Field label={t("http.headers")}>
+        <div className="flex flex-col gap-1.5">
+          {node.headers.map((h) => (
+            <div key={h.id} className="flex items-center gap-1.5">
+              <input
+                value={h.key}
+                placeholder={t("http.headerKey")}
+                onChange={(e) =>
+                  setHeaders(
+                    node.headers.map((x) =>
+                      x.id === h.id ? { ...x, key: e.target.value } : x,
+                    ),
+                  )
+                }
+                className={cn(inputCls, "font-mono")}
+              />
+              <input
+                value={h.value}
+                placeholder={t("http.headerValue")}
+                onChange={(e) =>
+                  setHeaders(
+                    node.headers.map((x) =>
+                      x.id === h.id ? { ...x, value: e.target.value } : x,
+                    ),
+                  )
+                }
+                className={cn(inputCls, "font-mono")}
+              />
+              <button
+                type="button"
+                aria-label={t("http.removeHeader")}
+                onClick={() =>
+                  setHeaders(node.headers.filter((x) => x.id !== h.id))
+                }
+                className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setHeaders([...node.headers, { id: uuid(), key: "", value: "" }])
+          }
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+        >
+          <Plus size={14} /> {t("http.addHeader")}
+        </button>
+      </Field>
+      {!bodyless && (
+        <Field label={t("http.body")}>
+          <textarea
+            value={node.body}
+            onChange={(e) => updateNode(node.id, { body: e.target.value })}
+            rows={4}
+            className={cn(inputCls, "h-auto resize-y py-2 font-mono")}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            {t("http.body.help")}
+          </p>
+        </Field>
+      )}
+      <Field label={t("http.responseType")}>
+        <Select
+          value={node.responseType}
+          onValueChange={(v) =>
+            updateNode(node.id, { responseType: v as HttpResponseType })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {HTTP_RESPONSE_TYPES.map((r) => (
+              <SelectItem key={r.value} value={r.value}>
+                {r.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={t("logic.output")}>
+        <StateSelect
+          value={node.output.value}
+          onChange={(v) =>
+            updateNode(node.id, { output: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("http.output.help")}
+        </p>
+      </Field>
+      <p className="text-[11px] text-muted-foreground">{t("http.footer")}</p>
+    </div>
+  );
+}
+
+/** Filter editor — input, field path, operator, value, output. */
+function FilterEditor({ node }: { node: FilterNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const valueless = VALUELESS_FILTER_OPERATORS.has(node.operator);
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <InOutFields
+        inValue={node.input.value}
+        outValue={node.output.value}
+        onIn={(v) => updateNode(node.id, { input: { mode: "name", value: v } })}
+        onOut={(v) =>
+          updateNode(node.id, { output: { mode: "name", value: v } })
+        }
+      />
+      <Field label={t("logic.field")}>
+        <input
+          value={node.field}
+          placeholder="status"
+          onChange={(e) => updateNode(node.id, { field: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("logic.field.help")}
+        </p>
+      </Field>
+      <Field label={t("filter.operator")}>
+        <Select
+          value={node.operator}
+          onValueChange={(v) =>
+            updateNode(node.id, { operator: v as FilterOperator })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FILTER_OPERATORS.map((op) => (
+              <SelectItem key={op} value={op}>
+                {t(`filter.op.${op}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      {!valueless && (
+        <Field label={t("filter.value")}>
+          <input
+            value={node.value}
+            onChange={(e) => updateNode(node.id, { value: e.target.value })}
+            className={inputCls}
+          />
+        </Field>
+      )}
+      <p className="text-[11px] text-muted-foreground">{t("filter.help")}</p>
+    </div>
+  );
+}
+
+/** Map editor — input, field mapping list, output. */
+function MapEditor({ node }: { node: MapNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const setFields = (fields: MapNode["fields"]) =>
+    updateNode(node.id, { fields });
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <InOutFields
+        inValue={node.input.value}
+        outValue={node.output.value}
+        onIn={(v) => updateNode(node.id, { input: { mode: "name", value: v } })}
+        onOut={(v) =>
+          updateNode(node.id, { output: { mode: "name", value: v } })
+        }
+      />
+      <Field label={t("map.fields")}>
+        <div className="flex flex-col gap-1.5">
+          {node.fields.map((f) => (
+            <div key={f.id} className="flex items-center gap-1.5">
+              <input
+                value={f.to}
+                placeholder={t("map.to")}
+                onChange={(e) =>
+                  setFields(
+                    node.fields.map((x) =>
+                      x.id === f.id ? { ...x, to: e.target.value } : x,
+                    ),
+                  )
+                }
+                className={cn(inputCls, "font-mono")}
+              />
+              <span className="shrink-0 text-xs text-muted-foreground">←</span>
+              <input
+                value={f.from}
+                placeholder={t("map.from")}
+                onChange={(e) =>
+                  setFields(
+                    node.fields.map((x) =>
+                      x.id === f.id ? { ...x, from: e.target.value } : x,
+                    ),
+                  )
+                }
+                className={cn(inputCls, "font-mono")}
+              />
+              <button
+                type="button"
+                aria-label={t("map.removeField")}
+                onClick={() =>
+                  setFields(node.fields.filter((x) => x.id !== f.id))
+                }
+                className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setFields([...node.fields, { id: uuid(), to: "", from: "" }])
+          }
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+        >
+          <Plus size={14} /> {t("map.addField")}
+        </button>
+      </Field>
+      <p className="text-[11px] text-muted-foreground">{t("map.help")}</p>
+    </div>
+  );
+}
+
+/** Sort editor — input, field, direction, type, output. */
+function SortEditor({ node }: { node: SortNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <InOutFields
+        inValue={node.input.value}
+        outValue={node.output.value}
+        onIn={(v) => updateNode(node.id, { input: { mode: "name", value: v } })}
+        onOut={(v) =>
+          updateNode(node.id, { output: { mode: "name", value: v } })
+        }
+      />
+      <Field label={t("logic.field")}>
+        <input
+          value={node.field}
+          placeholder="name"
+          onChange={(e) => updateNode(node.id, { field: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("logic.field.help")}
+        </p>
+      </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label={t("sort.direction")}>
+          <Select
+            value={node.direction}
+            onValueChange={(v) =>
+              updateNode(node.id, { direction: v as SortDirection })
+            }
+          >
+            <SelectTrigger className="h-8 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_DIRECTIONS.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {t(`sort.dir.${d}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label={t("sort.type")}>
+          <Select
+            value={node.sortType}
+            onValueChange={(v) =>
+              updateNode(node.id, { sortType: v as SortType })
+            }
+          >
+            <SelectTrigger className="h-8 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_TYPES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {t(`sort.type.${s}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
+      <p className="text-[11px] text-muted-foreground">{t("sort.help")}</p>
+    </div>
+  );
+}
+
+/** Merge / Join editor — left input, right input, keys, join kind, output. */
+function MergeEditor({ node }: { node: MergeNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <Field label={t("logic.input")}>
+        <StateSelect
+          value={node.input.value}
+          onChange={(v) =>
+            updateNode(node.id, { input: { mode: "name", value: v } })
+          }
+        />
+      </Field>
+      <Field label={t("merge.rightInput")}>
+        <StateSelect
+          value={node.rightInput.value}
+          onChange={(v) =>
+            updateNode(node.id, { rightInput: { mode: "name", value: v } })
+          }
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label={t("merge.leftKey")}>
+          <input
+            value={node.leftKey}
+            onChange={(e) => updateNode(node.id, { leftKey: e.target.value })}
+            className={cn(inputCls, "font-mono")}
+          />
+        </Field>
+        <Field label={t("merge.rightKey")}>
+          <input
+            value={node.rightKey}
+            onChange={(e) => updateNode(node.id, { rightKey: e.target.value })}
+            className={cn(inputCls, "font-mono")}
+          />
+        </Field>
+      </div>
+      <Field label={t("merge.joinKind")}>
+        <Select
+          value={node.joinKind}
+          onValueChange={(v) =>
+            updateNode(node.id, { joinKind: v as JoinKind })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {JOIN_KINDS.map((k) => (
+              <SelectItem key={k} value={k}>
+                {t(`merge.join.${k}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={t("logic.output")}>
+        <StateSelect
+          value={node.output.value}
+          onChange={(v) =>
+            updateNode(node.id, { output: { mode: "name", value: v } })
+          }
+        />
+      </Field>
+      <p className="text-[11px] text-muted-foreground">{t("merge.help")}</p>
+    </div>
+  );
+}
+
+/** Template editor — template text, output. */
+function TemplateEditor({ node }: { node: TemplateNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <Field label={t("template.template")}>
+        <textarea
+          value={node.template}
+          onChange={(e) => updateNode(node.id, { template: e.target.value })}
+          rows={4}
+          className={cn(inputCls, "h-auto resize-y py-2 font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("template.template.help")}
+        </p>
+      </Field>
+      <Field label={t("logic.output")}>
+        <StateSelect
+          value={node.output.value}
+          onChange={(v) =>
+            updateNode(node.id, { output: { mode: "name", value: v } })
+          }
+        />
+      </Field>
+    </div>
+  );
+}
+
+/** Regex editor — input, pattern, flags, mode, replacement, output. */
+function RegexEditor({ node }: { node: RegexNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <InOutFields
+        inValue={node.input.value}
+        outValue={node.output.value}
+        onIn={(v) => updateNode(node.id, { input: { mode: "name", value: v } })}
+        onOut={(v) =>
+          updateNode(node.id, { output: { mode: "name", value: v } })
+        }
+      />
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <Field label={t("regex.pattern")}>
+          <input
+            value={node.pattern}
+            placeholder="\\d+"
+            onChange={(e) => updateNode(node.id, { pattern: e.target.value })}
+            className={cn(inputCls, "font-mono")}
+          />
+        </Field>
+        <Field label={t("regex.flags")}>
+          <input
+            value={node.flags}
+            placeholder="gi"
+            onChange={(e) => updateNode(node.id, { flags: e.target.value })}
+            className={cn(inputCls, "w-16 font-mono")}
+          />
+        </Field>
+      </div>
+      <Field label={t("regex.mode")}>
+        <Select
+          value={node.mode}
+          onValueChange={(v) => updateNode(node.id, { mode: v as RegexMode })}
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {REGEX_MODES.map((m) => (
+              <SelectItem key={m} value={m}>
+                {t(`regex.mode.${m}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      {node.mode === "replace" && (
+        <Field label={t("regex.replacement")}>
+          <input
+            value={node.replacement}
+            placeholder="$1"
+            onChange={(e) =>
+              updateNode(node.id, { replacement: e.target.value })
+            }
+            className={cn(inputCls, "font-mono")}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            {t("regex.replacement.help")}
+          </p>
+        </Field>
+      )}
+      <p className="text-[11px] text-muted-foreground">{t("regex.help")}</p>
+    </div>
+  );
+}
+
+/** JSONPath editor — input, path, output. */
+function JsonPathEditor({ node }: { node: JsonPathNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <InOutFields
+        inValue={node.input.value}
+        outValue={node.output.value}
+        onIn={(v) => updateNode(node.id, { input: { mode: "name", value: v } })}
+        onOut={(v) =>
+          updateNode(node.id, { output: { mode: "name", value: v } })
+        }
+      />
+      <Field label={t("jsonpath.path")}>
+        <input
+          value={node.path}
+          placeholder="data.items[0].name"
+          onChange={(e) => updateNode(node.id, { path: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("jsonpath.path.help")}
+        </p>
+      </Field>
+      <p className="text-[11px] text-muted-foreground">{t("jsonpath.help")}</p>
+      <details className="rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+        <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground select-none">
+          {t("jsonpath.docs.title")}
+        </summary>
+        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted-foreground">
+          {t("jsonpath.docs")}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+/** Math editor — expression, output. */
+function MathEditor({ node }: { node: MathNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <Field label={t("math.expression")}>
+        <input
+          value={node.expression}
+          placeholder="price * qty"
+          onChange={(e) => updateNode(node.id, { expression: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("math.expression.help")}
+        </p>
+      </Field>
+      <Field label={t("logic.output")}>
+        <StateSelect
+          value={node.output.value}
+          onChange={(v) =>
+            updateNode(node.id, { output: { mode: "name", value: v } })
+          }
+        />
+      </Field>
+      <details className="rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+        <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground select-none">
+          {t("math.docs.title")}
+        </summary>
+        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted-foreground">
+          {t("math.docs")}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+/** Schema Validate editor — input, rule list, output, error output. */
+function SchemaValidateEditor({ node }: { node: SchemaValidateNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const setRules = (rules: SchemaValidateNode["rules"]) =>
+    updateNode(node.id, { rules });
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <Field label={t("logic.input")}>
+        <StateSelect
+          value={node.input.value}
+          onChange={(v) =>
+            updateNode(node.id, { input: { mode: "name", value: v } })
+          }
+        />
+      </Field>
+      <Field label={t("schema.rules")}>
+        <div className="flex flex-col gap-1.5">
+          {node.rules.map((r) => (
+            <div key={r.id} className="flex items-center gap-1.5">
+              <input
+                value={r.field}
+                placeholder={t("schema.ruleField")}
+                onChange={(e) =>
+                  setRules(
+                    node.rules.map((x) =>
+                      x.id === r.id ? { ...x, field: e.target.value } : x,
+                    ),
+                  )
+                }
+                className={cn(inputCls, "font-mono")}
+              />
+              <Select
+                value={r.type}
+                onValueChange={(v) =>
+                  setRules(
+                    node.rules.map((x) =>
+                      x.id === r.id
+                        ? { ...x, type: v as SchemaRule["type"] }
+                        : x,
+                    ),
+                  )
+                }
+              >
+                <SelectTrigger className="h-8 w-28 shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SCHEMA_TYPES.map((tp) => (
+                    <SelectItem key={tp} value={tp}>
+                      {t(`schema.type.${tp}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                aria-label={t("schema.removeRule")}
+                onClick={() =>
+                  setRules(node.rules.filter((x) => x.id !== r.id))
+                }
+                className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setRules([...node.rules, { id: uuid(), field: "", type: "any" }])
+          }
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+        >
+          <Plus size={14} /> {t("schema.addRule")}
+        </button>
+      </Field>
+      <Field label={t("logic.output")}>
+        <StateSelect
+          value={node.output.value}
+          onChange={(v) =>
+            updateNode(node.id, { output: { mode: "name", value: v } })
+          }
+        />
+      </Field>
+      <Field label={t("schema.errorOutput")}>
+        <StateSelect
+          value={node.errorOutput.value}
+          onChange={(v) =>
+            updateNode(node.id, { errorOutput: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("schema.errorOutput.help")}
+        </p>
+      </Field>
+      <p className="text-[11px] text-muted-foreground">{t("schema.help")}</p>
+    </div>
+  );
+}
+
+/** Encode / Decode editor — input, operation, output. */
+function EncodeEditor({ node }: { node: EncodeNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <InOutFields
+        inValue={node.input.value}
+        outValue={node.output.value}
+        onIn={(v) => updateNode(node.id, { input: { mode: "name", value: v } })}
+        onOut={(v) =>
+          updateNode(node.id, { output: { mode: "name", value: v } })
+        }
+      />
+      <Field label={t("encode.operation")}>
+        <Select
+          value={node.operation}
+          onValueChange={(v) =>
+            updateNode(node.id, { operation: v as EncodeOperation })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ENCODE_OPERATIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <p className="text-[11px] text-muted-foreground">{t("encode.help")}</p>
     </div>
   );
 }
@@ -1006,6 +2164,7 @@ function EditorBody({
   placement: EditorPlacement;
 }) {
   const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
 
   switch (node.type) {
     case "state":
@@ -1016,10 +2175,10 @@ function EditorBody({
       const isPanel = placement === "panel";
       return (
         <div className={cn("flex flex-col gap-4", isPanel && "flex-1 min-h-0")}>
-          <Field label="Description">
+          <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
-              placeholder="What this code block does"
+              placeholder={t("code.descPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { description: e.target.value })
               }
@@ -1027,7 +2186,7 @@ function EditorBody({
             />
           </Field>
           <Field
-            label="Code"
+            label={t("code.code")}
             className={isPanel ? "flex-1 min-h-0" : undefined}
           >
             <CodeEditor
@@ -1044,8 +2203,7 @@ function EditorBody({
               onAiModelChange={(aiModel) => updateNode(node.id, { aiModel })}
             />
             <p className="text-[11px] text-muted-foreground">
-              Runs top-to-bottom in the chain; reads &amp; writes state
-              directly.
+              {t("code.code.help")}
             </p>
           </Field>
         </div>
@@ -1061,11 +2219,45 @@ function EditorBody({
       return <ConvertHtmlEditor node={node} />;
     case "themed":
       return <ThemedEditor node={node} />;
+    case "http_request":
+      return <HttpRequestEditor node={node} />;
+    case "filter":
+      return <FilterEditor node={node} />;
+    case "map":
+      return <MapEditor node={node} />;
+    case "sort":
+      return <SortEditor node={node} />;
+    case "merge":
+      return <MergeEditor node={node} />;
+    case "template":
+      return <TemplateEditor node={node} />;
+    case "regex":
+      return <RegexEditor node={node} />;
+    case "jsonpath":
+      return <JsonPathEditor node={node} />;
+    case "math":
+      return <MathEditor node={node} />;
+    case "schema_validate":
+      return <SchemaValidateEditor node={node} />;
+    case "encode":
+      return <EncodeEditor node={node} />;
+    case "number":
+      return <NumberEditor node={node} />;
+    case "select":
+      return <SelectEditor node={node} />;
+    case "toggle":
+      return <ToggleEditor node={node} />;
+    case "date":
+      return <DateEditor node={node} />;
+    case "file":
+      return <FileEditor node={node} />;
+    case "image":
+      return <ImageEditor node={node} />;
     case "canvas": {
       const isPanel = placement === "panel";
       return (
         <div className={cn("flex flex-col gap-4", isPanel && "flex-1 min-h-0")}>
-          <Field label="Element ID">
+          <Field label={t("canvas.elementId")}>
             <div className="flex items-center gap-2">
               <code className="flex-1 truncate rounded-md border bg-muted/40 px-2.5 py-1.5 font-mono text-xs">
                 {node.elementId}
@@ -1077,15 +2269,15 @@ function EditorBody({
                 }
                 className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-[0.98]"
               >
-                <Copy size={14} /> Copy
+                <Copy size={14} /> {t("common.copy")}
               </button>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Auto-generated UUID. Target this div from your JS.
+              {t("canvas.elementId.help")}
             </p>
           </Field>
           <Field
-            label="HTML / JS"
+            label={t("canvas.htmljs")}
             className={isPanel ? "flex-1 min-h-0" : undefined}
           >
             <CodeEditor
@@ -1096,7 +2288,7 @@ function EditorBody({
               onChange={(html) => updateNode(node.id, { html })}
             />
             <p className="text-[11px] text-muted-foreground">
-              Populates the div above.
+              {t("canvas.htmljs.help")}
             </p>
           </Field>
         </div>
@@ -1105,7 +2297,7 @@ function EditorBody({
     case "text_run":
       return (
         <div className="flex flex-col gap-4">
-          <Field label="Field label">
+          <Field label={t("field.fieldLabel")}>
             <input
               value={node.fieldLabel}
               onChange={(e) =>
@@ -1114,17 +2306,17 @@ function EditorBody({
               className={inputCls}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
-              placeholder="Optional helper text shown below the label"
+              placeholder={t("field.descPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { description: e.target.value })
               }
               className={inputCls}
             />
           </Field>
-          <Field label="Placeholder">
+          <Field label={t("field.placeholder")}>
             <input
               value={node.placeholder}
               onChange={(e) =>
@@ -1134,13 +2326,13 @@ function EditorBody({
             />
           </Field>
           <ToggleRow
-            label="Run button"
-            description="Show a run button and submit on Enter."
+            label={t("toggle.runButton")}
+            description={t("toggle.runButton.desc")}
             checked={node.runEnabled}
             onChange={(next) => updateNode(node.id, { runEnabled: next })}
           />
           {node.runEnabled && (
-            <Field label="Run button text">
+            <Field label={t("field.runButtonText")}>
               <input
                 value={node.buttonText}
                 onChange={(e) =>
@@ -1150,22 +2342,26 @@ function EditorBody({
               />
             </Field>
           )}
+          <RunTargets node={node} />
           <ToggleRow
-            label="Reset button"
-            description="Clear the field after each run and show a reset button."
+            label={t("toggle.resetButton")}
+            description={t("toggle.resetButton.descText")}
             checked={node.resetEnabled}
             onChange={(next) => updateNode(node.id, { resetEnabled: next })}
           />
           {node.resetEnabled && (
-            <Field label="Reset button text">
-              <input
-                value={node.resetText}
-                onChange={(e) =>
-                  updateNode(node.id, { resetText: e.target.value })
-                }
-                className={inputCls}
-              />
-            </Field>
+            <>
+              <Field label={t("field.resetButtonText")}>
+                <input
+                  value={node.resetText}
+                  onChange={(e) =>
+                    updateNode(node.id, { resetText: e.target.value })
+                  }
+                  className={inputCls}
+                />
+              </Field>
+              <ResetTargets node={node} />
+            </>
           )}
           <BindingControl node={node} />
         </div>
@@ -1173,27 +2369,27 @@ function EditorBody({
     case "button":
       return (
         <div className="flex flex-col gap-4">
-          <Field label="Label (optional)">
+          <Field label={t("button.labelOptional")}>
             <input
               value={node.fieldLabel}
-              placeholder="Heading shown above the button"
+              placeholder={t("button.labelPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { fieldLabel: e.target.value })
               }
               className={inputCls}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
-              placeholder="Optional helper text shown below the label"
+              placeholder={t("field.descPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { description: e.target.value })
               }
               className={inputCls}
             />
           </Field>
-          <Field label="Button text">
+          <Field label={t("field.buttonText")}>
             <input
               value={node.buttonText}
               onChange={(e) =>
@@ -1203,13 +2399,13 @@ function EditorBody({
             />
           </Field>
           <ToggleRow
-            label="Reset button"
-            description="Show a reset button beside the action button."
+            label={t("toggle.resetButton")}
+            description={t("toggle.resetButton.descButton")}
             checked={node.resetEnabled}
             onChange={(next) => updateNode(node.id, { resetEnabled: next })}
           />
           {node.resetEnabled && (
-            <Field label="Reset button text">
+            <Field label={t("field.resetButtonText")}>
               <input
                 value={node.resetText}
                 onChange={(e) =>
@@ -1222,14 +2418,14 @@ function EditorBody({
           <RunTargets node={node} />
           {node.resetEnabled && <ResetTargets node={node} />}
           <p className="text-[11px] text-muted-foreground">
-            Runs over current state — no input field.
+            {t("button.footer")}
           </p>
         </div>
       );
     case "textarea":
       return (
         <div className="flex flex-col gap-4">
-          <Field label="Field label">
+          <Field label={t("field.fieldLabel")}>
             <input
               value={node.fieldLabel}
               onChange={(e) =>
@@ -1238,17 +2434,17 @@ function EditorBody({
               className={inputCls}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
-              placeholder="Optional helper text shown below the label"
+              placeholder={t("field.descPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { description: e.target.value })
               }
               className={inputCls}
             />
           </Field>
-          <Field label="Placeholder">
+          <Field label={t("field.placeholder")}>
             <input
               value={node.placeholder}
               onChange={(e) =>
@@ -1264,7 +2460,7 @@ function EditorBody({
     case "markdown":
       return (
         <div className="flex flex-col gap-4">
-          <Field label="Field label">
+          <Field label={t("field.fieldLabel")}>
             <input
               value={node.fieldLabel}
               onChange={(e) =>
@@ -1273,17 +2469,17 @@ function EditorBody({
               className={inputCls}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
-              placeholder="Optional helper text shown below the label"
+              placeholder={t("field.descPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { description: e.target.value })
               }
               className={inputCls}
             />
           </Field>
-          <Field label="Placeholder">
+          <Field label={t("field.placeholder")}>
             <input
               value={node.placeholder}
               onChange={(e) =>
@@ -1295,14 +2491,14 @@ function EditorBody({
           <EditorHeightField node={node} />
           <BindingControl node={node} />
           <p className="text-[11px] text-muted-foreground">
-            End users write Markdown and can toggle a live rendered preview.
+            {t("markdown.help")}
           </p>
         </div>
       );
     case "json":
       return (
         <div className="flex flex-col gap-4">
-          <Field label="Field label">
+          <Field label={t("field.fieldLabel")}>
             <input
               value={node.fieldLabel}
               onChange={(e) =>
@@ -1311,10 +2507,10 @@ function EditorBody({
               className={inputCls}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
-              placeholder="Optional helper text shown below the label"
+              placeholder={t("field.descPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { description: e.target.value })
               }
@@ -1323,18 +2519,13 @@ function EditorBody({
           </Field>
           <EditorHeightField node={node} />
           <BindingControl node={node} />
-          <p className="text-[11px] text-muted-foreground">
-            End users paste or edit JSON in a code editor; valid JSON
-            auto-formats. The raw source string lands in the bound state — use
-            <code className="font-mono"> JSON.parse(state.get(…))</code> in code
-            nodes.
-          </p>
+          <p className="text-[11px] text-muted-foreground">{t("json.help")}</p>
         </div>
       );
     case "csv":
       return (
         <div className="flex flex-col gap-4">
-          <Field label="Field label">
+          <Field label={t("field.fieldLabel")}>
             <input
               value={node.fieldLabel}
               onChange={(e) =>
@@ -1343,10 +2534,10 @@ function EditorBody({
               className={inputCls}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
-              placeholder="Optional helper text shown below the label"
+              placeholder={t("field.descPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { description: e.target.value })
               }
@@ -1354,24 +2545,19 @@ function EditorBody({
             />
           </Field>
           <ToggleRow
-            label="Header row"
-            description="First row is column names — rows become objects keyed by header."
+            label={t("csv.header")}
+            description={t("csv.header.desc")}
             checked={node.hasHeader}
             onChange={(next) => updateNode(node.id, { hasHeader: next })}
           />
           <BindingControl node={node} />
-          <p className="text-[11px] text-muted-foreground">
-            End users upload a .csv file. The parsed rows land in the bound
-            state as an array (typed values, empty rows/columns dropped) —
-            iterate <code className="font-mono">state.get(…)</code> directly in
-            code nodes.
-          </p>
+          <p className="text-[11px] text-muted-foreground">{t("csv.help")}</p>
         </div>
       );
     case "table":
       return (
         <div className="flex flex-col gap-4">
-          <Field label="Field label">
+          <Field label={t("field.fieldLabel")}>
             <input
               value={node.fieldLabel}
               onChange={(e) =>
@@ -1380,17 +2566,17 @@ function EditorBody({
               className={inputCls}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
-              placeholder="Optional helper text shown below the label"
+              placeholder={t("field.descPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { description: e.target.value })
               }
               className={inputCls}
             />
           </Field>
-          <Field label="Rows per page">
+          <Field label={t("table.rowsPerPage")}>
             <Select
               value={String(node.pageSize)}
               onValueChange={(v) =>
@@ -1398,34 +2584,30 @@ function EditorBody({
               }
             >
               <SelectTrigger className="h-8 w-full">
-                <SelectValue placeholder="Pick page size…" />
+                <SelectValue placeholder={t("table.pickPageSize")} />
               </SelectTrigger>
               <SelectContent>
                 {TABLE_PAGE_SIZES.map((s) => (
                   <SelectItem key={s} value={String(s)}>
-                    {s} rows
+                    {t("table.rows", { n: s })}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              Default page size in the preview — end users can switch between{" "}
-              {TABLE_PAGE_SIZES.join(" / ")}.
+              {t("table.help", { sizes: TABLE_PAGE_SIZES.join(" / ") })}
             </p>
           </Field>
           <BindingControl node={node} />
           <p className="text-[11px] text-muted-foreground">
-            Displays the bound state as a table — bind an array (e.g. CSV rows,
-            a JSON array, or a code-node result). Data is auto-optimized for
-            display; every column sorts (text, numbers, and auto-detected dates)
-            and resizes by dragging the header edge.
+            {t("table.footer")}
           </p>
         </div>
       );
     case "code_input":
       return (
         <div className="flex flex-col gap-4">
-          <Field label="Field label">
+          <Field label={t("field.fieldLabel")}>
             <input
               value={node.fieldLabel}
               onChange={(e) =>
@@ -1434,17 +2616,17 @@ function EditorBody({
               className={inputCls}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
-              placeholder="Optional helper text shown below the label"
+              placeholder={t("field.descPlaceholder")}
               onChange={(e) =>
                 updateNode(node.id, { description: e.target.value })
               }
               className={inputCls}
             />
           </Field>
-          <Field label="Language">
+          <Field label={t("codeInput.language")}>
             <Select
               value={node.language}
               onValueChange={(v) =>
@@ -1452,7 +2634,7 @@ function EditorBody({
               }
             >
               <SelectTrigger className="h-8 w-full">
-                <SelectValue placeholder="Pick language…" />
+                <SelectValue placeholder={t("codeInput.pickLanguage")} />
               </SelectTrigger>
               <SelectContent>
                 {CODE_INPUT_LANGUAGES.map((l) => (
@@ -1463,14 +2645,13 @@ function EditorBody({
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              Drives syntax highlighting in the preview editor.
+              {t("codeInput.language.help")}
             </p>
           </Field>
           <EditorHeightField node={node} />
           <BindingControl node={node} />
           <p className="text-[11px] text-muted-foreground">
-            End users write or paste code in a Monaco editor. The raw source
-            string lands in the bound state — it is never executed.
+            {t("codeInput.help")}
           </p>
         </div>
       );
@@ -1492,6 +2673,7 @@ export function NodeEditor({
   placement: EditorPlacement;
 }) {
   const { clearNodeSelection, deleteNode } = useToolBuilder();
+  const { t } = useTranslation();
   const meta = NODE_META[node.type];
   const Icon = meta.icon;
 
@@ -1506,7 +2688,7 @@ export function NodeEditor({
         {placement === "panel" && (
           <button
             type="button"
-            aria-label="Back to palette"
+            aria-label={t("node.back")}
             onClick={clearNodeSelection}
             className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-95"
           >
@@ -1522,14 +2704,16 @@ export function NodeEditor({
           <Icon size={15} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">{meta.label}</div>
+          <div className="truncate text-sm font-semibold">
+            {t(`node.${node.type}.label`)}
+          </div>
           <div className="font-mono text-[11px] text-muted-foreground">
             {meta.slug}
           </div>
         </div>
         <button
           type="button"
-          aria-label="Delete node"
+          aria-label={t("node.delete")}
           onClick={() => deleteNode(node.id)}
           className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:bg-destructive/10 hover:text-destructive active:scale-95"
         >
@@ -1538,7 +2722,7 @@ export function NodeEditor({
         {placement !== "panel" && (
           <button
             type="button"
-            aria-label="Close editor"
+            aria-label={t("node.close")}
             onClick={clearNodeSelection}
             className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-95"
           >
@@ -1546,7 +2730,9 @@ export function NodeEditor({
           </button>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">{meta.blurb}</p>
+      <p className="text-xs text-muted-foreground">
+        {t(`node.${node.type}.blurb`)}
+      </p>
       <hr className="border-border" />
       <EditorBody node={node} placement={placement} />
     </div>

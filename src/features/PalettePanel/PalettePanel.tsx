@@ -8,26 +8,32 @@ import {
   PALETTE_GROUPS,
 } from "@/constants/tool-builder";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
+import { useTranslation } from "@/hooks/useTranslation";
 import { cn } from "@/lib/utils";
 
+/** dataTransfer MIME used to carry a node type from palette to builder. */
+export const NODE_DND_MIME = "application/x-tool-node-type";
+
 /**
- * "Select Inputs" palette — the catalogue of node types, grouped. Clicking a
- * card appends that node to the open tool and selects it.
+ * "Node" — the catalogue of node types, grouped. Clicking a
+ * card appends that node to the open tool and selects it; each card is
+ * also draggable into the Builder drop zone (see {@link NODE_DND_MIME}).
  */
 export function PalettePanel() {
   const { addNode } = useToolBuilder();
+  const { t } = useTranslation();
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b-2 border-foreground px-4">
-        <span className="text-sm font-bold">Select Inputs</span>
+        <span className="text-sm font-bold">{t("palette.title")}</span>
       </div>
       <div className="flex-1 overflow-auto p-3 @container">
         <div className="flex flex-col gap-4">
           {PALETTE_GROUPS.map(({ group, types }) => (
             <div key={group} className="flex flex-col gap-1.5">
               <div className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-                {group}
+                {t(`palette.group.${group}`)}
               </div>
               <div className="grid grid-cols-1 gap-1.5 @xl:grid-cols-2 @4xl:grid-cols-3">
                 {types.map((type) => {
@@ -37,8 +43,13 @@ export function PalettePanel() {
                     <button
                       key={type}
                       type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(NODE_DND_MIME, type);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
                       onClick={() => addNode(type)}
-                      className="nb-press group flex items-start gap-3 border-2 border-foreground bg-card p-2.5 text-left shadow-nb-sm"
+                      className="nb-press group flex cursor-grab items-start gap-3 border-2 border-foreground bg-card p-2.5 text-left shadow-nb-sm active:cursor-grabbing"
                     >
                       <span
                         className={cn(
@@ -50,11 +61,11 @@ export function PalettePanel() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold">
-                          {meta.label}
+                          {t(`node.${type}.label`)}
                         </span>
                         {meta.blurb && (
                           <span className="block text-[11px] leading-snug text-muted-foreground">
-                            {meta.blurb}
+                            {t(`node.${type}.blurb`)}
                           </span>
                         )}
                       </span>
@@ -69,7 +80,7 @@ export function PalettePanel() {
           ))}
         </div>
         <div className="mt-4 flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
-          <Sparkles size={13} /> Nodes run top-to-bottom along the chain.
+          <Sparkles size={13} /> {t("palette.footer")}
         </div>
       </div>
     </div>

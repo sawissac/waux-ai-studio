@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import * as React from "react";
 
@@ -76,8 +77,48 @@ function DropdownMenuItem({
   );
 }
 
+/**
+ * Toggleable menu item with a leading check indicator. Used for multi-select
+ * dropdowns; defaults to staying open after a toggle so several items can be
+ * picked in one pass.
+ */
+function DropdownMenuCheckboxItem({
+  className,
+  children,
+  checked,
+  onSelect,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      data-slot="dropdown-menu-checkbox-item"
+      checked={checked}
+      onSelect={(e) => {
+        // Keep the menu open while toggling multiple targets.
+        e.preventDefault();
+        onSelect?.(e);
+      }}
+      className={cn(
+        "relative flex cursor-pointer select-none items-center gap-2 rounded-sm py-1.5 pl-7 pr-2 text-sm outline-none transition-colors duration-(--motion-duration-fast)",
+        "focus:bg-accent focus:text-accent-foreground",
+        "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+        className,
+      )}
+      {...props}
+    >
+      <span className="absolute left-2 grid place-items-center">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <Check className="size-3.5" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+}
+
 export {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,

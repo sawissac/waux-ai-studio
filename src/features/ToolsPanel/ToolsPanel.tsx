@@ -17,12 +17,15 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  Eye,
   Link2,
   MoreHorizontal,
   Pencil,
   Plus,
   Search,
+  SearchX,
   Trash2,
+  Wrench,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -42,12 +45,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { AiKeysButton } from "@/features/AiKeysButton";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
+import { useTranslation } from "@/hooks/useTranslation";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { useAppSelector } from "@/stores/hooks";
 import type { Tool } from "@/types/tool-builder";
 
 function SortableToolItem({
@@ -57,6 +59,7 @@ function SortableToolItem({
   selectTool,
   beginRename,
   shareTool,
+  previewTool,
   deleteTool,
   draftName,
   setDraftName,
@@ -70,6 +73,7 @@ function SortableToolItem({
   selectTool: (id: string) => void;
   beginRename: (id: string, name: string) => void;
   shareTool: (id: string) => void;
+  previewTool: (id: string) => void;
   deleteTool: (id: string) => void;
   draftName: string;
   setDraftName: (val: string) => void;
@@ -77,6 +81,7 @@ function SortableToolItem({
   setRenamingId: (id: string | null) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  const { t: translate } = useTranslation();
   const {
     attributes,
     listeners,
@@ -150,7 +155,7 @@ function SortableToolItem({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label="Tool options"
+            aria-label={translate("tools.options")}
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             className={cn(
@@ -162,20 +167,24 @@ function SortableToolItem({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
+          <DropdownMenuItem onSelect={() => previewTool(t.id)}>
+            <Eye />
+            {translate("tools.preview")}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => beginRename(t.id, t.name)}>
             <Pencil />
-            Rename
+            {translate("tools.rename")}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => shareTool(t.id)}>
             <Link2 />
-            Share
+            {translate("tools.share")}
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onSelect={() => deleteTool(t.id)}
           >
             <Trash2 />
-            Delete
+            {translate("tools.delete")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -201,8 +210,7 @@ export function ToolsPanel() {
     deleteTool,
     reorderTools,
   } = useToolBuilder();
-
-  const loadState = useAppSelector((s) => s.toolBuilder.loadState);
+  const { t } = useTranslation();
 
   /** Id of the tool currently being renamed inline, or null. */
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -248,12 +256,37 @@ export function ToolsPanel() {
       .update({ is_shared: true })
       .eq("id", id);
     if (error) {
-      toast.error("Could not enable sharing.");
+      toast.error(t("tools.shareError"));
       return;
     }
     const url = `${window.location.origin}/${id}`;
     await navigator.clipboard.writeText(url);
-    toast.success("Share link copied!");
+    toast.success(t("tools.shareCopied"));
+  }
+
+  /**
+   * Open the tool's public share page in a new tab. Opens the tab
+   * synchronously (so the popup blocker treats it as a user gesture), enables
+   * sharing — the public page 404s on unshared tools — then redirects the tab.
+   */
+  async function handlePreview(id: string) {
+    const tab = window.open("about:blank", "_blank");
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("tools")
+      .update({ is_shared: true })
+      .eq("id", id);
+    if (error) {
+      toast.error(t("tools.previewError"));
+      tab?.close();
+      return;
+    }
+    const url = `${window.location.origin}/${id}`;
+    if (tab) {
+      tab.location.href = url;
+    } else {
+      toast.error(t("tools.popupBlocked"));
+    }
   }
 
   const sensors = useSensors(
@@ -275,14 +308,14 @@ export function ToolsPanel() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b-2 border-foreground px-4">
-        <span className="text-sm font-bold">Tools</span>
+        <span className="text-sm font-bold">{t("tools.title")}</span>
         <div className="ml-auto flex items-center gap-2">
           <AiKeysButton />
           <button
             type="button"
-            aria-label="New tool"
+            aria-label={t("tools.new")}
             onClick={addTool}
             className="nb-press grid size-8 place-items-center border-2 border-foreground bg-card shadow-nb-sm"
           >
@@ -300,31 +333,25 @@ export function ToolsPanel() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tools…"
+            placeholder={t("tools.search")}
             className="h-8 w-full border-2 border-foreground bg-background pl-8 pr-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-2">
-        {loadState === "loading" && tools.length === 0 ? (
-          <div className="flex flex-col gap-1">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 border-2 border-transparent px-2.5 py-2"
-              >
-                <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/30" />
-                <Skeleton
-                  className="h-3 border-0"
-                  style={{ width: `${55 + ((i * 13) % 35)}%` }}
-                />
-              </div>
-            ))}
-          </div>
-        ) : filteredTools.length === 0 ? (
-          <div className="px-2 py-6 text-center text-xs text-muted-foreground">
-            No tools match “{search}”.
+        {filteredTools.length === 0 ? (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 px-2 text-center text-muted-foreground">
+            <span className="grid size-12 place-items-center border-2 border-foreground bg-card shadow-nb">
+              {search ? (
+                <SearchX className="size-6" aria-hidden />
+              ) : (
+                <Wrench className="size-6" aria-hidden />
+              )}
+            </span>
+            <p className="max-w-[16rem] text-xs">
+              {search ? t("tools.noMatch", { q: search }) : t("tools.empty")}
+            </p>
           </div>
         ) : (
           <DndContext
@@ -347,6 +374,7 @@ export function ToolsPanel() {
                     selectTool={selectTool}
                     beginRename={beginRename}
                     shareTool={handleShare}
+                    previewTool={handlePreview}
                     deleteTool={setDeleteConfirmId}
                     draftName={draftName}
                     setDraftName={setDraftName}
@@ -367,7 +395,7 @@ export function ToolsPanel() {
           onClick={addTool}
           className="nb-press inline-flex w-full items-center justify-center gap-1.5 border-2 border-foreground bg-primary px-3 py-2 text-sm font-bold text-primary-foreground shadow-nb"
         >
-          <Plus size={14} /> New tool
+          <Plus size={14} /> {t("tools.new")}
         </button>
       </div>
 
@@ -377,21 +405,20 @@ export function ToolsPanel() {
       >
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Delete tool?</DialogTitle>
+            <DialogTitle>{t("tools.deleteTitle")}</DialogTitle>
             <DialogDescription>
               <span className="font-medium text-foreground">
                 {toolToDelete?.name}
               </span>{" "}
-              and all its nodes will be permanently removed. This cannot be
-              undone.
+              {t("tools.deleteBodyTail")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
-              Delete
+              {t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>
