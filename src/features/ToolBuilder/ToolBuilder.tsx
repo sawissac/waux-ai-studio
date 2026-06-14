@@ -1,6 +1,12 @@
 "use client";
 
-import { MousePointerClick, SlidersHorizontal } from "lucide-react";
+import {
+  MousePointerClick,
+  PanelLeftOpen,
+  PanelRightOpen,
+  SlidersHorizontal,
+} from "lucide-react";
+import { useState } from "react";
 
 import {
   ResizableGroup,
@@ -16,6 +22,8 @@ import { ToolsPanel } from "@/features/ToolsPanel";
 import { Topbar } from "@/features/Topbar";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { useToolsSync } from "@/hooks/useToolsSync";
+import { useTranslation } from "@/hooks/useTranslation";
+import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/stores/hooks";
 
 /**
@@ -24,9 +32,12 @@ import { useAppSelector } from "@/stores/hooks";
  * Composes the three-panel workspace: tools list (left), node-chain builder +
  * live preview (center), and the contextual right panel. The right panel shows
  * the node editor when a node is selected in `panel` placement, the
- * "Node" panel when a tool is open, otherwise nothing. All state
- * flows through {@link useToolBuilder};
- * this component holds no local UI state of its own.
+ * "Node" panel when a tool is open, otherwise nothing. Tool/node state flows
+ * through {@link useToolBuilder}; the only local UI state here is the center
+ * view (builder vs chat) and side-panel visibility — switching to chat hides
+ * both side panels, and a build view (panel / inline) restores them. Each panel
+ * has a collapse button in its own header; a slim {@link CollapsedRail} with an
+ * expand button shows in place of a hidden panel.
  *
  * {@link useToolsSync} hydrates the Redux slice from Supabase on mount.
  */
@@ -37,9 +48,23 @@ export function ToolBuilder() {
   const { tool, tools, selectedNode, editorPlacement } = useToolBuilder();
   const loadState = useAppSelector((s) => s.toolBuilder.loadState);
   const isLoading = loadState === "loading";
+  const { t } = useTranslation();
 
   const showEditorInPanel =
     editorPlacement === "panel" && selectedNode !== null;
+
+  // Center view + side-panel visibility. Switching to chat hides both panels;
+  // returning to a build view (panel / inline) restores them.
+  const [view, setView] = useState<"build" | "chat">("build");
+  const [leftHidden, setLeftHidden] = useState(false);
+  const [rightHidden, setRightHidden] = useState(false);
+
+  function handleViewChange(next: "build" | "chat") {
+    setView(next);
+    const hide = next === "chat";
+    setLeftHidden(hide);
+    setRightHidden(hide);
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
@@ -50,66 +75,145 @@ export function ToolBuilder() {
         saveState={saveState}
       />
 
-      <ResizableGroup className="min-h-0 flex-1 flex">
-        <ResizablePanel
-          id="tools"
-          defaultSize="350px"
-          minSize="240px"
-          maxSize="480px"
-          className="min-h-0"
-        >
-          <aside className="h-full min-h-0">
-            {isLoading ? <ToolsSkeleton /> : <ToolsPanel />}
-          </aside>
-        </ResizablePanel>
+      <div className="flex min-h-0 flex-1">
+        {leftHidden && (
+          <CollapsedRail
+            side="left"
+            icon={PanelLeftOpen}
+            label={t("tools.title")}
+            onExpand={() => setLeftHidden(false)}
+          />
+        )}
 
-        <ResizableHandle />
+        <ResizableGroup className="min-h-0 flex-1 flex">
+          {!leftHidden && (
+            <>
+              <ResizablePanel
+                id="tools"
+                defaultSize="350px"
+                minSize="240px"
+                maxSize="480px"
+                className="min-h-0"
+              >
+                <aside className="h-full min-h-0">
+                  {isLoading ? (
+                    <ToolsSkeleton />
+                  ) : (
+                    <ToolsPanel onHide={() => setLeftHidden(true)} />
+                  )}
+                </aside>
+              </ResizablePanel>
+              <ResizableHandle />
+            </>
+          )}
 
-        <ResizablePanel
-          id="builder"
-          minSize="320px"
-          className="min-h-0 min-w-0"
-        >
-          <main className="h-full min-h-0 min-w-0">
-            {isLoading ? (
-              <BuilderSkeleton />
-            ) : tool ? (
-              <BuilderPanel tool={tool} />
-            ) : (
-              <EmptyState
-                icon={MousePointerClick}
-                label="Select or create a tool to start building."
-              />
-            )}
-          </main>
-        </ResizablePanel>
+          <ResizablePanel
+            id="builder"
+            minSize="320px"
+            className="min-h-0 min-w-0"
+          >
+            <main className="h-full min-h-0 min-w-0">
+              {isLoading ? (
+                <BuilderSkeleton />
+              ) : tool ? (
+                <BuilderPanel
+                  tool={tool}
+                  view={view}
+                  onViewChange={handleViewChange}
+                />
+              ) : (
+                <EmptyState
+                  icon={MousePointerClick}
+                  label="Select or create a tool to start building."
+                />
+              )}
+            </main>
+          </ResizablePanel>
 
-        <ResizableHandle />
-        <ResizablePanel
-          id="inspector"
-          defaultSize="400px"
-          minSize="300px"
-          maxSize="60%"
-          className="min-h-0"
-        >
-          <aside className="h-full min-h-0">
-            {isLoading ? (
-              <PaletteSkeleton />
-            ) : showEditorInPanel && selectedNode ? (
-              <div className="h-full overflow-auto p-4">
-                <NodeEditor node={selectedNode} placement="panel" />
-              </div>
-            ) : tool ? (
-              <PalettePanel />
-            ) : (
-              <EmptyState
-                icon={SlidersHorizontal}
-                label="Inputs appear here once a tool is open."
-              />
-            )}
-          </aside>
-        </ResizablePanel>
-      </ResizableGroup>
+          {!rightHidden && (
+            <>
+              <ResizableHandle />
+              <ResizablePanel
+                id="inspector"
+                defaultSize="400px"
+                minSize="300px"
+                maxSize="60%"
+                className="min-h-0"
+              >
+                <aside className="h-full min-h-0">
+                  {isLoading ? (
+                    <PaletteSkeleton />
+                  ) : showEditorInPanel && selectedNode ? (
+                    <div className="h-full overflow-auto p-4">
+                      <NodeEditor node={selectedNode} placement="panel" />
+                    </div>
+                  ) : tool ? (
+                    <PalettePanel onHide={() => setRightHidden(true)} />
+                  ) : (
+                    <EmptyState
+                      icon={SlidersHorizontal}
+                      label="Inputs appear here once a tool is open."
+                    />
+                  )}
+                </aside>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizableGroup>
+
+        {rightHidden && (
+          <CollapsedRail
+            side="right"
+            icon={PanelRightOpen}
+            label={t("palette.title")}
+            onExpand={() => setRightHidden(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Slim rail shown in place of a collapsed side panel: an expand button plus the
+ * panel's name written vertically. Clicking re-opens the panel.
+ *
+ * @param props.side - Which edge the rail sits on (controls its border).
+ * @param props.icon - Expand icon (panel-open glyph).
+ * @param props.label - Panel name shown vertically.
+ * @param props.onExpand - Re-open the panel.
+ */
+function CollapsedRail({
+  side,
+  icon: Icon,
+  label,
+  onExpand,
+}: {
+  side: "left" | "right";
+  icon: typeof MousePointerClick;
+  label: string;
+  onExpand: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex h-full w-11 shrink-0 flex-col items-center gap-3 bg-card py-3",
+        side === "left"
+          ? "border-r-2 border-foreground"
+          : "border-l-2 border-foreground",
+      )}
+    >
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onExpand}
+        className="nb-press grid size-8 place-items-center border-2 border-foreground bg-card text-muted-foreground shadow-nb-sm hover:text-foreground"
+      >
+        <Icon size={15} />
+      </button>
+      <span className="text-xs font-bold text-muted-foreground [writing-mode:vertical-rl]">
+        {label}
+      </span>
     </div>
   );
 }

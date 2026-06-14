@@ -20,6 +20,7 @@ import {
   Eye,
   Link2,
   MoreHorizontal,
+  PanelLeftClose,
   Pencil,
   Plus,
   Search,
@@ -197,7 +198,7 @@ function SortableToolItem({
  * create control. Selecting a row opens that tool in the builder; the options
  * menu exposes rename (inline edit) and delete (with confirmation dialog).
  */
-export function ToolsPanel() {
+export function ToolsPanel({ onHide }: { onHide: () => void }) {
   const {
     tools,
     filteredTools,
@@ -320,6 +321,14 @@ export function ToolsPanel() {
             className="nb-press grid size-8 place-items-center border-2 border-foreground bg-card shadow-nb-sm"
           >
             <Plus size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label={t("builder.toggleTools")}
+            onClick={onHide}
+            className="nb-press grid size-8 place-items-center border-2 border-foreground bg-card text-muted-foreground shadow-nb-sm hover:text-foreground"
+          >
+            <PanelLeftClose size={15} />
           </button>
         </div>
       </div>

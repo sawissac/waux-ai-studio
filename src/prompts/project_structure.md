@@ -1,6 +1,6 @@
 # Project Structure — File Placement Rules
 
-Last updated: 2026-06-12
+Last updated: 2026-06-14
 
 Where each file type lives. Next.js 16 App Router + TypeScript.
 
@@ -95,10 +95,11 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
   three-panel workspace; mounted by `app/page.tsx`. Calls `useToolsSync` on
   mount to hydrate the Redux slice from Supabase.
   - `index.ts` — barrel: re-exports the `ToolBuilder` component
-  - `ToolBuilder.tsx` — entry component; composes the panel features
+  - `ToolBuilder.tsx` — entry component; composes the panel features. Owns the center view (builder vs chat) + side-panel visibility: the chat tab hides both side panels, panel/inline restore them, and per-panel toggle buttons (PanelLeft / PanelRight) in the builder header hide/show Tools + Node independently.
 - `Topbar/` — tool name + count header
 - `ToolsPanel/` — left tools list + search
-- `BuilderPanel/` — center node-chain builder; composes `NodeCard` + `PreviewPane` features
+- `BuilderPanel/` — center node-chain builder; composes `NodeCard` + `PreviewPane` features. A header segmented control switches the center view between the node builder (panel / inline editor placement) and a chat surface.
+  - `components/ChatView.tsx` — feature-private ChatGPT-style chat assistant. Calls the chosen provider (Gemini / OpenRouter; keys via the AI-keys popover in `ToolsPanel`) with a tool-grounded system prompt from `buildChatSystemPrompt` (`@/constants/ai-prompts`) + `buildChatToolContext` (`@/lib/chat-context`) — the open tool's connected node chain, the node catalog, and docs for the node types in use — plus a `get_node_docs` tool call (function calling, both providers) so it fetches full docs for any node on demand. Provider/model pickers, thinking indicator, error + retry. Shown when the "chat" tab is active.
 - `NodeCard/` — single node row; composes the `NodeEditor` feature
 - `NodeEditor/` — node config form (shared by `NodeCard` and `ToolBuilder`)
 - `PalettePanel/` — right "Node" panel
@@ -139,7 +140,9 @@ Rule: `ui/` is lowercase-kebab. `customs/` and `icons/` are PascalCase.
 
 ### Current components
 
-**ui/** — `button` (shadcn/ui, new-york style, neutral base)
+**ui/** — `button` (shadcn/ui, new-york style, neutral base). `markdown.tsx` — shared `Markdown` renderer (react-markdown + GFM/math/highlight, sanitized; caller wraps in `prose`). Single source for Markdown across the `markdown` input node, AI Markdown output (`PreviewPane`), and the Builder chat assistant (`ChatView`).
+
+**customs/** — `ClickBurst.tsx` — global pointer click-burst effect (neobrutalism square ring + sparks, spring physics via `motion`/framer-motion). Mounted once in `app/layout.tsx`; portals a fixed pointer-events-none overlay. No-ops under reduced motion.
 
 > **Example usage** (target convention):
 >
@@ -208,6 +211,7 @@ Rule: feature-only hooks stay inside feature folder, not here. Query/mutation ho
 - `useToolsSync.ts` — fetches tools + nodes from Supabase via TanStack Query and dispatches `hydrateTools` into the Redux slice on mount. Called once at the top of `ToolBuilder`.
 - `useAppConfig.ts` — single access point for global app config / user settings (`state.appConfig`): returns current values + bound setters (incl. catalog-driven `setToggle`). Used by `Settings` and `AppConfigProvider`; components never read the slice directly.
 - `useTranslation.ts` — returns `t(key)` resolving `@/constants/i18n` strings for the active locale (from `useAppConfig`), with `en` fallback. Used by any feature rendering user-facing text (`Topbar`, `Settings`).
+- `useChatModelPref.ts` — global per-user Builder-chat model selection, persisted on `profiles.chat_provider` / `chat_model` (one choice across all tools). TanStack Query read + optimistic `save` (Supabase update). Falls back to `gemini` / app-default model. Used by the `BuilderPanel` chat view.
 
 > **Example usage** (target convention):
 >
@@ -231,6 +235,7 @@ Rule: no React imports unless wrapper hook. No business logic.
 
 - `tool-builder-runtime.ts` — pure preview helpers (`resolveBinding`, `initialStateMap`, `runChain`, `nodeSubtitle`). No React, no Redux.
 - `node-catalog.ts` — serialisable view of the node catalogue (`getNodeCatalog()`, `getNodeCount()`): flattens `@/constants/tool-builder` (which carries icon components) into plain grouped data + i18n keys, safe to cross server/client and feed non-React readers. Also `getNodeReference()` / `getNodeReferenceFor()` — fully-resolved flat records merging catalogue identity + canonical English label/blurb (`MESSAGES.en`) + the `@/constants/node-docs` detail, the shape intended for an **AI tool call**. Consumed by the `NodeDocs` feature.
+- `chat-context.ts` — pure bridge from the open tool to the chat assistant's prompt inputs (`buildChatToolContext(tool, stateNode)` → `ChatToolContext`): the connected node chain (label/`@slug` + `nodeSubtitle` detail), the compact catalog of every node type, and in-depth docs for the node types in use. Feeds `buildChatSystemPrompt` (`@/constants/ai-prompts`). Also exports `NODE_DOCS_TOOL` + `lookupNodeDocs` — the `get_node_docs` function-calling tool definition + dispatcher that returns any node type's full docs on demand (resolved by type id / `@slug` / label), so the assistant answers about nodes not in the open tool. No React; never surfaces internal ids. Consumed by the `BuilderPanel` chat view.
 - `json-to-ts.ts` — pure JSON → TypeScript declaration generator (`jsonToTs`). Used by the Tool Builder's `ts_type` (TS Type Converter) node via the runtime.
 - `csv.ts` — pure CSV parser (`parseCsv`, wraps PapaParse) producing an optimized rows array (typed values, empty rows/columns dropped). Used by the Tool Builder's `csv` input node in `PreviewPane`.
 - `table-data.ts` — pure table-data normalizer (`normalizeTableData`, `compareCells`, `formatCell`): auto-optimizes any array / JSON string into a render-ready grid (typed cells, empty rows/columns dropped) and detects per-column kinds (string/number/date) for sorting. Used by the Tool Builder's `table` input node (`PreviewPane/components/DataTable.tsx`).
@@ -271,6 +276,7 @@ Rule: never hardcode route strings in JSX — use `Routes.X`. Use `.tsx` only wh
 
 - `tool-builder.tsx` — node catalog (`NODE_META`, `ACCENT_CLASSES`, `PALETTE_GROUPS`), the `createNode()` factory, and `uuid()`. `.tsx` because entries reference lucide icon components.
 - `node-docs.ts` — long-form per-node reference docs (`NodeDetail` type, `NODE_DETAILS` keyed by `ToolNodeType`, `getNodeDetail()`). Pure serialisable English content (summary, when-to-use, config controls, state in/out, tips, example) — the _content_ layer behind the docs detail dialog, and AI-tool-call-ready (no React/icons). Short labels/blurbs stay in `i18n.ts`; the depth lives here.
+- `ai-prompts.ts` — **single source of truth for every AI prompt.** Base system prompts (`CODE_EDITOR_SYSTEM_PROMPT`, `AI_NODE_SYSTEM_PROMPT`, `CHAT_SYSTEM_PROMPT`) + pure context builders that assemble the full prompt from live data passed by callers: `stateContext()`, `buildCodeEditorSystemPrompt()` (code-editor Ask AI panel), `buildAiNodeSystemPrompt()` (runtime `@ai` node), and `buildChatSystemPrompt()` / `toolChainContext()` (Builder chat tab — grounds the assistant in the open tool's connected node chain). No React/state reads; never surfaces internal ids. Consumed by `@/components/ui/code-editor`, `@/lib/tool-builder-runtime`, and (next) the chat feature.
 - `settings.tsx` — available-settings catalog (`THEME_OPTIONS`, `LOCALE_OPTIONS`, `TOGGLE_SETTINGS`, `SETTINGS_STORAGE_KEY`) consumed by the `Settings` feature. Labels are `MessageKey`s resolved at render. `.tsx` because options carry lucide icons.
 - `i18n.ts` — in-house i18n message catalog (`MESSAGES` per `AppLocale`, `MessageKey` type). Hardcoded `en` + `my` (Burmese) dictionaries; `en` is the source-of-truth key set (the `my: Record<MessageKey, string>` value type forces parity). Covers Topbar, Settings, PreviewPane, the Tools/Builder/Node panels (chrome + node-catalog labels/blurbs), and the full NodeEditor detail form (field labels, helper text, toggles, targets, dialogs). Only author-supplied content (a node's own fieldLabel/description/buttonText) stays untranslated. Resolved via `@/hooks/useTranslation`.
 

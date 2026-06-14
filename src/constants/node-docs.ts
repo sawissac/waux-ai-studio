@@ -1711,11 +1711,6 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
           "Model id combobox (node.model). Pick from the provider's curated list or type any id. Placeholder/default is gemini-2.5-flash for Gemini, openrouter/auto for OpenRouter.",
       },
       {
-        name: "System instruction (optional)",
-        description:
-          "Optional system prompt textarea (node.systemInstruction). Also interpolates {{stateName}} tokens. Left empty sends no system instruction.",
-      },
-      {
         name: "Prompt",
         description:
           "The user prompt textarea (node.prompt, monospace). Use {{stateName}} to interpolate state values into the prompt at run time.",
@@ -1733,12 +1728,13 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     ],
     io: {
       reads:
-        "Any state names referenced as {{name}} tokens in the prompt and system instruction — interpolated at run time.",
+        "Any state names referenced as {{name}} tokens in the prompt — interpolated at run time. An auto-built system instruction also lists every state slot (name + current value) so the model is aware of the tool's state.",
       writes:
         "The output state slot — the model's reply text. The node no-ops if the output binding does not resolve to a slot.",
     },
     tips: [
-      "The prompt and system instruction both interpolate {{stateName}} — wire inputs into state, then reference them by name.",
+      "The prompt interpolates {{stateName}} — wire inputs into state, then reference them by name.",
+      "There is no manual system prompt: the node auto-sends a state-aware system instruction listing the tool's slots (same approach as the code editor's Ask AI panel).",
       "Requires a configured API key for the chosen provider; a missing/invalid key surfaces as a runtime error logged by the chain.",
       "It runs in the async run chain (with Code nodes), so it only fires when an input's run button / targets trigger it — not on every keystroke like synchronous transforms.",
       "Markdown output only changes how the reply renders in the preview; the raw text is still what gets written to state.",

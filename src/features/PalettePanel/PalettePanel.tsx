@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Search, SearchX, Sparkles } from "lucide-react";
+import { PanelRightClose, Plus, Search, SearchX, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -20,7 +20,7 @@ export const NODE_DND_MIME = "application/x-tool-node-type";
  * card appends that node to the open tool and selects it; each card is
  * also draggable into the Builder drop zone (see {@link NODE_DND_MIME}).
  */
-export function PalettePanel() {
+export function PalettePanel({ onHide }: { onHide: () => void }) {
   const { addNode } = useToolBuilder();
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -47,6 +47,14 @@ export function PalettePanel() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b-2 border-foreground px-4">
+        <button
+          type="button"
+          aria-label={t("builder.toggleNode")}
+          onClick={onHide}
+          className="nb-press grid size-8 place-items-center border-2 border-foreground bg-card text-muted-foreground shadow-nb-sm hover:text-foreground"
+        >
+          <PanelRightClose size={15} />
+        </button>
         <span className="text-sm font-bold">{t("palette.title")}</span>
       </div>
       <div className="border-b-2 border-foreground px-3 py-2.5">

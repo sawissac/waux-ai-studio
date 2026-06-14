@@ -14,10 +14,18 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { FlaskConical, Plus } from "lucide-react";
+import {
+  FlaskConical,
+  type LucideIcon,
+  MessageSquare,
+  PanelRight,
+  Plus,
+  Rows3,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ChatView } from "@/features/BuilderPanel/components/ChatView";
 import { NodeCard } from "@/features/NodeCard";
 import { NODE_DND_MIME } from "@/features/PalettePanel";
 import { PreviewPane } from "@/features/PreviewPane";
@@ -28,6 +36,12 @@ import type { EditorPlacement, Tool, ToolNodeType } from "@/types/tool-builder";
 
 const PLACEMENTS: EditorPlacement[] = ["panel", "inline"];
 
+/** Icon shown beside each placement tab's label, keyed by placement. */
+const PLACEMENT_ICONS: Record<EditorPlacement, LucideIcon> = {
+  panel: PanelRight,
+  inline: Rows3,
+};
+
 /**
  * Center panel — the node chain plus the live preview.
  *
@@ -37,8 +51,18 @@ const PLACEMENTS: EditorPlacement[] = ["panel", "inline"];
  * segmented control switches the global editor placement.
  *
  * @param props.tool - The open tool to build.
+ * @param props.view - Center view: the node builder or the chat surface.
+ * @param props.onViewChange - Switch the center view (parent toggles panels).
  */
-export function BuilderPanel({ tool }: { tool: Tool }) {
+export function BuilderPanel({
+  tool,
+  view,
+  onViewChange,
+}: {
+  tool: Tool;
+  view: "build" | "chat";
+  onViewChange: (next: "build" | "chat") => void;
+}) {
   const {
     stateNode,
     selectedNodeId,
@@ -53,6 +77,21 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
   const { t } = useTranslation();
 
   const [dropActive, setDropActive] = useState(false);
+
+  /**
+   * The header segmented control multiplexes two concerns: "chat" swaps the
+   * center view (the parent auto-hides both side panels); "panel" / "inline"
+   * stay editor-placement values and switch back to the builder (panels back).
+   */
+  const tabValue = view === "chat" ? "chat" : editorPlacement;
+  function handleTabChange(value: string) {
+    if (value === "chat") {
+      onViewChange("chat");
+      return;
+    }
+    onViewChange("build");
+    setEditorPlacement(value as EditorPlacement);
+  }
 
   /** Accept a node-type drag originating from the palette. */
   function handleDragOver(e: React.DragEvent) {
@@ -103,101 +142,118 @@ export function BuilderPanel({ tool }: { tool: Tool }) {
         </span>
         <div className="ml-auto flex items-center gap-2">
           <Tabs
-            value={editorPlacement}
-            onValueChange={(val) => setEditorPlacement(val as EditorPlacement)}
+            value={tabValue}
+            onValueChange={handleTabChange}
             className="hidden sm:block"
           >
             <TabsList className="h-7">
-              {PLACEMENTS.map((p) => (
-                <TabsTrigger
-                  key={p}
-                  value={p}
-                  className="text-[11px] capitalize"
-                >
-                  {t(`builder.placement.${p}`)}
-                </TabsTrigger>
-              ))}
+              {PLACEMENTS.map((p) => {
+                const Icon = PLACEMENT_ICONS[p];
+                return (
+                  <TabsTrigger
+                    key={p}
+                    value={p}
+                    className="gap-1 text-[11px] capitalize"
+                  >
+                    <Icon />
+                    {t(`builder.placement.${p}`)}
+                  </TabsTrigger>
+                );
+              })}
+              <TabsTrigger
+                value="chat"
+                className="gap-1 text-[11px] capitalize"
+              >
+                <MessageSquare />
+                {t("builder.tab.chat")}
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
 
-      <div
-        className="flex-1 overflow-auto p-4 sm:p-6"
-        onDragOver={handleDragOver}
-        onDragLeave={() => setDropActive(false)}
-        onDrop={handleDrop}
-      >
-        <div className="mx-auto max-w-2xl">
-          {empty ? (
-            <div
-              className={cn(
-                "flex flex-col items-center gap-2 border-2 border-dashed border-foreground py-14 text-center transition-colors duration-(--motion-duration-fast)",
-                dropActive && "border-primary bg-accent",
-              )}
-            >
-              <span className="grid size-11 place-items-center border-2 border-foreground bg-primary text-primary-foreground shadow-nb-sm">
-                <FlaskConical size={22} />
-              </span>
-              <div className="text-sm font-bold">{t("builder.emptyTitle")}</div>
-              <div className="max-w-xs text-xs text-muted-foreground">
-                {t("builder.emptyBody")}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              <DndContext
-                id="builder-dnd"
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={tool.nodes.map((n) => n.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {tool.nodes.map((node, i) => (
-                    <div key={node.id} className="flex flex-col">
-                      {i > 0 && (
-                        <span
-                          className="mx-auto h-5 w-0 border-l-2 border-foreground"
-                          aria-hidden
-                        />
-                      )}
-                      <NodeCard
-                        node={node}
-                        orderIndex={i}
-                        stateNode={stateNode}
-                        selected={node.id === selectedNodeId}
-                        placement={editorPlacement}
-                        onSelect={() => selectNode(node.id)}
-                        onDelete={() => deleteNode(node.id)}
-                      />
-                    </div>
-                  ))}
-                </SortableContext>
-              </DndContext>
-              <span
-                className="mx-auto h-5 w-0 border-l border-dashed border-border"
-                aria-hidden
-              />
-              <button
-                type="button"
-                onClick={clearNodeSelection}
+      {view === "chat" ? (
+        <ChatView tool={tool} stateNode={stateNode} />
+      ) : (
+        <div
+          className="flex-1 overflow-auto p-4 sm:p-6"
+          onDragOver={handleDragOver}
+          onDragLeave={() => setDropActive(false)}
+          onDrop={handleDrop}
+        >
+          <div className="mx-auto max-w-2xl">
+            {empty ? (
+              <div
                 className={cn(
-                  "inline-flex h-14 items-center justify-center gap-1.5 border-2 border-dashed border-foreground text-sm font-bold text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground",
-                  dropActive && "border-primary bg-accent text-foreground",
+                  "flex flex-col items-center gap-2 border-2 border-dashed border-foreground py-14 text-center transition-colors duration-(--motion-duration-fast)",
+                  dropActive && "border-primary bg-accent",
                 )}
               >
-                <Plus size={15} />{" "}
-                {dropActive ? t("builder.dropToAdd") : t("builder.addInput")}
-              </button>
-            </div>
-          )}
+                <span className="grid size-11 place-items-center border-2 border-foreground bg-primary text-primary-foreground shadow-nb-sm">
+                  <FlaskConical size={22} />
+                </span>
+                <div className="text-sm font-bold">
+                  {t("builder.emptyTitle")}
+                </div>
+                <div className="max-w-xs text-xs text-muted-foreground">
+                  {t("builder.emptyBody")}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                <DndContext
+                  id="builder-dnd"
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={tool.nodes.map((n) => n.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {tool.nodes.map((node, i) => (
+                      <div key={node.id} className="flex flex-col">
+                        {i > 0 && (
+                          <span
+                            className="mx-auto h-5 w-0 border-l-2 border-foreground"
+                            aria-hidden
+                          />
+                        )}
+                        <NodeCard
+                          node={node}
+                          orderIndex={i}
+                          stateNode={stateNode}
+                          selected={node.id === selectedNodeId}
+                          placement={editorPlacement}
+                          onSelect={() => selectNode(node.id)}
+                          onDelete={() => deleteNode(node.id)}
+                        />
+                      </div>
+                    ))}
+                  </SortableContext>
+                </DndContext>
+                <span
+                  className="mx-auto h-5 w-0 border-l border-dashed border-border"
+                  aria-hidden
+                />
+                <button
+                  type="button"
+                  onClick={clearNodeSelection}
+                  className={cn(
+                    "inline-flex h-14 items-center justify-center gap-1.5 border-2 border-dashed border-foreground text-sm font-bold text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground",
+                    dropActive && "border-primary bg-accent text-foreground",
+                  )}
+                >
+                  <Plus size={15} />{" "}
+                  {dropActive ? t("builder.dropToAdd") : t("builder.addInput")}
+                </button>
+              </div>
+            )}
 
-          <PreviewPane tool={tool} stateNode={stateNode} />
+            <PreviewPane tool={tool} stateNode={stateNode} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

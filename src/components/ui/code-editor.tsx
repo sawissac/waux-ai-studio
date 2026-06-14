@@ -1,7 +1,7 @@
 "use client";
 
 import Editor, { type OnMount } from "@monaco-editor/react";
-import { Loader2, Send, Sparkles, X } from "lucide-react";
+import { Loader2, RotateCcw, Send, Sparkles, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { buildCodeEditorSystemPrompt } from "@/constants/ai-prompts";
 import { useProviderModels } from "@/hooks/useProviderModels";
 import {
   callGemini,
@@ -53,6 +54,12 @@ export interface CodeEditorProps {
   aiModel?: string;
   /** Called when the user changes the AI model. */
   onAiModelChange?: (model: string) => void;
+  /**
+   * Shared state slots the running tool exposes. Listed in the AI assistant's
+   * context so it answers about the *tool's* real `state.get(name)` /
+   * `state.set(name, …)` keys instead of guessing from the visible code.
+   */
+  stateSlots?: readonly { name: string; value?: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -494,9 +501,6 @@ const DEFAULT_MODELS: Record<AiProvider, string> = {
   openrouter: "openrouter/auto",
 };
 
-const SYSTEM_PROMPT =
-  "You assist inside a JS/HTML code editor. Reply with code only (no markdown fences, no prose) unless explicitly asked for explanation.";
-
 /** Strip leading/trailing ```lang fences a model might still emit. */
 function stripFences(text: string): string {
   const t = text.trim();
@@ -517,6 +521,7 @@ export function CodeEditor({
   onAiProviderChange,
   aiModel,
   onAiModelChange,
+  stateSlots,
 }: CodeEditorProps) {
   const registered = useRef<Set<string>>(new Set());
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
@@ -617,6 +622,41 @@ export function CodeEditor({
     [onChange],
   );
 
+  /** Drop a single message from the transcript. */
+  const removeMessage = useCallback((index: number) => {
+    setMessages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  /**
+   * Send a conversation `history` to the active provider and return the reply.
+   * Rebuilds the system context (editor content, selection, state slots) fresh
+   * each call so retries pick up the latest editor state. Shared by send +
+   * retry.
+   */
+  const requestReply = useCallback(
+    async (history: ChatMessage[]): Promise<string> => {
+      const apiMessages: ChatMessage[] = [
+        {
+          role: "system",
+          content: buildCodeEditorSystemPrompt({
+            stateSlots,
+            value,
+            language,
+            selection: selectedText,
+          }),
+        },
+        ...history,
+      ];
+      const opts = { messages: apiMessages, model: model || undefined };
+      const reply =
+        provider === "openrouter"
+          ? await callOpenRouter(opts)
+          : await callGemini(opts);
+      return reply || "(empty reply)";
+    },
+    [value, language, selectedText, stateSlots, provider, model],
+  );
+
   const sendChat = useCallback(async () => {
     const prompt = input.trim();
     if (!prompt || sending) {
@@ -631,44 +671,49 @@ export function CodeEditor({
     setInput("");
     setSending(true);
     try {
-      const contextNote = value
-        ? `Current editor content (language: ${language}):\n\`\`\`${language}\n${value}\n\`\`\``
-        : `(editor is empty; language: ${language})`;
-      const selection = selectedText.trim();
-      const selectionNote = selection
-        ? `\n\nThe user has selected this snippet — focus your answer on it:\n\`\`\`${language}\n${selection}\n\`\`\``
-        : "";
-      const apiMessages: ChatMessage[] = [
-        {
-          role: "system",
-          content: `${SYSTEM_PROMPT}\n\n${contextNote}${selectionNote}`,
-        },
-        ...nextMessages,
-      ];
-      const opts = { messages: apiMessages, model: model || undefined };
-      const reply =
-        provider === "openrouter"
-          ? await callOpenRouter(opts)
-          : await callGemini(opts);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: reply || "(empty reply)" },
-      ]);
+      const reply = await requestReply(nextMessages);
+      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setSending(false);
     }
-  }, [
-    input,
-    sending,
-    messages,
-    value,
-    language,
-    provider,
-    model,
-    selectedText,
-  ]);
+  }, [input, sending, messages, requestReply]);
+
+  /**
+   * Regenerate an assistant reply: re-send every message *before* it (so the
+   * preceding user prompt drives a fresh answer) and overwrite it in place.
+   */
+  const retryMessage = useCallback(
+    async (index: number) => {
+      if (sending) {
+        return;
+      }
+      const target = messages[index];
+      if (target?.role !== "assistant") {
+        return;
+      }
+      const history = messages.slice(0, index);
+      if (history.length === 0) {
+        return;
+      }
+      setErr(null);
+      setSending(true);
+      try {
+        const reply = await requestReply(history);
+        setMessages((prev) =>
+          prev.map((m, i) =>
+            i === index ? { role: "assistant", content: reply } : m,
+          ),
+        );
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSending(false);
+      }
+    },
+    [sending, messages, requestReply],
+  );
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -946,39 +991,60 @@ export function CodeEditor({
                         : "border-pink-200 bg-pink-50 dark:border-pink-500/20 dark:bg-pink-500/5")
                     }
                   >
-                    <div className="mb-1 flex items-center justify-between">
+                    <div className="mb-1 flex items-center justify-between gap-2">
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                         {isUser ? "You" : "AI"}
                       </span>
-                      {!isUser && (
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => insertAtCursor(stripped)}
-                            className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium hover:bg-accent"
-                          >
-                            Insert
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => replaceAll(stripped)}
-                            className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium hover:bg-accent"
-                          >
-                            Replace all
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              navigator.clipboard
-                                ?.writeText(stripped)
-                                .catch(() => {})
-                            }
-                            className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium hover:bg-accent"
-                          >
-                            Copy
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex gap-1">
+                        {!isUser && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => insertAtCursor(stripped)}
+                              className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium hover:bg-accent"
+                            >
+                              Insert
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => replaceAll(stripped)}
+                              className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium hover:bg-accent"
+                            >
+                              Replace all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigator.clipboard
+                                  ?.writeText(stripped)
+                                  .catch(() => {})
+                              }
+                              className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium hover:bg-accent"
+                            >
+                              Copy
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void retryMessage(i)}
+                              disabled={sending}
+                              title="Regenerate this reply"
+                              aria-label="Regenerate this reply"
+                              className="grid size-5.5 place-items-center rounded-md border hover:bg-accent disabled:opacity-50"
+                            >
+                              <RotateCcw size={11} />
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeMessage(i)}
+                          title="Remove message"
+                          aria-label="Remove message"
+                          className="grid size-5.5 place-items-center rounded-md border text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
                     </div>
                     <pre className="whitespace-pre-wrap wrap-break-word font-mono text-[11px] leading-snug">
                       {stripped}

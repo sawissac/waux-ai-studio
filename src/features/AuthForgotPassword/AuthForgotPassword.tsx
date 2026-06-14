@@ -104,7 +104,7 @@ export function AuthForgotPassword() {
                   required
                   autoComplete="email"
                   autoFocus
-                  placeholder="you@example.com"
+                  placeholder="you@gmail.com"
                   className={cn(
                     "h-10 w-full rounded-none border-2 border-foreground bg-background px-3 text-sm text-foreground",
                     "placeholder:text-muted-foreground",

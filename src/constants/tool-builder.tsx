@@ -632,22 +632,21 @@ export const uuid = (): string =>
 
 const DEFAULT_CODE = `// runs when an input above triggers
 async function run(state) {
-  const email = state.get("email");
-  if (!email) return;
-  const log = state.get("message") || "";
-  state.set("message", log + "Subscribed: " + email + "\\n");
-  // await state.copyToClipboard(email); // copy a string to the clipboard
+  const input = state.get("input");
+  if (!input) return;
+  state.set("output", input.toUpperCase());
+  // await state.copyToClipboard(input); // copy a string to the clipboard
 }
 
 // optional: runs live as inputs change
 async function change(state) {
-  // e.g. state.set("message", state.get("email") || "");
+  // e.g. state.set("output", state.get("input") || "");
 }
 
 // optional: runs when a reset button is clicked
 async function reset(state) {
-  state.set("email", "");
-  state.set("message", "");
+  state.set("input", "");
+  state.set("output", "");
 }`;
 
 /**
@@ -986,7 +985,6 @@ export function createNode(type: ToolNodeType): ToolNode {
         type,
         provider: "gemini",
         model: "gemini-2.5-flash",
-        systemInstruction: "",
         prompt: "Summarize: {{state1}}",
         output: { mode: "name", value: "state1" },
       };

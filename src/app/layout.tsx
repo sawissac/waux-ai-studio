@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import { Toaster } from "sonner";
 
+import { ClickBurst } from "@/components/customs/ClickBurst";
 import { GlobalErrorSwallow } from "@/components/ui/error-boundary";
 import { AppConfigProvider } from "@/providers/AppConfigProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
@@ -87,6 +88,7 @@ export default function RootLayout({
           </AppConfigProvider>
         </StoreProvider>
         <Toaster />
+        <ClickBurst />
       </body>
     </html>
   );

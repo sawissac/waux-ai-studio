@@ -9,32 +9,10 @@ import {
   Upload,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
-import rehypeKatex from "rehype-katex";
-import rehypeRaw from "rehype-raw";
-import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
-import remarkBreaks from "remark-breaks";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
 import { useDebouncedCallback } from "use-debounce";
 
 import { ErrorBoundary } from "@/components/ui/error-boundary";
-
-function preprocessContent(content: string): string {
-  if (!content) {
-    return "";
-  }
-  return content
-    .replace(/\\\[([\s\S]*?)\\\]/g, "$$$$\n$1\n$$$$")
-    .replace(/\\\(([\s\S]*?)\\\)/g, "$$$1$$")
-    .replace(/\\\\([a-zA-Z]+|[,;!])/g, "\\$1")
-    .replace(/\\n/g, "\n")
-    .replace(/([^\n])\n(#{1,6} )/g, "$1\n\n$2")
-    .replace(/([^\n])\n([-*+] )/g, "$1\n\n$2")
-    .replace(/([^\n])\n(\d+\. )/g, "$1\n\n$2")
-    .replace(/,(?=[a-zA-Z])/g, ", ");
-}
+import { Markdown } from "@/components/ui/markdown";
 
 /**
  * Normalize an author/state-supplied viewport URL for iframe embedding:
@@ -84,77 +62,6 @@ function resolveSelectOptions(
     value: o.value,
     label: o.label || o.value,
   }));
-}
-
-const katexSchema = {
-  ...defaultSchema,
-  tagNames: [
-    ...(defaultSchema.tagNames ?? []),
-    "span",
-    "div",
-    "math",
-    "semantics",
-    "annotation",
-    "mrow",
-    "mi",
-    "mn",
-    "mo",
-    "ms",
-    "mtext",
-    "mspace",
-    "msqrt",
-    "mroot",
-    "mfrac",
-    "msub",
-    "msup",
-    "msubsup",
-    "munder",
-    "mover",
-    "munderover",
-    "mtable",
-    "mtr",
-    "mtd",
-  ],
-  attributes: {
-    ...defaultSchema.attributes,
-    "*": ["className", "style"],
-    span: ["aria-hidden"],
-    math: ["xmlns", "display"],
-    annotation: ["encoding"],
-  },
-};
-
-/**
- * Render `content` as sanitized Markdown (GFM + math + code highlighting),
- * pre-processing LaTeX delimiters and loose line breaks first. Shared by the
- * Markdown input node and AI Markdown output.
- *
- * Wide GFM tables get their own horizontal scroll container so long rows
- * never clip at the card border (code blocks already scroll via prose `pre`).
- *
- * @param props.content - Raw Markdown source to render.
- */
-function MarkdownView({ content }: { content: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-      rehypePlugins={[
-        rehypeRaw,
-        [rehypeSanitize, katexSchema],
-        rehypeKatex,
-        rehypeHighlight,
-      ]}
-      components={{
-        table: ({ node: _node, ...props }) => (
-          <div className="overflow-x-auto overscroll-x-contain">
-            <table {...props} />
-          </div>
-        ),
-      }}
-    >
-      {preprocessContent(content)}
-    </ReactMarkdown>
-  );
 }
 
 import { CodeEditor } from "@/components/ui/code-editor";
@@ -998,7 +905,7 @@ export function PreviewPane({
                         )}
                         {isMarkdown && currentValue ? (
                           <div className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm">
-                            <MarkdownView content={currentValue} />
+                            <Markdown content={currentValue} />
                           </div>
                         ) : (
                           <textarea
@@ -1302,7 +1209,7 @@ export function PreviewPane({
                             className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm"
                           >
                             {currentValue ? (
-                              <MarkdownView content={currentValue} />
+                              <Markdown content={currentValue} />
                             ) : (
                               <span className="text-muted-foreground">
                                 {t("preview.markdown.empty")}
@@ -1411,7 +1318,7 @@ export function PreviewPane({
                       </label>
                       {content ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto rounded-xl border border-input bg-transparent px-4 py-3 text-sm shadow-sm">
-                          <MarkdownView content={content} />
+                          <Markdown content={content} />
                         </div>
                       ) : (
                         <div className="flex items-center justify-center rounded-xl border border-dashed border-border/50 py-8 text-xs text-muted-foreground">

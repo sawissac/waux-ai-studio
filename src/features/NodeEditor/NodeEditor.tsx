@@ -647,7 +647,7 @@ function StateEditor({ node }: { node: StateNode }) {
   );
 }
 
-/** AI node editor — provider, model, system, prompt, output binding, key. */
+/** AI node editor — provider, model, prompt, output binding, key. */
 function AiEditor({
   node,
   placement,
@@ -692,16 +692,6 @@ function AiEditor({
         <p className="text-[11px] text-muted-foreground">
           {t("ai.model.help")}
         </p>
-      </Field>
-      <Field label={t("ai.system")}>
-        <textarea
-          value={node.systemInstruction}
-          onChange={(e) =>
-            updateNode(node.id, { systemInstruction: e.target.value })
-          }
-          rows={2}
-          className={cn(inputCls, "h-auto resize-y py-2")}
-        />
       </Field>
       <Field
         label={t("ai.prompt")}
@@ -2163,7 +2153,7 @@ function EditorBody({
   node: ToolNode;
   placement: EditorPlacement;
 }) {
-  const { updateNode } = useToolBuilder();
+  const { updateNode, stateNode } = useToolBuilder();
   const { t } = useTranslation();
 
   switch (node.type) {
@@ -2201,6 +2191,7 @@ function EditorBody({
               }
               aiModel={node.aiModel}
               onAiModelChange={(aiModel) => updateNode(node.id, { aiModel })}
+              stateSlots={stateNode?.states}
             />
             <p className="text-[11px] text-muted-foreground">
               {t("code.code.help")}

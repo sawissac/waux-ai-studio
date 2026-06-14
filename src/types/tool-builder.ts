@@ -763,8 +763,6 @@ export interface AiNode extends BaseNode {
   provider: AiProvider;
   /** Model id (e.g. `gemini-2.5-flash`, `openrouter/auto`). */
   model: string;
-  /** Optional system instruction. Supports `{{state}}` interpolation. */
-  systemInstruction: string;
   /** Prompt body. Supports `{{state}}` interpolation. */
   prompt: string;
   /** State slot the model reply is written into. */

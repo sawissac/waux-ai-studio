@@ -113,7 +113,7 @@ export function AuthLogin() {
                   type="email"
                   required
                   autoComplete="email"
-                  placeholder="you@example.com"
+                  placeholder="you@gmail.com"
                   autoFocus
                   className={cn(
                     "h-10 w-full rounded-none border-2 border-foreground bg-background px-3 text-sm text-foreground",

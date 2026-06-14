@@ -3,6 +3,7 @@
  * Preview pane. No React, no Redux — just resolve bindings and execute the
  * code-node chain over a plain `{ [stateName]: string }` map.
  */
+import { buildAiNodeSystemPrompt } from "@/constants/ai-prompts";
 import { aiHelpers, callGemini, callOpenRouter } from "@/lib/ai-providers";
 import { sanitizeHtmlDoc } from "@/lib/html-sanitize";
 import { httpRequest } from "@/lib/http-request";
@@ -113,9 +114,18 @@ async function runAiNode(
   stateNode: StateNode | null,
 ): Promise<void> {
   const promptText = interpolate(node.prompt ?? "", state);
-  const systemText = node.systemInstruction
-    ? interpolate(node.systemInstruction, state)
-    : undefined;
+  // Auto-built, state-aware system instruction (mirrors the code-editor Ask AI
+  // panel) — lists the tool's slots with their current values so the model can
+  // reason about real state. Not interpolated: its literal {{name}} hints must
+  // survive verbatim.
+  const slots = (stateNode?.states ?? []).map((s) => {
+    const current = state[s.name];
+    return {
+      name: s.name,
+      value: current == null ? s.value : String(current),
+    };
+  });
+  const systemText = buildAiNodeSystemPrompt(slots);
   const outName = resolveBinding(node.output, stateNode);
   if (!outName) {
     return;

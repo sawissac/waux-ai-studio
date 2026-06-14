@@ -12,8 +12,9 @@ Animation MUST use what ships in the repo. No new animation library without appr
 - **`sonner`** — toast enter/exit. Use built-in transitions.
 - **Plain CSS transitions** — hover, focus, press states on buttons/cards/rows.
 - **D3 (`d3`)** — chart-only transitions (see §7). Do not use D3 for DOM/layout UI.
+- **`motion`** (framer-motion successor, `motion/react`) — **approved** for spring/physics-driven interactions where CSS can't express the feel (e.g. the global click burst, `@/components/customs/ClickBurst`). Prefer the lighter tools above for simple state/hover/enter transitions; reach for `motion` when you need spring physics or orchestration. Keep animations `transform`/`opacity`-only and honour reduced motion (§6).
 
-No `framer-motion`, no `react-spring`. If a need can't be met above, raise before adding a dep.
+No `react-spring`. Beyond the approved set above, raise before adding a new animation dep.
 
 ## 2. Motion Tokens (define once, reuse)
 
