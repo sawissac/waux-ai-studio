@@ -1109,9 +1109,14 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
           'Repeatable list of key/value rows (each input is mono; placeholders "Header" and "Value"). "Add header" appends a blank row; the trash button removes a row (aria-label "Remove header"). Default is an empty list. Header values support {{stateName}} interpolation; rows with a blank/whitespace-only key are dropped at runtime. The proxy strips host, content-length, and connection headers.',
       },
       {
+        name: "Input state",
+        description:
+          'Optional StateSelect (with a "— none —" clear option) binding config.input to a state slot. When bound, that slot\'s value is exposed as the `{{input}}` token and can be referenced in the URL, header values, and body alongside any other `{{stateName}}`. Always rendered (URL/headers exist for every method). Default binding { mode: "name", value: "" } (unbound). Help text: "Optional: bind a state slot to reference as {{input}} in the URL, headers, or body."',
+      },
+      {
         name: "Body",
         description:
-          'Multi-line mono textarea for the request body (default empty string). Only rendered for POST/PUT/PATCH (hidden for GET and DELETE). Supports {{stateName}} interpolation. Help text: "Sent for POST / PUT / PATCH. Supports {{state}} interpolation."',
+          'Multi-line mono textarea for the request body (default empty string). Only rendered for POST/PUT/PATCH (hidden for GET and DELETE). Supports {{stateName}} interpolation, including the {{input}} token when Input state is bound. Help text: "Sent for POST / PUT / PATCH. Supports {{state}} interpolation."',
       },
       {
         name: "Response",
@@ -1126,7 +1131,7 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     ],
     io: {
       reads:
-        "No fixed/declared state slot. Instead it pulls from state implicitly: every {{stateName}} token in the URL, each header value, and the body is replaced via interpolate() against the shared state (token regex {{ name }}, name chars [\\w$]; a null/undefined or missing state value resolves to an empty string, anything else is String()-coerced).",
+        "Pulls from state via interpolation: every {{stateName}} token in the URL, each header value, and the body is replaced via interpolate() against the shared state (token regex {{ name }}, name chars [\\w$]; a null/undefined or missing state value resolves to an empty string, anything else is String()-coerced). The optional `input` binding adds one extra token: when bound, the resolved slot's value is available as {{input}} in all three places (it shadows any real state slot literally named `input`).",
       writes:
         'The parsed response body into the slot named by the output binding (resolved by name, or by positional index if mode is "index"). null/undefined response normalizes to an empty string; arrays/objects are written structured (so JSON responses stay as parsed objects/arrays for downstream Filter/Map/Table nodes). If the output binding resolves to an empty name, the node returns and writes nothing.',
     },

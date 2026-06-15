@@ -213,18 +213,24 @@ async function runHttpRequestNode(
   if (!outName) {
     return;
   }
+  // A bound `input` slot is exposed as the `{{input}}` token, usable in the
+  // URL, header values, and body alongside any other `{{stateName}}`.
+  const inName = resolveBinding(node.input, stateNode);
+  const interpState: StateMap = inName
+    ? { ...state, input: state[inName] }
+    : state;
   const headers: Record<string, string> = {};
   for (const h of node.headers ?? []) {
     if (h.key.trim()) {
-      headers[h.key.trim()] = interpolate(h.value ?? "", state);
+      headers[h.key.trim()] = interpolate(h.value ?? "", interpState);
     }
   }
   const result = await httpRequest(
     {
       method: node.method,
-      url: interpolate(node.url ?? "", state),
+      url: interpolate(node.url ?? "", interpState),
       headers,
-      body: node.body ? interpolate(node.body, state) : undefined,
+      body: node.body ? interpolate(node.body, interpState) : undefined,
     },
     node.responseType,
   );

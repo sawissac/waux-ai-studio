@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "@/stores/hooks";
 import {
   addNode,
+  addStateSlot,
   addTool,
   clearNodeSelection,
   deleteNode,
@@ -91,6 +92,8 @@ export function useToolBuilder() {
     selectNode: (id: string) => dispatch(selectNode(id)),
     renameStateSlot: (id: string, oldName: string, newName: string) =>
       dispatch(renameStateSlot({ id, oldName, newName })),
+    addStateSlot: (name: string, value?: string) =>
+      dispatch(addStateSlot({ name, value })),
     clearNodeSelection: () => dispatch(clearNodeSelection()),
     setEditorPlacement: (p: EditorPlacement) => dispatch(setEditorPlacement(p)),
     setSearch: (q: string) => dispatch(setSearch(q)),

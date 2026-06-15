@@ -178,20 +178,26 @@ function Field({
 }
 
 /** State-slot selector. Reusable across input + AI nodes. */
+/** Sentinel value for the "unbound" option (Radix Select forbids empty values). */
+const STATE_NONE = "__none__";
+
 function StateSelect({
   value,
   onChange,
+  allowEmpty = false,
 }: {
   value: string;
   onChange: (next: string) => void;
+  /** Render a "None" option that clears the binding back to "". */
+  allowEmpty?: boolean;
 }) {
   const { stateNode } = useToolBuilder();
   const { t } = useTranslation();
   const states = stateNode?.states ?? [];
   return (
     <Select
-      value={value || undefined}
-      onValueChange={onChange}
+      value={value || (allowEmpty ? STATE_NONE : undefined)}
+      onValueChange={(v) => onChange(v === STATE_NONE ? "" : v)}
       disabled={states.length === 0}
     >
       <SelectTrigger className="h-8 w-full">
@@ -202,6 +208,9 @@ function StateSelect({
         />
       </SelectTrigger>
       <SelectContent>
+        {allowEmpty && (
+          <SelectItem value={STATE_NONE}>{t("field.none")}</SelectItem>
+        )}
         {states.map((s) => (
           <SelectItem key={s.id} value={s.name}>
             {s.name}
@@ -1501,6 +1510,18 @@ function HttpRequestEditor({ node }: { node: HttpRequestNode }) {
         >
           <Plus size={14} /> {t("http.addHeader")}
         </button>
+      </Field>
+      <Field label={t("http.input")}>
+        <StateSelect
+          value={node.input.value}
+          onChange={(v) =>
+            updateNode(node.id, { input: { mode: "name", value: v } })
+          }
+          allowEmpty
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("http.input.help")}
+        </p>
       </Field>
       {!bodyless && (
         <Field label={t("http.body")}>

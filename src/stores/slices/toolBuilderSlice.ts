@@ -100,11 +100,22 @@ const toolBuilderSlice = createSlice({
         state.selectedNodeId = null;
       }
     },
-    /** Append a node of `type` to the open tool and select it. */
+    /**
+     * Append a node of `type` to the open tool and select it. A tool has at
+     * most one State Control: adding a second `state` node instead selects the
+     * existing one (slots are managed there), keeping the shared store single.
+     */
     addNode(state, action: PayloadAction<ToolNodeType>) {
       const tool = state.tools.find((t) => t.id === state.selectedToolId);
       if (!tool) {
         return;
+      }
+      if (action.payload === "state") {
+        const existing = tool.nodes.find((n) => n.type === "state");
+        if (existing) {
+          state.selectedNodeId = existing.id;
+          return;
+        }
       }
       const node = createNode(action.payload);
       tool.nodes.push(node);
@@ -175,6 +186,40 @@ const toolBuilderSlice = createSlice({
         }
       }
     },
+    /**
+     * Add a shared-state slot to the open tool's State Control, creating that
+     * node (at the front of the chain) when the tool has none yet. No-ops on a
+     * blank or duplicate name. Used by the chat assistant's build tools.
+     */
+    addStateSlot(
+      state,
+      action: PayloadAction<{ name: string; value?: string }>,
+    ) {
+      const tool = state.tools.find((t) => t.id === state.selectedToolId);
+      if (!tool) {
+        return;
+      }
+      const name = action.payload.name.trim();
+      if (!name) {
+        return;
+      }
+      let stateNode = tool.nodes.find((n) => n.type === "state");
+      if (!stateNode) {
+        stateNode = { id: uuid(), type: "state", states: [] };
+        tool.nodes.unshift(stateNode);
+      }
+      if (stateNode.type !== "state") {
+        return;
+      }
+      if (stateNode.states.some((s) => s.name === name)) {
+        return;
+      }
+      stateNode.states.push({
+        id: uuid(),
+        name,
+        value: action.payload.value ?? "",
+      });
+    },
     /** Clear node selection — returns the right panel to the palette. */
     clearNodeSelection(state) {
       state.selectedNodeId = null;
@@ -243,6 +288,7 @@ export const {
   updateNode,
   selectNode,
   renameStateSlot,
+  addStateSlot,
   clearNodeSelection,
   setEditorPlacement,
   setSearch,

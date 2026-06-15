@@ -534,6 +534,12 @@ export interface HttpRequestNode extends BaseNode {
   /** Request URL. Supports `{{stateName}}` interpolation. */
   url: string;
   headers: HttpHeader[];
+  /**
+   * Optional state slot exposed as the `{{input}}` token when interpolating the
+   * `url`, header values, and `body` — letting an upstream node (e.g. a Map or
+   * Code transform) drive any part of the request. Leave unbound to omit it.
+   */
+  input: StateBinding;
   /** Request body (ignored for GET). Supports `{{stateName}}` interpolation. */
   body: string;
   /** How the response is parsed before writing to `output`. */

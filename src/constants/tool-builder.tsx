@@ -867,6 +867,7 @@ export function createNode(type: ToolNodeType): ToolNode {
         method: "GET",
         url: "https://api.example.com/data",
         headers: [],
+        input: { mode: "name", value: "" },
         body: "",
         responseType: "json",
         output: { mode: "name", value: "state1" },
