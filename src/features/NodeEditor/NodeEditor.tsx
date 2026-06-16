@@ -2288,19 +2288,59 @@ function EditorBody({
               {t("canvas.elementId.help")}
             </p>
           </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={t("canvas.width")}>
+              <input
+                type="number"
+                min={1}
+                value={node.width}
+                onChange={(e) =>
+                  updateNode(node.id, {
+                    width: Math.max(1, Number(e.target.value) || 1),
+                  })
+                }
+                className={inputCls}
+              />
+            </Field>
+            <Field label={t("canvas.height")}>
+              <input
+                type="number"
+                min={1}
+                value={node.height}
+                onChange={(e) =>
+                  updateNode(node.id, {
+                    height: Math.max(1, Number(e.target.value) || 1),
+                  })
+                }
+                className={inputCls}
+              />
+            </Field>
+          </div>
+          <Field label={t("canvas.binding")}>
+            <StateSelect
+              value={node.binding.value}
+              allowEmpty
+              onChange={(v) =>
+                updateNode(node.id, { binding: { mode: "name", value: v } })
+              }
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {t("canvas.binding.help")}
+            </p>
+          </Field>
           <Field
-            label={t("canvas.htmljs")}
+            label={t("canvas.draw")}
             className={isPanel ? "flex-1 min-h-0" : undefined}
           >
             <CodeEditor
-              language="html"
+              language="javascript"
               height={isPanel ? "100%" : 300}
               className={isPanel ? "flex-1 min-h-0" : undefined}
-              value={node.html}
-              onChange={(html) => updateNode(node.id, { html })}
+              value={node.draw}
+              onChange={(draw) => updateNode(node.id, { draw })}
             />
             <p className="text-[11px] text-muted-foreground">
-              {t("canvas.htmljs.help")}
+              {t("canvas.draw.help")}
             </p>
           </Field>
         </div>

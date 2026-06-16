@@ -1671,33 +1671,45 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
   },
   canvas: {
     summary:
-      'The "HTML Canvas" node (type "canvas", slug @canvas, group "Website Site") renders a free-form HTML div with an auto-generated UUID id. The author writes raw HTML/JS in the editor; at runtime that markup populates the div and any JS targets it by its UUID. It has no state binding at all — it is a pure escape hatch for custom output/markup.',
+      'The "Canvas" node (type "canvas", slug @canvas, group "Website Site") renders a real HTML <canvas> with author-set width/height and an auto-generated UUID id. The author writes a JS draw script that runs against the 2D context; it executes on mount and whenever the optional bound state slot changes. Use it for imperative pixel/vector drawing the standard render nodes can\'t express.',
     whenToUse:
-      "Reach for it when you need fully custom output that the standard render/output nodes can't express — e.g. a hand-coded HTML block, a chart/widget drawn by JS, or any element you want to manipulate imperatively via its unique div id.",
+      "Reach for it when you need to draw something programmatically — a chart, sparkline, gauge, diagram, or any 2D-context graphic — that reacts to a state value.",
     config: [
       {
         name: "Element ID",
         description:
-          'Read-only display of the auto-generated UUID (node.elementId) shown in a code box with a Copy button. Help text: "Auto-generated UUID. Target this div from your JS." Not editable in the form; it is the id of the rendered <div> and is created once by createNode().',
+          "Read-only display of the auto-generated UUID (node.elementId) shown in a code box with a Copy button. It is the id of the rendered <canvas> and is created once by createNode(). The draw script also receives the element directly as `canvas`, so you rarely need the id.",
       },
       {
-        name: "HTML / JS",
+        name: "Width / Height (px)",
         description:
-          'A code editor (language="html") bound to node.html; edits write via updateNode(node.id, { html }). Free-form markup that populates the div above (help text: "Populates the div above."). Default value is a <div id="{elementId}"> containing a sample <h4>/<p>. Any string is valid; this is the entire authored content of the node.',
+          "Two number inputs (node.width, node.height, min 1) that set the canvas backing-store dimensions. Default 320×200. The element is styled max-w-full so it scales down responsively while keeping its pixel resolution.",
+      },
+      {
+        name: "State binding (optional)",
+        description:
+          "A StateSelect (allowEmpty) bound to node.binding. When set, the slot's current value is passed to the draw script as `state` and changes to it re-run the script. Leave as None for a static drawing.",
+      },
+      {
+        name: "Draw script (JS)",
+        description:
+          'A code editor (language="javascript") bound to node.draw. The body runs wrapped in an AsyncFunction as (ctx, canvas, state) => { … }, where ctx is the CanvasRenderingContext2D, canvas the HTMLCanvasElement, and state the bound slot value (or undefined). Top-level await is allowed. Default clears the canvas and draws a rectangle plus the state value as text.',
       },
     ],
     io: {
-      reads: null,
+      reads:
+        "Optional bound state slot (passed to the draw script as `state`).",
       writes: null,
     },
     tips: [
-      "No state binding exists on this node. The CanvasNode interface only has elementId and html — there is no binding/input/output field, so it neither reads from nor writes to the shared state store. Don't expect {{state}} interpolation here the way input/AI nodes provide it.",
-      "The Element ID field is read-only and fixed at node creation; use the Copy button and reference that exact UUID from your JS (e.g. document.getElementById('<uuid>')) to target the div.",
-      'The default html template already wraps your content in <div id="{elementId}">…</div>. If you replace the markup, keep a matching id (or know the wrapper id) so your JS can find the element.',
-      'The only runtime touchpoint is the node-card subtitle (nodeSubtitle), which just shows label "ID" with the elementId value — confirming this node is a renderer, not a transform.',
+      "When you add or update this node, write the actual drawing code into the `draw` config field (a plain JS string). The string is the BODY ONLY — do NOT wrap it in a function, do NOT redeclare ctx/canvas/state, and do NOT write <canvas>/<script> HTML. The runtime already gives you three live variables: `ctx` (CanvasRenderingContext2D), `canvas` (the HTMLCanvasElement, with .width/.height), and `state` (the bound slot's value, or undefined).",
+      "ALWAYS start the draw script with ctx.clearRect(0, 0, canvas.width, canvas.height) — the script re-runs on every state change and frames stack otherwise.",
+      "Coerce `state` before using it (Number(state) for a numeric slot, String(state ?? '') for text, JSON values come through as real objects/arrays — no parsing needed). Derive everything you draw from `state` so it updates live.",
+      "Use the standard 2D API: fillStyle/strokeStyle, fillRect/strokeRect, beginPath + arc/moveTo/lineTo + fill/stroke, fillText (set ctx.font first), and ctx.measureText for layout. Top-level await is allowed (e.g. await an Image load) but rarely needed.",
+      "Author errors in the draw script are caught and logged to the console; the preview stays alive and the canvas keeps its last painted frame.",
     ],
     example:
-      'Add an HTML Canvas node. Its Element ID is e.g. 3f2a...c19. In the HTML / JS field write: <div id=\\"3f2a...c19\\"><h4>Live count</h4><p id=\\"n\\">0</p></div><script>const el=document.getElementById(\'n\'); el.textContent=new Date().getSeconds();</script> — the div renders your custom markup and the script targets it by its UUID.',
+      'Bind the node to a 0–100 number slot "pct" and set width 320, height 40. Put this in the `draw` field (body only):\n\nctx.clearRect(0, 0, canvas.width, canvas.height);\nconst pct = Math.max(0, Math.min(100, Number(state) || 0));\nctx.fillStyle = "#e5e7eb";\nctx.fillRect(0, 0, canvas.width, canvas.height);\nctx.fillStyle = "#10b981";\nctx.fillRect(0, 0, canvas.width * pct / 100, canvas.height);\nctx.fillStyle = "#111827";\nctx.font = "14px sans-serif";\nctx.fillText(pct + "%", 8, 26);\n\nThis paints a progress bar that repaints whenever pct changes.',
   },
   ai: {
     summary:

@@ -344,7 +344,7 @@ const BODY_FIELDS: ReadonlySet<string> = new Set([
   "code",
   "prompt",
   "template",
-  "html",
+  "draw",
 ]);
 
 /** Describe one node as a numbered build-instruction block for {@link buildToolPrompt}. */
@@ -399,7 +399,7 @@ function describeNodeForPrompt(node: ToolNode, index: number): string {
  *
  * @param tool - The open tool, or null when none is open.
  */
-function buildToolPrompt(tool: Tool | null): string {
+export function buildToolPrompt(tool: Tool | null): string {
   if (!tool || tool.nodes.length === 0) {
     return "The open tool is empty — nothing to export. Add nodes first, then ask again.";
   }
@@ -452,6 +452,8 @@ export interface BuilderToolDeps {
   updateNode: (id: string, changes: Record<string, unknown>) => void;
   /** Remove the node with `id`. */
   deleteNode: (id: string) => void;
+  /** Move node `activeId` to the chain slot currently held by `overId`. */
+  moveNode: (activeId: string, overId: string) => void;
   /** Add a shared-state slot by name (creates the State Control if needed). */
   addStateSlot: (name: string, value?: string) => void;
   /** Surface a plan to the user (renders Confirm / Cancel in the chat). */
@@ -569,6 +571,26 @@ export const BUILDER_TOOLS: readonly AiTool[] = [
         },
       },
       required: ["index"],
+    },
+  },
+  {
+    name: "move_node",
+    description:
+      "Reposition a node in the chain WITHOUT deleting and re-adding it. Moves the node at `from` so it lands at position `to`; nodes between them shift to fill the gap, exactly like dragging the node in the editor. This is the ONLY correct way to reorder — never delete a node and rebuild the tail to change its position. Both indices are 1-based, from the latest get_tool. Returns the full reordered chain (new 1-based indices + labels) so you can re-orient without another get_tool. The State Control stays pinned at the top: you cannot move it, nor move any node above it (`to` must be 2 or greater).",
+    parameters: {
+      type: "object",
+      properties: {
+        from: {
+          type: "integer",
+          description: "1-based index of the node to move (from get_tool).",
+        },
+        to: {
+          type: "integer",
+          description:
+            "1-based index the node should occupy after the move. Must be 2 or greater (the State Control stays first).",
+        },
+      },
+      required: ["from", "to"],
     },
   },
 ];
@@ -728,6 +750,53 @@ export function createBuilderToolDispatcher(
           ok: true,
           deleted: NODE_META[node.type].label,
           index: Number(args.index),
+        });
+      }
+
+      case "move_node": {
+        if (!deps.isPlanConfirmed()) {
+          return JSON.stringify({
+            error:
+              "No approved plan yet. Call propose_plan and wait for the user to click Confirm before building.",
+          });
+        }
+        const tool = deps.getTool();
+        const active = nodeAtIndex(tool, args.from);
+        const over = nodeAtIndex(tool, args.to);
+        if (!active || !over) {
+          return JSON.stringify({
+            error: `No node at ${!active ? `from index ${args.from}` : `to index ${args.to}`}. Call get_tool for valid indices.`,
+          });
+        }
+        if (active.type === "state") {
+          return JSON.stringify({
+            error:
+              "The State Control stays pinned at the top of the chain — it cannot be moved.",
+          });
+        }
+        if (over.type === "state") {
+          return JSON.stringify({
+            error:
+              "Cannot move a node above the State Control. Choose a `to` index of 2 or greater.",
+          });
+        }
+        if (active.id === over.id) {
+          return JSON.stringify({
+            ok: true,
+            note: "from and to are the same node — nothing to move.",
+          });
+        }
+        deps.moveNode(active.id, over.id);
+        const fresh = deps.getTool();
+        return JSON.stringify({
+          ok: true,
+          moved: NODE_META[active.type].label,
+          from: Number(args.from),
+          to: Number(args.to),
+          chain: (fresh?.nodes ?? []).map((n, i) => ({
+            index: i + 1,
+            label: NODE_META[n.type].label,
+          })),
         });
       }
 

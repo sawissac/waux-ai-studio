@@ -409,8 +409,8 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
   },
   canvas: {
     type: "canvas",
-    label: "HTML Canvas",
-    blurb: "A free-form HTML div you populate with elements via JS.",
+    label: "Canvas",
+    blurb: "A real <canvas> you paint with a JS draw script (2D context).",
     accent: "emerald",
     group: "Website Site",
     icon: Columns3,
@@ -977,7 +977,19 @@ export function createNode(type: ToolNodeType): ToolNode {
         id,
         type,
         elementId,
-        html: `<div id="${elementId}">\n  <h4>Canvas output</h4>\n  <p>Drawn from JS into a plain &lt;div&gt;.</p>\n</div>`,
+        width: 320,
+        height: 200,
+        binding: { mode: "name", value: "" },
+        draw: [
+          "// ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement",
+          "// state: value of the bound state slot (undefined if none).",
+          "ctx.clearRect(0, 0, canvas.width, canvas.height);",
+          'ctx.fillStyle = "#10b981";',
+          "ctx.fillRect(20, 20, 120, 80);",
+          'ctx.fillStyle = "#111827";',
+          'ctx.font = "16px sans-serif";',
+          'ctx.fillText(String(state ?? "Canvas"), 24, 130);',
+        ].join("\n"),
       };
     }
     case "ai":

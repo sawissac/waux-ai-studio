@@ -4,11 +4,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   Circle,
+  Download,
   Loader2,
   Plus,
   SendHorizontal,
   Sparkles,
   Square,
+  Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -221,7 +223,8 @@ export function ChatView({
   // Build tools mutate through Redux; `getTool` reads fresh store state after
   // each call so the assistant observes its own prior edits within one turn.
   const store = useAppStore();
-  const { addNode, updateNode, deleteNode, addStateSlot } = useToolBuilder();
+  const { addNode, updateNode, deleteNode, addStateSlot, reorderNodes } =
+    useToolBuilder();
   // Plan-confirm gate: propose_plan parks a plan here for the user to approve;
   // mutations stay blocked until `confirmedRef` is flipped by a Confirm click.
   const [pendingPlan, setPendingPlan] = useState<PlanProposal | null>(null);
@@ -259,10 +262,11 @@ export function ChatView({
         updateNode,
         deleteNode,
         addStateSlot,
+        moveNode: reorderNodes,
         onProposePlan: (plan) => setPendingPlan(plan),
         isPlanConfirmed: () => confirmedRef.current,
       }),
-    [getOpenTool, addNode, updateNode, deleteNode, addStateSlot],
+    [getOpenTool, addNode, updateNode, deleteNode, addStateSlot, reorderNodes],
   );
 
   const [messages, setMessages] = useState<ChatItem[]>([]);
@@ -277,6 +281,7 @@ export function ChatView({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const empty = messages.length === 0;
@@ -530,8 +535,12 @@ export function ChatView({
   /**
    * Review: user reports the build is wrong. Reopen the gate and run a hidden
    * root-cause fix turn against the approved plan; the result returns to review.
+   *
+   * @param comment - Optional user feedback describing what's wrong. When
+   *   present it's shown in the transcript (so the user sees what they asked
+   *   for) and woven into the hidden fix directive to steer the fix pass.
    */
-  function rejectBuild() {
+  function rejectBuild(comment?: string) {
     const plan = confirmedPlanRef.current;
     if (sending || !plan || selfFixCountRef.current >= MAX_SELF_FIX) {
       return;
@@ -542,14 +551,24 @@ export function ChatView({
     const planText = `${plan.summary}\n${plan.steps
       .map((s, i) => `${i + 1}. ${s}`)
       .join("\n")}`;
+    const feedback = comment?.trim();
+    const fixText = feedback
+      ? `${t("chat.review.fixRequest")} ${t("chat.review.feedback", {
+          comment: feedback,
+        })} ${t("chat.plan.selfFix", { plan: planText })}`
+      : `${t("chat.review.fixRequest")} ${t("chat.plan.selfFix", {
+          plan: planText,
+        })}`;
     const history: ChatItem[] = [
       ...messages,
+      // Show the user's feedback in the transcript when they gave any.
+      ...(feedback
+        ? [{ id: uuid(), role: "user" as const, text: feedback }]
+        : []),
       {
         id: uuid(),
         role: "user",
-        text: `${t("chat.review.fixRequest")} ${t("chat.plan.selfFix", {
-          plan: planText,
-        })}`,
+        text: fixText,
         hidden: true,
       },
     ];
@@ -570,6 +589,89 @@ export function ChatView({
     setBuildPlan(null);
     setBuildPhase(null);
     setCompletedSteps(0);
+  }
+
+  /** Section heading used in exported Markdown for a given role. */
+  const roleHeading = (role: ChatItem["role"]) =>
+    role === "user" ? t("chat.you") : t("chat.assistant");
+
+  /**
+   * Serialize the visible transcript to Markdown and trigger a client-side
+   * download. Hidden control messages (confirm/cancel/self-fix) are excluded so
+   * the file mirrors exactly what the user sees in the chat. The same format is
+   * read back by {@link importChat}.
+   */
+  function exportChat() {
+    const visible = messages.filter((m) => !m.hidden);
+    if (visible.length === 0) {return;}
+    const md =
+      `# ${t("chat.greeting")}\n\n` +
+      visible.map((m) => `## ${roleHeading(m.role)}\n\n${m.text}`).join("\n\n");
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `chat-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Parse a Markdown chat export back into transcript turns. Splits on `## `
+   * headings; a heading matching the "You" label is a user turn, anything else
+   * (e.g. "Assistant") is an assistant turn. The leading `# …` title is ignored.
+   *
+   * @param md - Raw Markdown file contents.
+   * @returns Parsed turns, or an empty array when nothing usable is found.
+   */
+  function parseChatMarkdown(md: string): ChatItem[] {
+    const userLabel = t("chat.you").trim().toLowerCase();
+    const out: ChatItem[] = [];
+    // Split on H2 headings, keeping the heading text via a capture group.
+    const parts = md.split(/^##[ \t]+(.+)$/m);
+    // parts[0] is the preamble (title) before the first heading; then pairs of
+    // [headingText, body] follow.
+    for (let i = 1; i < parts.length; i += 2) {
+      const heading = parts[i].trim().toLowerCase();
+      const text = parts[i + 1]?.trim() ?? "";
+      if (!text) {continue;}
+      out.push({
+        id: uuid(),
+        role: heading === userLabel ? "user" : "assistant",
+        text,
+      });
+    }
+    return out;
+  }
+
+  /** Load a chat from a Markdown file the user picks, replacing the transcript. */
+  async function importChat(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-importing the same file later
+    if (!file) {return;}
+    try {
+      const parsed = parseChatMarkdown(await file.text());
+      if (parsed.length === 0) {
+        setError(t("chat.import.error"));
+        return;
+      }
+      // Reset any in-flight build/plan state, then load the imported turns.
+      abortRef.current?.abort();
+      setSending(false);
+      setPendingPlan(null);
+      confirmedRef.current = false;
+      confirmedPlanRef.current = null;
+      selfFixCountRef.current = 0;
+      setBuildPlan(null);
+      setBuildPhase(null);
+      setCompletedSteps(0);
+      setError(null);
+      setMessages(parsed);
+    } catch {
+      setError(t("chat.import.error"));
+    }
   }
 
   /** Enter sends; Shift+Enter inserts a newline. */
@@ -608,18 +710,50 @@ export function ChatView({
             size="sm"
           />
         </div>
-        {!empty && (
+        <div className="ml-auto flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md,.markdown,text/markdown,text/plain"
+            className="hidden"
+            onChange={importChat}
+          />
           <Button
             type="button"
             variant="outline"
             size="xs"
-            className="ml-auto"
-            onClick={newChat}
+            title={t("chat.import.title")}
+            aria-label={t("chat.import.title")}
+            onClick={() => fileInputRef.current?.click()}
           >
-            <Plus />
-            {t("chat.newChat")}
+            <Upload />
+            {t("chat.import")}
           </Button>
-        )}
+          {!empty && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                title={t("chat.export.title")}
+                aria-label={t("chat.export.title")}
+                onClick={exportChat}
+              >
+                <Download />
+                {t("chat.export")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={newChat}
+              >
+                <Plus />
+                {t("chat.newChat")}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
@@ -835,6 +969,18 @@ function BuildProgressCard({
   completed: number;
   t: ReturnType<typeof useTranslation>["t"];
 }) {
+  // Keep the in-progress step visible as the list scrolls inside its capped box.
+  const activeStepRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    const reduced = document.documentElement.hasAttribute(
+      "data-reduced-motion",
+    );
+    activeStepRef.current?.scrollIntoView({
+      block: "nearest",
+      behavior: reduced ? "auto" : "smooth",
+    });
+  }, [completed]);
+
   return (
     <div className="mb-2 border-2 border-foreground bg-card p-3 shadow-nb-sm">
       <div className="flex items-center gap-2">
@@ -843,13 +989,14 @@ function BuildProgressCard({
       </div>
       <p className="mt-1.5 text-sm">{plan.summary}</p>
       {plan.steps.length > 0 && (
-        <ol className="mt-2 flex flex-col gap-1">
+        <ol className="mt-2 flex max-h-[35vh] flex-col gap-1 overflow-y-auto pr-1">
           {plan.steps.map((step, i) => {
             const done = i < completed;
             const active = i === completed;
             return (
               <li
                 key={i}
+                ref={active ? activeStepRef : undefined}
                 className={cn(
                   "flex items-start gap-2 text-sm",
                   done || active ? "text-foreground" : "text-muted-foreground",
@@ -897,11 +1044,14 @@ function FixingCard({ t }: { t: ReturnType<typeof useTranslation>["t"] }) {
 /**
  * Post-build approval card: the build is done, so ask the user whether it is
  * correct. "Yes" ends the build; "No" triggers an automatic root-cause fix pass
- * against the approved plan, after which the user is asked again.
+ * against the approved plan, after which the user is asked again. The comment
+ * box lets the user describe what's wrong; "Continue" runs the fix with that
+ * feedback woven into the directive.
  *
  * @param props.disabled - Disable the actions while a request is in flight.
  * @param props.onAccept - User confirms the build is correct.
- * @param props.onReject - User reports the build is wrong → fix it.
+ * @param props.onReject - User reports the build is wrong → fix it. Receives the
+ *   optional feedback comment.
  * @param props.t - Translator.
  */
 function BuildReviewCard({
@@ -912,9 +1062,11 @@ function BuildReviewCard({
 }: {
   disabled: boolean;
   onAccept: () => void;
-  onReject: () => void;
+  onReject: (comment?: string) => void;
   t: ReturnType<typeof useTranslation>["t"];
 }) {
+  const [comment, setComment] = useState("");
+  const trimmed = comment.trim();
   return (
     <div className="mb-2 border-2 border-foreground bg-card p-3 shadow-nb-sm">
       <div className="flex items-center gap-2">
@@ -922,18 +1074,39 @@ function BuildReviewCard({
         <span className="text-sm font-bold">{t("chat.review.title")}</span>
       </div>
       <p className="mt-1.5 text-sm">{t("chat.review.body")}</p>
-      <div className="mt-3 flex gap-2">
-        <Button type="button" size="sm" onClick={onAccept} disabled={disabled}>
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        rows={2}
+        disabled={disabled}
+        placeholder={t("chat.review.commentPlaceholder")}
+        aria-label={t("chat.review.commentPlaceholder")}
+        className="mt-3 max-h-40 min-h-8 w-full resize-none border-2 border-foreground bg-background px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+      />
+      <p className="mt-1 text-xs text-muted-foreground">
+        {t("chat.review.commentHint")}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          onClick={onAccept}
+          disabled={disabled}
+          title={t("chat.review.yesHint")}
+        >
           {t("chat.review.yes")}
         </Button>
         <Button
           type="button"
           size="sm"
           variant="outline"
-          onClick={onReject}
+          onClick={() => onReject(trimmed || undefined)}
           disabled={disabled}
+          title={
+            trimmed ? t("chat.review.continueHint") : t("chat.review.noHint")
+          }
         >
-          {t("chat.review.no")}
+          {trimmed ? t("chat.review.continue") : t("chat.review.no")}
         </Button>
       </div>
     </div>

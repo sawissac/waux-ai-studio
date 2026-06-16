@@ -8,7 +8,7 @@ import {
   Loader2,
   Upload,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -90,6 +90,7 @@ import {
 } from "@/lib/tool-builder-runtime";
 import { cn } from "@/lib/utils";
 import type {
+  CanvasNode,
   CsvNode,
   FileNode,
   SelectNode,
@@ -100,6 +101,66 @@ import type {
   ViewportNode,
 } from "@/types/tool-builder";
 import { isRenderNode } from "@/types/tool-builder";
+
+/** AsyncFunction constructor — lets canvas draw scripts use top-level `await`. */
+const AsyncFunction = Object.getPrototypeOf(async function () {})
+  .constructor as FunctionConstructor;
+
+/**
+ * Renders a real `<canvas>` and runs the node's draw script against its 2D
+ * context. The script body is wrapped as `(ctx, canvas, state) => { … }` and
+ * re-executes on mount and whenever the draw source, dimensions, or bound
+ * `stateValue` change. Author errors are swallowed to the console so the
+ * preview stays alive.
+ *
+ * @param props.node - The canvas node holding dimensions and draw source.
+ * @param props.stateValue - Current value of the bound state slot (or undefined).
+ */
+function CanvasNodeView({
+  node,
+  stateValue,
+}: {
+  node: CanvasNode;
+  stateValue: unknown;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+    try {
+      const fn = new AsyncFunction("ctx", "canvas", "state", node.draw);
+      void Promise.resolve(fn(ctx, canvas, stateValue)).catch((err) => {
+        console.error(
+          `[ToolBuilder] canvas node "${node.id}" draw failed:`,
+          err instanceof Error ? (err.stack ?? err.message) : err,
+        );
+      });
+    } catch (err) {
+      console.error(
+        `[ToolBuilder] canvas node "${node.id}" draw failed:`,
+        err instanceof Error ? (err.stack ?? err.message) : err,
+      );
+    }
+  }, [node.id, node.draw, node.width, node.height, stateValue]);
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-background/50 p-4 shadow-sm backdrop-blur-sm">
+      <canvas
+        ref={canvasRef}
+        width={node.width}
+        height={node.height}
+        className="max-w-full"
+      />
+    </div>
+  );
+}
 
 /**
  * Seed the preview's shared simulated screen from the first website node's
@@ -423,11 +484,13 @@ export function PreviewPane({
               <div className="flex flex-col gap-6">
                 {renderNodes.map((node, nodeIndex) => {
                   if (node.type === "canvas") {
+                    const cName = resolveBinding(node.binding, stateNode);
+                    const cValue = cName ? runtime[cName] : undefined;
                     return (
-                      <div
+                      <CanvasNodeView
                         key={node.id}
-                        className="rounded-xl border border-border/50 bg-background/50 p-4 shadow-sm backdrop-blur-sm [&_h4]:mb-1 [&_h4]:font-semibold [&_p]:text-sm [&_p]:text-muted-foreground"
-                        dangerouslySetInnerHTML={{ __html: node.html }}
+                        node={node}
+                        stateValue={cValue}
                       />
                     );
                   }

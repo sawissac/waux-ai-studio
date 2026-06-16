@@ -58,6 +58,11 @@ const en = {
   "tools.options": "Tool options",
   "tools.preview": "Preview",
   "tools.rename": "Rename",
+  "tools.generateName": "Generate name",
+  "tools.generating": "Generating name…",
+  "tools.generateSuccess": "Renamed to “{name}”.",
+  "tools.generateError": "Could not generate a name.",
+  "tools.generateEmpty": "Add a node first — there's nothing to name yet.",
   "tools.share": "Share",
   "tools.delete": "Delete",
   "tools.empty": "No tools yet — create one to get started.",
@@ -92,6 +97,12 @@ const en = {
   "chat.you": "You",
   "chat.assistant": "Assistant",
   "chat.newChat": "New chat",
+  "chat.export": "Export",
+  "chat.export.title": "Export conversation as Markdown",
+  "chat.import": "Import",
+  "chat.import.title": "Import a conversation from a Markdown file",
+  "chat.import.error":
+    "Couldn't read that file as a chat. Use a Markdown file exported from here.",
   "chat.hint": "Enter to send · Shift + Enter for a new line",
   "chat.demoReply":
     "This is a UI-only preview, so I can’t reply for real yet — your message would be answered here.",
@@ -124,9 +135,19 @@ const en = {
     "I built the plan. Check the preview — does it work the way you wanted?",
   "chat.review.yes": "Yes, looks good",
   "chat.review.no": "No, fix it",
+  "chat.review.continue": "Continue with feedback",
+  "chat.review.commentPlaceholder": "Describe what's wrong (optional)…",
+  "chat.review.commentHint":
+    "Tell me what's wrong so the fix is targeted — wrong values, missing node, bad layout. Leave empty to let me find the root cause automatically.",
+  "chat.review.yesHint":
+    "The build works the way you wanted — finish and keep it.",
+  "chat.review.noHint":
+    "Something's off but you're not sure what — I'll find the root cause and fix it.",
+  "chat.review.continueHint": "Fix the build using the notes you wrote above.",
   "chat.review.fixing": "Finding the root cause and fixing…",
   "chat.review.fixRequest":
     "The build is NOT correct. Find the root cause and fix it.",
+  "chat.review.feedback": "What's wrong, in the user's words: {comment}",
   "chat.error.generic": "Something went wrong. Try again.",
   "chat.error.noKey":
     "Add a {provider} API key (key icon, left panel) to chat.",
@@ -281,9 +302,9 @@ const en = {
   "node.encode.label": "Encode / Decode",
   "node.encode.blurb":
     "Base64 / URL encode-decode, or a one-way SHA-256 hash over a string; output writes to state.",
-  "node.canvas.label": "HTML Canvas",
+  "node.canvas.label": "Canvas",
   "node.canvas.blurb":
-    "A free-form HTML div you populate with elements via JS.",
+    "A real <canvas> you paint with a JS draw script (2D context).",
   "node.ai.label": "AI",
   "node.ai.blurb":
     "Ask Gemini or OpenRouter. Interpolate state via {{name}} in the prompt; reply writes to bound state.",
@@ -424,11 +445,17 @@ const en = {
   "code.code.help":
     "Runs top-to-bottom in the chain; reads & writes state directly.",
 
-  // Node editor — HTML Canvas
+  // Node editor — Canvas
   "canvas.elementId": "Element ID",
-  "canvas.elementId.help": "Auto-generated UUID. Target this div from your JS.",
-  "canvas.htmljs": "HTML / JS",
-  "canvas.htmljs.help": "Populates the div above.",
+  "canvas.elementId.help":
+    "Auto-generated UUID. The rendered <canvas> id; the draw script also gets it as `canvas`.",
+  "canvas.width": "Width (px)",
+  "canvas.height": "Height (px)",
+  "canvas.binding": "State binding (optional)",
+  "canvas.binding.help":
+    "Bound slot value is passed as `state` and re-runs the draw script on change.",
+  "canvas.draw": "Draw script (JS)",
+  "canvas.draw.help": "Runs as (ctx, canvas, state) => { … }. Paint into ctx.",
 
   // Node editor — Button
   "button.labelOptional": "Label (optional)",
@@ -758,6 +785,11 @@ const my: Record<MessageKey, string> = {
   "tools.options": "ကိရိယာ ရွေးချယ်စရာများ",
   "tools.preview": "အစမ်းကြည့်",
   "tools.rename": "အမည်ပြောင်း",
+  "tools.generateName": "အမည် ထုတ်ပေး",
+  "tools.generating": "အမည် ထုတ်နေသည်…",
+  "tools.generateSuccess": "“{name}” အဖြစ် အမည်ပြောင်းပြီးပါပြီ။",
+  "tools.generateError": "အမည် ထုတ်၍ မရပါ။",
+  "tools.generateEmpty": "node အရင် ထည့်ပါ — အမည်ပေးစရာ မရှိသေးပါ။",
   "tools.share": "မျှဝေ",
   "tools.delete": "ဖျက်",
   "tools.empty": "ကိရိယာ မရှိသေးပါ — တစ်ခု ဖန်တီး၍ စတင်ပါ။",
@@ -791,6 +823,12 @@ const my: Record<MessageKey, string> = {
   "chat.you": "သင်",
   "chat.assistant": "Assistant",
   "chat.newChat": "ချတ် အသစ်",
+  "chat.export": "Export",
+  "chat.export.title": "စကားဝိုင်းကို Markdown အဖြစ် Export လုပ်ရန်",
+  "chat.import": "Import",
+  "chat.import.title": "Markdown ဖိုင်မှ စကားဝိုင်းကို Import လုပ်ရန်",
+  "chat.import.error":
+    "ထိုဖိုင်ကို ချတ်အဖြစ် မဖတ်နိုင်ပါ။ ဤနေရာမှ Export လုပ်ထားသော Markdown ဖိုင်ကို သုံးပါ။",
   "chat.hint": "ပို့ရန် Enter · စာကြောင်းသစ်အတွက် Shift + Enter",
   "chat.demoReply":
     "ဤသည် UI-only preview ဖြစ်သဖြင့် တကယ် ပြန်မဖြေနိုင်သေးပါ — သင့်စာကို ဤနေရာတွင် ဖြေကြားပေးမည်။",
@@ -823,9 +861,20 @@ const my: Record<MessageKey, string> = {
     "အစီအစဉ်အတိုင်း တည်ဆောက်ပြီးပါပြီ။ Preview ကို စစ်ကြည့်ပါ — သင်လိုချင်သလို အလုပ်လုပ်ပါသလား?",
   "chat.review.yes": "ဟုတ်ကဲ့၊ ကောင်းပါသည်",
   "chat.review.no": "မဟုတ်ပါ၊ ပြင်ပါ",
+  "chat.review.continue": "feedback နှင့် ဆက်လုပ်ရန်",
+  "chat.review.commentPlaceholder": "ဘာမှားနေသလဲ ဖော်ပြပါ (ရွေးချယ်နိုင်)…",
+  "chat.review.commentHint":
+    "ပြင်ဆင်မှု တိကျစေရန် ဘာမှားနေသလဲ ပြောပါ — တန်ဖိုးမှား၊ node ပျောက်၊ layout မကောင်း။ ဗလာထားပါက မူရင်းအကြောင်းရင်းကို အလိုအလျောက် ရှာပေးပါမည်။",
+  "chat.review.yesHint":
+    "သင်လိုချင်သလို အလုပ်လုပ်ပါသည် — ပြီးဆုံးပြီး သိမ်းထားရန်။",
+  "chat.review.noHint":
+    "တစ်ခုခု မှားနေသည် ဒါပေမယ့် ဘာမှန်း မသေချာ — မူရင်းအကြောင်းရင်းကို ရှာပြီး ပြင်ပေးပါမည်။",
+  "chat.review.continueHint":
+    "အပေါ်တွင် ရေးထားသော မှတ်စုဖြင့် build ကို ပြင်ဆင်ရန်။",
   "chat.review.fixing": "မူရင်းအကြောင်းရင်းကို ရှာပြီး ပြင်ဆင်နေသည်…",
   "chat.review.fixRequest":
     "တည်ဆောက်မှု မှန်ကန်မှု မရှိပါ။ မူရင်းအကြောင်းရင်းကို ရှာပြီး ပြင်ဆင်ပါ။",
+  "chat.review.feedback": "သုံးစွဲသူ ပြောသည် — ဘာမှားနေသလဲ — {comment}",
   "chat.error.generic": "တစ်ခုခု မှားယွင်းသွားသည်။ ပြန်ကြိုးစားပါ။",
   "chat.error.noKey":
     "ချတ်ရန် {provider} API key (key အိုင်ကွန်၊ ဘယ်ဘက် panel) ထည့်ပါ။",
@@ -978,9 +1027,9 @@ const my: Record<MessageKey, string> = {
   "node.encode.label": "Encode / Decode",
   "node.encode.blurb":
     "String ပေါ် Base64 / URL encode-decode သို့ တစ်လမ်းသွား SHA-256 hash; output ကို state သို့ ရေးသည်။",
-  "node.canvas.label": "HTML Canvas",
+  "node.canvas.label": "Canvas",
   "node.canvas.blurb":
-    "JS ဖြင့် element များ ထည့်သွင်းနိုင်သော လွတ်လပ်သော HTML div။",
+    "JS draw script (2D context) ဖြင့် ဆွဲသော တကယ့် <canvas>။",
   "node.ai.label": "AI",
   "node.ai.blurb":
     "Gemini သို့ OpenRouter ကို မေး။ Prompt ထဲ {{name}} ဖြင့် state interpolate; အဖြေကို bound state သို့ ရေးသည်။",
@@ -1111,9 +1160,15 @@ const my: Record<MessageKey, string> = {
 
   "canvas.elementId": "Element ID",
   "canvas.elementId.help":
-    "Auto-generated UUID။ သင့် JS မှ ဤ div ကို target လုပ်ပါ။",
-  "canvas.htmljs": "HTML / JS",
-  "canvas.htmljs.help": "အထက်က div ကို ဖြည့်သည်။",
+    "Auto-generated UUID။ Render လုပ်သော <canvas> id; draw script က `canvas` အဖြစ်လည်း ရသည်။",
+  "canvas.width": "အကျယ် (px)",
+  "canvas.height": "အမြင့် (px)",
+  "canvas.binding": "State binding (optional)",
+  "canvas.binding.help":
+    "Bound slot တန်ဖိုးကို `state` အဖြစ် ပေးပြီး ပြောင်းသည်နှင့် draw script ကို ပြန် run သည်။",
+  "canvas.draw": "Draw script (JS)",
+  "canvas.draw.help":
+    "(ctx, canvas, state) => { … } အဖြစ် run သည်။ ctx ထဲ ဆွဲပါ။",
 
   "button.labelOptional": "Label (optional)",
   "button.labelPlaceholder": "ခလုတ်အပေါ် ပြသမည့် ခေါင်းစဉ်",

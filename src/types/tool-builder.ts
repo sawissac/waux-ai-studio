@@ -752,12 +752,23 @@ export interface TsTypeNode extends BaseNode {
   output: StateBinding;
 }
 
-/** Free-form HTML div populated by the author, targeted via its UUID. */
+/**
+ * A real HTML `<canvas>` the author paints with a JS draw script. The script
+ * body is wrapped in an AsyncFunction with signature `(ctx, canvas, state)` and
+ * re-runs on mount and whenever the bound state slot changes.
+ */
 export interface CanvasNode extends BaseNode {
   type: "canvas";
-  /** Auto-generated UUID used as the rendered div id. */
+  /** Auto-generated UUID used as the rendered `<canvas>` id. */
   elementId: string;
-  html: string;
+  /** Canvas backing-store width in pixels. */
+  width: number;
+  /** Canvas backing-store height in pixels. */
+  height: number;
+  /** JS draw body run as `(ctx, canvas, state) => { … }`. */
+  draw: string;
+  /** Optional state slot passed as `state` and used as a redraw trigger. */
+  binding: StateBinding;
 }
 
 /**
