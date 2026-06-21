@@ -67,7 +67,7 @@ export function ToolBuilder() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
+    <div className="flex flex-col bg-background text-foreground h-dvh w-dvw">
       <Topbar
         toolName={tool?.name ?? null}
         toolCount={tools.length}

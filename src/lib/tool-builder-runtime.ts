@@ -1,5 +1,5 @@
 /**
- * Pure preview-runtime helpers shared by the canvas node cards and the live
+ * Pure preview-runtime helpers shared by the builder node cards and the live
  * Preview pane. No React, no Redux — just resolve bindings and execute the
  * code-node chain over a plain `{ [stateName]: string }` map.
  */
@@ -19,6 +19,9 @@ import {
 } from "@/lib/transform";
 import type {
   AiNode,
+  CounterMode,
+  CounterNode,
+  CsvToMdNode,
   EncodeNode,
   FilterNode,
   HtmlSanitizeNode,
@@ -36,6 +39,7 @@ import type {
   Tool,
   ToolNode,
   TsTypeNode,
+  VaultNode,
 } from "@/types/tool-builder";
 
 /** A flat snapshot of the shared state store keyed by state name. */
@@ -488,6 +492,204 @@ async function runEncodeNode(
 }
 
 /**
+ * Convert a tabular array in `input` to a GFM Markdown table and write to
+ * `output`. Handles three shapes:
+ * - Array of objects → column headers from keys, rows from values.
+ * - Array of arrays → first sub-array as headers, remaining as rows.
+ * - Array of primitives → single `value` column.
+ * Non-array or empty input clears the output.
+ */
+function runCsvToMdNode(
+  node: CsvToMdNode,
+  state: StateMap,
+  stateNode: StateNode | null,
+): void {
+  const inName = resolveBinding(node.input, stateNode);
+  const outName = resolveBinding(node.output, stateNode);
+  if (!inName || !outName) {
+    return;
+  }
+  const raw = state[inName];
+  let rows: unknown[];
+  if (Array.isArray(raw)) {
+    rows = raw;
+  } else if (typeof raw === "string" && raw.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw);
+      rows = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      rows = [];
+    }
+  } else {
+    state[outName] = "";
+    return;
+  }
+  if (rows.length === 0) {
+    state[outName] = "";
+    return;
+  }
+
+  let headers: string[];
+  let bodyRows: string[][];
+
+  if (Array.isArray(rows[0])) {
+    // Array of arrays — first row = headers
+    const [headerArr, ...rest] = rows as unknown[][];
+    headers = headerArr.map((c) => String(c ?? ""));
+    bodyRows = rest.map((r) =>
+      headers.map((_, i) => String((r)[i] ?? "")),
+    );
+  } else if (rows[0] !== null && typeof rows[0] === "object") {
+    // Array of objects — keys = headers
+    headers = Object.keys(rows[0]);
+    bodyRows = rows.map((r) => {
+      const rec = r as Record<string, unknown>;
+      return headers.map((h) => String(rec[h] ?? ""));
+    });
+  } else {
+    // Array of primitives — single column
+    headers = ["value"];
+    bodyRows = rows.map((r) => [String(r ?? "")]);
+  }
+
+  const escape = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
+  const headerLine = "| " + headers.map(escape).join(" | ") + " |";
+  const sepLine = "| " + headers.map(() => "---").join(" | ") + " |";
+  const dataLines = bodyRows.map(
+    (row) => "| " + row.map(escape).join(" | ") + " |",
+  );
+  state[outName] = [headerLine, sepLine, ...dataLines].join("\n");
+}
+
+/**
+ * Tally a single counter metric of `raw`. Text metrics coerce the value to a
+ * string; `array_items` / `object_keys` parse it as an array / JSON object.
+ */
+function countMetric(mode: CounterMode, raw: unknown): number {
+  if (mode === "array_items") {
+    return asArray(raw).length;
+  }
+  if (mode === "object_keys") {
+    const obj = asJson(raw);
+    return obj !== null && typeof obj === "object" && !Array.isArray(obj)
+      ? Object.keys(obj).length
+      : 0;
+  }
+  const text = raw == null ? "" : String(raw);
+  const words = text.match(/\S+/g) ?? [];
+  const sentences = (text.match(/[^.!?]+[.!?]+(\s|$)/g) ?? []).length;
+  // Round a ratio to one decimal place (NaN/Infinity → 0).
+  const round1 = (n: number) =>
+    Number.isFinite(n) ? Math.round(n * 10) / 10 : 0;
+  switch (mode) {
+    case "words":
+      return words.length;
+    case "unique_words":
+      return new Set(
+        words
+          .map((w) =>
+            w.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""),
+          )
+          .filter(Boolean),
+      ).size;
+    case "characters":
+      return [...text].length;
+    case "characters_no_spaces":
+      return [...text.replace(/\s/g, "")].length;
+    case "letters":
+      return (text.match(/\p{L}/gu) ?? []).length;
+    case "uppercase":
+      return (text.match(/\p{Lu}/gu) ?? []).length;
+    case "lowercase":
+      return (text.match(/\p{Ll}/gu) ?? []).length;
+    case "digits":
+      return (text.match(/\p{Nd}/gu) ?? []).length;
+    case "punctuation":
+      return (text.match(/[\p{P}\p{S}]/gu) ?? []).length;
+    case "whitespace":
+      return (text.match(/\s/gu) ?? []).length;
+    case "lines":
+      return text.length === 0 ? 0 : text.split(/\r\n|\r|\n/).length;
+    case "sentences":
+      return sentences;
+    case "paragraphs":
+      // Blocks separated by one or more blank lines.
+      return text.trim() === ""
+        ? 0
+        : text
+            .trim()
+            .split(/\n\s*\n+/)
+            .filter((p) => p.trim() !== "").length;
+    case "avg_word_length":
+      // Total non-space characters ÷ words.
+      return words.length === 0
+        ? 0
+        : round1(
+            words.reduce((sum, w) => sum + [...w].length, 0) / words.length,
+          );
+    case "avg_sentence_length":
+      // Words per sentence (falls back to one sentence when none detected).
+      return words.length === 0
+        ? 0
+        : round1(words.length / Math.max(sentences, 1));
+    case "longest_word":
+      return words.reduce((max, w) => Math.max(max, [...w].length), 0);
+    case "shortest_word":
+      return words.length === 0
+        ? 0
+        : words.reduce((min, w) => Math.min(min, [...w].length), Infinity);
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Count every metric in `modes` of the value in `input` and write the results
+ * to `output` as a `{ [mode]: number }` object. Re-runs live as the input
+ * changes.
+ */
+function runCounterNode(
+  node: CounterNode,
+  state: StateMap,
+  stateNode: StateNode | null,
+): void {
+  const inName = resolveBinding(node.input, stateNode);
+  const outName = resolveBinding(node.output, stateNode);
+  if (!inName || !outName) {
+    return;
+  }
+  const raw = state[inName];
+  const result: Record<string, number> = {};
+  for (const mode of node.modes ?? []) {
+    result[mode] = countMetric(mode, raw);
+  }
+  state[outName] = result;
+}
+
+/**
+ * Assemble a Vault node's key/value entries into a `{ [key]: value }` object
+ * and write it to the bound state slot. Entries with a blank key are skipped;
+ * later duplicate keys overwrite earlier ones. Runs synchronously in the chain.
+ */
+function runVaultNode(
+  node: VaultNode,
+  state: StateMap,
+  stateNode: StateNode | null,
+): void {
+  const outName = resolveBinding(node.binding, stateNode);
+  if (!outName) {
+    return;
+  }
+  const obj: Record<string, string> = {};
+  for (const entry of node.entries ?? []) {
+    if (entry.key.trim()) {
+      obj[entry.key] = entry.value;
+    }
+  }
+  state[outName] = obj;
+}
+
+/**
  * Run the synchronous transform nodes (everything except code, ai,
  * http_request, encode — those are async and handled by their callers). Pure,
  * so both {@link runChain} and {@link changeChain} share it for live preview.
@@ -531,6 +733,15 @@ function runSyncTransform(
       return true;
     case "schema_validate":
       runSchemaValidateNode(node, state, stateNode);
+      return true;
+    case "csv_to_md":
+      runCsvToMdNode(node, state, stateNode);
+      return true;
+    case "counter":
+      runCounterNode(node, state, stateNode);
+      return true;
+    case "vault":
+      runVaultNode(node, state, stateNode);
       return true;
     default:
       return false;
@@ -763,6 +974,8 @@ export function nodeSubtitle(
     case "json":
     case "csv":
     case "table":
+    case "chart":
+    case "sprite":
     case "code_input":
       return {
         label: "Using State",
@@ -775,8 +988,6 @@ export function nodeSubtitle(
           ? `${node.buttonText} / ${node.resetText}`
           : node.buttonText,
       };
-    case "canvas":
-      return { label: "ID", value: node.elementId };
     case "viewport": {
       const bound = resolveBinding(node.binding, stateNode);
       return {
@@ -843,6 +1054,26 @@ export function nodeSubtitle(
       };
     case "encode":
       return { label: "Encode", value: node.operation };
+    case "csv_to_md":
+      return {
+        label: "CSV → MD",
+        value: `${resolveBinding(node.input, stateNode) || "?"} → ${resolveBinding(node.output, stateNode) || "?"}`,
+      };
+    case "counter":
+      return {
+        label: "Count",
+        value: `${node.modes.length} metrics → ${resolveBinding(node.output, stateNode) || "?"}`,
+      };
+    case "download":
+      return {
+        label: "Download",
+        value: `${resolveBinding(node.binding, stateNode) || "—"} as .${node.format}`,
+      };
+    case "vault":
+      return {
+        label: "Vault →",
+        value: `${node.entries.length} keys → ${resolveBinding(node.binding, stateNode) || "—"}`,
+      };
     case "ai":
       return {
         label: node.provider === "openrouter" ? "OpenRouter" : "Gemini",

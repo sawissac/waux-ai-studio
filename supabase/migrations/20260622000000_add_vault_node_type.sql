@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- Add `vault` node type.
+--
+-- `vault` — Data node. Author-configured key/value store. Assembles its
+--           entries (pairs with a non-empty key) into a { [key]: value } object
+--           and writes it to a bound state slot; renders the pairs as a
+--           read-only detail view in the preview (values maskable). Runs
+--           synchronously in the live-change chain.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'vault';

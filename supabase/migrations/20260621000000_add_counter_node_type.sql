@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- Add `counter` node type.
+--
+-- `counter` — Logic node. Reads a value from an input state slot, tallies one
+--             chosen metric (words, characters, characters without spaces,
+--             letters, lines, sentences, unique words, array items, or object
+--             keys), and writes the resulting number (stringified) to an
+--             output state slot. Runs synchronously in the live-change chain.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'counter';

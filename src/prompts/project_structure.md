@@ -1,6 +1,6 @@
 # Project Structure — File Placement Rules
 
-Last updated: 2026-06-14
+Last updated: 2026-06-21
 
 Where each file type lives. Next.js 16 App Router + TypeScript.
 
@@ -105,6 +105,9 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
 - `PalettePanel/` — right "Node" panel
 - `PreviewPane/` — live preview renderer
   - `components/DataTable.tsx` — Table-node renderer (TanStack Table + Virtual: kind-aware sorting, column resizing, 30/50/100 pagination)
+  - `components/ChartView.tsx` — Chart-node renderer (d3: bar/line/area/pie/scatter over normalized array data)
+  - `components/SpriteView.tsx` — Sprite-node renderer (flip-book animation over a bound frame array / sprite sheet)
+  - `components/VaultView.tsx` — Vault-node renderer (read-only key/value detail view with optional value masking)
 - `SharedToolView/` — public share view. Fetches a shared tool via `/api/shared/[toolId]` and renders only `PreviewPane`. No builder UI. Mounted by `app/(full-frame-public)/[toolId]/page.tsx`.
 - `Settings/` — user settings. Exposes `SettingsButton` (gear trigger + dialog) mounted in `Topbar`. Renders the available-settings catalog (`@/constants/settings`); reads/writes via `@/hooks/useAppConfig`. Persistence + theme application live in `@/providers/AppConfigProvider`.
   - `components/SettingToggle.tsx` — feature-private on/off switch.

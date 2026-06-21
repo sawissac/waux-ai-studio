@@ -461,7 +461,7 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     },
     tips: [
       "No parsing or validation: the slot receives a plain string. For binary files choose Base64 or Data URL — Text decodes the bytes as UTF-8 and will mangle non-text files.",
-      "Base64 strips the data:<mime>;base64, prefix (regex ^data:[^;]*;base64,); Data URL keeps it. Pick base64 for APIs that want raw base64, dataurl for <img src> / Canvas / Markdown embedding.",
+      "Base64 strips the data:<mime>;base64, prefix (regex ^data:[^;]*;base64,); Data URL keeps it. Pick base64 for APIs that want raw base64, dataurl for <img src> / Markdown embedding.",
       "The Accept filter is only a UI hint to the native picker (the accept attribute) — it does not enforce file type at runtime; users can still bypass it. Leave it blank to allow anything.",
       "If no state slot is bound (empty value) the upload is a no-op — loadFile returns early when the resolved name is empty, so nothing is written and the chain does not run. Make sure a state slot exists and is selected.",
       "The picker is reset after each selection (input value cleared), so re-selecting the same file fires the change chain again; selecting nothing leaves the slot unchanged.",
@@ -473,7 +473,7 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     summary:
       'The "Image upload" node (type "image", slug @image) is an Input node that lets the end user pick an image file in the preview. On upload it reads the file as a data: URL and writes that string into one bound state slot; it then renders a live thumbnail from that same slot. Mental model: a one-way image-to-state field whose value is a full data URL, ready to feed an AI vision prompt or be rendered downstream.',
     whenToUse:
-      "Reach for it when the tool needs the user to supply an image and you want that image as a data: URL in state — e.g. feeding an AI vision node, or rendering the image in a Markdown/Canvas/output node downstream.",
+      "Reach for it when the tool needs the user to supply an image and you want that image as a data: URL in state — e.g. feeding an AI vision node, or rendering the image in a Markdown/output node downstream.",
     config: [
       {
         name: "Field label",
@@ -736,6 +736,129 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     ],
     example:
       'A CSV upload node parses an uploaded file into the state slot \\"rows\\" as an array of header-keyed objects. Add a Table node, set Field label \\"Orders\\", Rows per page \\"50\\", and State binding \\"rows\\". The end user sees the order rows in a sortable, resizable table, 50 per page, with empty columns dropped and numeric/date columns auto-typed for correct sorting.',
+  },
+  chart: {
+    summary:
+      'The "Chart" node (NODE_META label "Chart", slug @chart, group "Inputs") is a read-only d3 visualization bound to one state slot. It accepts the same shapes as the Table node — an array of objects, an array of arrays, or a JSON string of either (e.g. CSV rows) — runs it through the shared normalizer (empty rows/columns dropped, numeric/boolean strings typed, per-column kind detected), then auto-resolves which columns to plot: the first text/date column becomes the category (X) axis and every numeric column becomes a value (Y) series. Renders as a bar, line, area, pie, or scatter chart that resizes to the preview width. It never writes to state.',
+    whenToUse:
+      "Reach for it at the end of a chain to visualize an array — CSV rows, a JSON array, or a code/HTTP/transform node's result. Use it instead of the Table node when a trend or distribution reads better as a picture than a grid; pair the two (Table + Chart on the same slot) to show detail and shape together.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Text input (i18n field.fieldLabel). The bold title shown above the chart in the preview. Default "Chart".',
+      },
+      {
+        name: "Description",
+        description:
+          'Text input (i18n field.description). Optional helper text under the label; hidden when empty. Default "".',
+      },
+      {
+        name: "Chart type",
+        description:
+          'Select (CHART_TYPES). One of bar, line, area, pie, scatter. Stored in node.chartType. Default "bar". Bar/line/area plot one or more numeric series against the category axis; pie uses the category column for slices and the first numeric column for size; scatter plots the first two numeric columns against each other.',
+      },
+      {
+        name: "X / category field",
+        description:
+          "Text input bound to node.xField (a column key). Leave blank to auto-detect (first text column, else first date column, else the first column). For scatter this is the horizontal numeric axis; blank auto-picks the first numeric column.",
+      },
+      {
+        name: "Value fields (Y)",
+        description:
+          "Repeatable list bound to node.yFields (column keys). Leave empty to auto-detect every numeric column. Add multiple to plot grouped bars / multiple lines / overlaid areas. Pie and scatter use only the first entry as their value / vertical axis.",
+      },
+      {
+        name: "Legend",
+        description:
+          "Toggle bound to node.showLegend. Shows colored chips for each series (bar/line/area/scatter) or category (pie). Default on.",
+      },
+      {
+        name: "Gridlines",
+        description:
+          "Toggle bound to node.showGrid. Shows horizontal axis gridlines on bar/line/area/scatter (ignored by pie). Default on.",
+      },
+      {
+        name: "Chart height (px)",
+        description:
+          "Number input bound to node.height, clamped to 120–800 on blur. The chart fills the available width and uses this for height. Default 280.",
+      },
+      {
+        name: "State binding",
+        description:
+          'State picker (BindingControl) bound to node.binding. The slot holding the array (or JSON string) to plot. Editor always writes mode "name". Default { mode: "name", value: "state1" }.',
+      },
+    ],
+    io: {
+      reads:
+        'The single state slot named by node.binding (resolved via resolveBinding). The value is normalized with normalizeTableData (the same helper the Table node uses) and plotted. In the runtime the only chart handling is in nodeSubtitle, where the resolved binding name shows under the "Using State" label.',
+      writes: null,
+    },
+    tips: [
+      'Pure renderer: the chart never writes to state — put it after the node that produces the array. The shared State binding help says "reads from / writes to", but only the read applies here.',
+      "Auto-resolve mirrors the Table normalizer: a JSON string of an array is parsed, numeric/boolean strings are typed, and empty rows/columns are dropped before plotting. A non-array value (plain object, number) has nothing to plot and shows the empty state.",
+      "Leave X / category and Value fields blank to let the node choose columns; set them by column key (header name, or col1/col2… for header-less arrays) to override. Series colors follow the order of the resolved value fields.",
+      "Pie and scatter only use the first value field. Pie sums the first numeric column per category; scatter plots the first two numeric columns (or auto-picks them) as x and y.",
+      "Gridlines apply to the cartesian charts (bar/line/area/scatter); the pie ignores the gridlines and axis settings.",
+    ],
+    example:
+      'A CSV upload writes monthly rows like [{ "month": "Jan", "sales": 120, "refunds": 8 }, …] to the slot "rows". Add a Chart node, Field label "Monthly sales", Chart type "bar", State binding "rows", and leave X/Value blank. It auto-picks "month" as the category axis and plots "sales" and "refunds" as grouped bars. Switch Chart type to "line" for a trend, or "pie" (with a single value field "sales") for share-by-month.',
+  },
+  sprite: {
+    summary:
+      'The "Sprite" node (NODE_META label "Sprite", slug @sprite, group "Inputs") is a read-only sprite animation viewer bound to one state slot. The bound value is either a single sprite-sheet image (a URL or data: URL, sliced into a grid of frameWidth × frameHeight cells, left-to-right then top-to-bottom) or an array of frame images (each element a URL / data: URL / { src }). It plays the frames as a flip-book at node.fps. It never writes to state.',
+    whenToUse:
+      "Reach for it to preview an animated character or icon — e.g. a sprite sheet uploaded via an Image/File node, pasted as a data URL, or produced by a code/HTTP node. Use the per-track bindings to wire separate sheets for idle, intro, walk-left, walk-right, and a click reaction.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Text input (i18n field.fieldLabel). The bold title shown above the viewer. Default "Sprite".',
+      },
+      {
+        name: "Description",
+        description:
+          'Text input (i18n field.description). Optional helper text under the label; hidden when empty. Default "".',
+      },
+      {
+        name: "Frame width (px)",
+        description:
+          "Number input bound to node.frameWidth, clamped to 16–512 on blur. The width of one frame/cell and of the viewer box; a single sheet is sliced into columns of this width. Default 96.",
+      },
+      {
+        name: "Frame height (px)",
+        description:
+          "Number input bound to node.frameHeight, clamped to 16–512 on blur. The height of one frame/cell and of the viewer box; a single sheet is sliced into rows of this height. Default 96.",
+      },
+      {
+        name: "Speed (fps)",
+        description:
+          "Number input bound to node.fps, clamped to 1–60 on blur. Playback speed in frames per second. Default 12.",
+      },
+      {
+        name: "State binding",
+        description:
+          'State picker (BindingControl) bound to node.binding — the default frames/sheet source. Per-track bindings fall back to this. Default { mode: "name", value: "state1" }.',
+      },
+      {
+        name: "Animations (per track)",
+        description:
+          'Fixed list of five tracks in node.animations — idle, intro, left, right, click — each rendered as a control button. Per track: a Loop checkbox (node.animations[].loop) and a state Select for its own sheet (node.animations[].binding; "Default frames" = empty, reuse node.binding). idle and left/right default to looping; intro and click play once and settle back to idle.',
+      },
+    ],
+    io: {
+      reads:
+        'Each track reads its own binding slot (or node.binding when blank), resolved via resolveBinding. A single image value is treated as a sprite sheet and sliced by frame size (natural size read on load); an array (or JSON string of one) is treated as discrete frames. In the runtime the only sprite handling is in nodeSubtitle, where the default binding name shows under the "Using State" label.',
+      writes: null,
+    },
+    tips: [
+      "Pure renderer: the sprite never writes to state — bind it to a slot another node produces (Image upload, data URL, code/HTTP result).",
+      "Sheet slicing assumes uniform cells laid out left-to-right, top-to-bottom: columns = round(sheetWidth / frameWidth), rows = round(sheetHeight / frameHeight). Set frame width/height to the exact cell size so frames align.",
+      "Bind one value with multiple images (array) to play arbitrary frames instead of a grid sheet; each element is shown whole (object-contain).",
+      "Turn Loop off for intro/click so they run a single cycle then hand back to the idle loop. The idle (or first) track auto-plays on load.",
+    ],
+    example:
+      'An Image upload writes a 6-frame walk sheet (600×150) as a data URL to the slot "sheet". Add a Sprite node, Field label "Hero", Frame width 100, Frame height 150, Speed 12, State binding "sheet". The preview slices the strip into 6 frames and loops them as an idle walk; bind separate sheets to the left/right/click tracks to switch animations from the control bar.',
   },
   code_input: {
     summary:
@@ -1669,48 +1792,6 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     example:
       'A tool reads a user-entered API key into state slot "key". An Encode node with Input state = key, Output state = keyB64, Operation = "Base64 encode" produces e.g. key = "user:pass" -> keyB64 = "dXNlcjpwYXNz". A downstream HTTP Request node then interpolates {{keyB64}} into an Authorization header.',
   },
-  canvas: {
-    summary:
-      'The "Canvas" node (type "canvas", slug @canvas, group "Website Site") renders a real HTML <canvas> with author-set width/height and an auto-generated UUID id. The author writes a JS draw script that runs against the 2D context; it executes on mount and whenever the optional bound state slot changes. Use it for imperative pixel/vector drawing the standard render nodes can\'t express.',
-    whenToUse:
-      "Reach for it when you need to draw something programmatically — a chart, sparkline, gauge, diagram, or any 2D-context graphic — that reacts to a state value.",
-    config: [
-      {
-        name: "Element ID",
-        description:
-          "Read-only display of the auto-generated UUID (node.elementId) shown in a code box with a Copy button. It is the id of the rendered <canvas> and is created once by createNode(). The draw script also receives the element directly as `canvas`, so you rarely need the id.",
-      },
-      {
-        name: "Width / Height (px)",
-        description:
-          "Two number inputs (node.width, node.height, min 1) that set the canvas backing-store dimensions. Default 320×200. The element is styled max-w-full so it scales down responsively while keeping its pixel resolution.",
-      },
-      {
-        name: "State binding (optional)",
-        description:
-          "A StateSelect (allowEmpty) bound to node.binding. When set, the slot's current value is passed to the draw script as `state` and changes to it re-run the script. Leave as None for a static drawing.",
-      },
-      {
-        name: "Draw script (JS)",
-        description:
-          'A code editor (language="javascript") bound to node.draw. The body runs wrapped in an AsyncFunction as (ctx, canvas, state) => { … }, where ctx is the CanvasRenderingContext2D, canvas the HTMLCanvasElement, and state the bound slot value (or undefined). Top-level await is allowed. Default clears the canvas and draws a rectangle plus the state value as text.',
-      },
-    ],
-    io: {
-      reads:
-        "Optional bound state slot (passed to the draw script as `state`).",
-      writes: null,
-    },
-    tips: [
-      "When you add or update this node, write the actual drawing code into the `draw` config field (a plain JS string). The string is the BODY ONLY — do NOT wrap it in a function, do NOT redeclare ctx/canvas/state, and do NOT write <canvas>/<script> HTML. The runtime already gives you three live variables: `ctx` (CanvasRenderingContext2D), `canvas` (the HTMLCanvasElement, with .width/.height), and `state` (the bound slot's value, or undefined).",
-      "ALWAYS start the draw script with ctx.clearRect(0, 0, canvas.width, canvas.height) — the script re-runs on every state change and frames stack otherwise.",
-      "Coerce `state` before using it (Number(state) for a numeric slot, String(state ?? '') for text, JSON values come through as real objects/arrays — no parsing needed). Derive everything you draw from `state` so it updates live.",
-      "Use the standard 2D API: fillStyle/strokeStyle, fillRect/strokeRect, beginPath + arc/moveTo/lineTo + fill/stroke, fillText (set ctx.font first), and ctx.measureText for layout. Top-level await is allowed (e.g. await an Image load) but rarely needed.",
-      "Author errors in the draw script are caught and logged to the console; the preview stays alive and the canvas keeps its last painted frame.",
-    ],
-    example:
-      'Bind the node to a 0–100 number slot "pct" and set width 320, height 40. Put this in the `draw` field (body only):\n\nctx.clearRect(0, 0, canvas.width, canvas.height);\nconst pct = Math.max(0, Math.min(100, Number(state) || 0));\nctx.fillStyle = "#e5e7eb";\nctx.fillRect(0, 0, canvas.width, canvas.height);\nctx.fillStyle = "#10b981";\nctx.fillRect(0, 0, canvas.width * pct / 100, canvas.height);\nctx.fillStyle = "#111827";\nctx.font = "14px sans-serif";\nctx.fillText(pct + "%", 8, 26);\n\nThis paints a progress bar that repaints whenever pct changes.',
-  },
   ai: {
     summary:
       "The AI node (\"AI\", slug @ai, group Logic) sends a prompt to Gemini or OpenRouter and writes the model's reply to a state slot. It runs as part of the async code/AI chain (triggered by an input's run/targets), not the synchronous preview pass.",
@@ -1759,6 +1840,194 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     ],
     example:
       'A Textarea writes an article to state `article`. An AI node (provider Gemini, model gemini-2.5-flash) with prompt "Summarize in 3 bullets:\\n{{article}}" writes to `summary`, with Markdown output on so the bullets render in the preview.',
+  },
+  csv_to_md: {
+    summary:
+      'The "CSV → Markdown" node (type "csv_to_md", slug @csv_to_md, Logic group) reads a tabular array from its input state slot and converts it to a GitHub-Flavored Markdown table string written to the output slot. Mental model: a pure sync transform wired array-slot → GFM table → output-slot, re-runs live as the input changes, never writes to any slot other than the configured output.',
+    whenToUse:
+      "Use it when you need a Markdown-formatted table from CSV rows or a JSON array — e.g. to feed a Markdown node, an AI prompt, or the Clipboard. Pair with a CSV input node (upstream) and a Markdown display node or Code node (downstream).",
+    config: [
+      {
+        name: "Description",
+        description:
+          "Optional author note (node.description). Shown as the node card subtitle in the builder canvas.",
+      },
+      {
+        name: "Input state",
+        description:
+          "State slot holding the tabular array to convert (node.input, name-mode). Accepts: array of objects (keys → headers), array of arrays (first sub-array → headers, rest → rows), or array of primitives (single `value` column). A JSON string starting with `[` is also parsed. Empty or non-array input clears the output.",
+      },
+      {
+        name: "Output state",
+        description:
+          "State slot the generated GFM Markdown table is written to (node.output, name-mode). Pipe characters inside cells are escaped; newlines within cells are collapsed to spaces.",
+      },
+    ],
+    io: {
+      reads:
+        "The input state slot — expects an array (or JSON string of an array).",
+      writes:
+        "The output state slot — a multi-line GFM Markdown table string (header row | separator row | data rows).",
+    },
+    tips: [
+      "Wire a CSV input node → csv_to_md → Markdown node to let users upload a CSV and see it rendered as a Markdown table immediately.",
+      "Pipe into an AI node prompt via {{outputState}} to give the model tabular context in Markdown.",
+      "Empty arrays and non-array values write an empty string — the downstream Markdown node shows nothing, which is a clean no-op.",
+      "Runs synchronously in the live-change chain, so the Markdown table updates instantly as a CSV is uploaded.",
+    ],
+    example:
+      "A CSV input node writes rows to `csvData`. A csv_to_md node reads `csvData` and writes `tableMarkdown`. A Markdown display node (bound to `tableMarkdown`, read-only) renders the GFM table live.",
+  },
+  counter: {
+    summary:
+      'The "Counter" node (type "counter", slug @counter, Inputs group) reads the value held in one state slot, tallies one or more chosen metrics, writes the results to another state slot as a `{ [metric]: number }` object, and renders every selected count live in the preview. Mental model: a sync transform plus a read-only stat grid, wired input-slot → metrics → output-slot; input and output may be the same slot (in-place).',
+    whenToUse:
+      "Reach for it when you want to show live counts derived from state — e.g. a words + characters + lines counter under a Textarea, the number of rows in a parsed CSV/JSON array, the number of keys in an object, or a sentence count. Pick several metrics at once; they render as preview stat cards and are written to a state slot for downstream nodes. For custom counting logic use Code.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Label shown above the count card in the preview (node.fieldLabel). Default: "Counter".',
+      },
+      {
+        name: "Description",
+        description:
+          "Optional author note (node.description). Shown under the field label in the preview and as the node card subtitle in the builder canvas; does not affect execution.",
+      },
+      {
+        name: "Input state",
+        description:
+          'State-slot dropdown (logic.input) selecting which slot to count. Name-mode binding (node.input = {mode:"name", value}). Default slot: state1. Text metrics coerce the value with String(...); array_items / object_keys parse it as an array / JSON object.',
+      },
+      {
+        name: "Output state",
+        description:
+          "State-slot dropdown (logic.output) the count is written to as a stringified number. Name-mode binding (node.output). Default slot: state1 — so by default the node overwrites its own input in place.",
+      },
+      {
+        name: "Count",
+        description:
+          'Toggle chips (counter.mode, label "Count") selecting which metrics to tally (node.modes — multiple allowed, kept in catalog order). Options: Words (whitespace-separated runs), Characters (Unicode code points), Characters (no spaces), Letters (Unicode letters only), Uppercase / Lowercase (\\p{Lu} / \\p{Ll}), Digits (\\p{Nd}), Punctuation (punctuation + symbol marks \\p{P}\\p{S}), Whitespace (\\s), Lines (split on CR/LF), Sentences (runs ending in . ! ?), Paragraphs (blocks separated by blank lines), Avg word length (non-space chars ÷ words, 1 dp), Avg sentence length (words ÷ sentences, 1 dp), Longest word / Shortest word (token length in code points), Unique words (distinct, case-insensitive, trimmed of surrounding punctuation), Array items (length of the parsed array), Object keys (own-key count of a parsed object). Default: Words + Characters. With none selected the node writes an empty object and the preview prompts to pick a metric.',
+      },
+    ],
+    io: {
+      reads:
+        'State slot named by node.input. Text metrics read it coerced to a string (missing/undefined → "" → 0); array_items reads it as an array (via asArray); object_keys parses it as JSON and counts own keys only when it\'s a non-array object.',
+      writes:
+        "State slot named by node.output — a `{ [metric]: number }` object with one numeric entry per selected metric (keyed by mode id, e.g. { words: 4, characters: 19 }). If either binding resolves to an empty name, the node returns without writing. The preview reads this same output slot to display each live count.",
+    },
+    tips: [
+      "Bindings are name-based; renaming/removing the referenced slot in the State node silently resolves to empty and the node no-ops.",
+      "Output is an object, not a string — read individual counts downstream with a JSONPath node (e.g. words) or a Code node; a Table/JSON node can show the whole object.",
+      "Default input and output are both state1 (in-place) — set distinct slots to keep the original value alongside its counts.",
+      "Characters counts Unicode code points (so emoji and accented letters count as one); Characters (no spaces) strips all whitespace first.",
+      "Lines counts 0 for an empty string and otherwise splits on \\r\\n / \\r / \\n; a trailing newline yields one extra (empty) line.",
+      "array_items / object_keys accept a real array/object or a JSON string of one; anything else counts as 0.",
+      "Runs synchronously in the live-change chain, so the counts update instantly in the preview as the bound input is typed or uploaded.",
+      "The preview renders the counts from the output slot — set Output state to a distinct slot if you also want to keep the original input value intact.",
+    ],
+    example:
+      'A Textarea writes prose to state slot "essay". A Counter node (Field label "Stats", Input state = essay, Output state = essayStats, Count = Words + Characters + Lines) renders three live stat cards in the preview for essay = "the quick brown fox" and writes essayStats = { words: 4, characters: 19, lines: 1 } for downstream nodes.',
+  },
+  download: {
+    summary:
+      'The "Download" node (type "download", slug @download, Inputs group) renders a download button in the live preview. When clicked it reads the bound state slot and exports its content as the configured format: .csv (array via PapaParse.unparse or string), .md/.svg (plain text file), or .png/.jpeg (data URL from state, or SVG string rendered to a canvas). Mental model: a one-way export trigger — reads state on click, triggers a browser file download, never writes back.',
+    whenToUse:
+      "Use it to give end users a way to save results — e.g. download a processed CSV after a Filter/Map chain, export a generated Markdown report, or save an uploaded image. Pair with any node that writes content to a state slot (CSV, Code, Template, AI, etc.).",
+    config: [
+      {
+        name: "Field label",
+        description:
+          "Optional heading shown above the button (node.fieldLabel). Leave blank for a button-only row.",
+      },
+      {
+        name: "Description",
+        description:
+          "Optional helper text shown below the label (node.description).",
+      },
+      {
+        name: "Button text",
+        description:
+          'Label on the download button (node.buttonText, default "Download").',
+      },
+      {
+        name: "State binding",
+        description:
+          "State slot whose value is exported on click (node.binding, name-mode). For CSV: an array is unparsed via PapaParse; a string is used as-is. For PNG/JPEG: expects a data: URL or an SVG string (rendered to canvas). For MD/SVG: any string.",
+      },
+      {
+        name: "Format",
+        description:
+          "Target file extension and export strategy (node.format). Options: csv, md, svg, png, jpeg.",
+      },
+      {
+        name: "File name",
+        description:
+          'Base name for the downloaded file without extension (node.fileName, default "export"). Extension is appended automatically.',
+      },
+    ],
+    io: {
+      reads:
+        "The bound state slot — content is read on button click and never during the change/run chain.",
+      writes: "Nothing — this node never modifies state.",
+    },
+    tips: [
+      "For CSV export, bind the output of a Filter/Map/Sort node so the user downloads the processed rows.",
+      "For Markdown export, bind a csv_to_md or Template node output to let users save generated reports.",
+      "PNG/JPEG export works best when the bound state holds a data URL (from an Image upload node or a code node that creates a canvas data URL). SVG strings are also supported via canvas rendering.",
+      "The file name can be a static string; if you need a dynamic name (e.g. date-stamped), write it from a Code/Template node into a separate state slot — the Download node does not interpolate state in the file name field.",
+      "Multiple Download nodes can live in one tool, each bound to a different state slot and configured for a different format.",
+    ],
+    example:
+      'A CSV input node writes rows to `csvData`. A Filter node outputs filtered rows to `filtered`. A Download node (format csv, fileName "filtered-export", binding filtered) lets the user download the filtered result with one click.',
+  },
+  vault: {
+    summary:
+      'The "Vault" node (type "vault", slug @vault, Data group) is an author-configured key/value store. You add { key, value } pairs in the node editor; the runtime assembles every pair with a non-empty key into a `{ [key]: value }` object and writes it to the bound state slot, and the preview renders the pairs as a read-only detail view (a property sheet). Mental model: a static config/secrets object surfaced as a state slot — one place to define fixed values the rest of the chain reads.',
+    whenToUse:
+      "Reach for it to hold fixed configuration or credentials that several nodes consume — API base URLs, headers, feature flags, tokens — instead of scattering literals across Template/HTTP/Code nodes. Turn on masking when the values are sensitive so the preview hides them behind dots. For values derived from other state use Template (string) or Code (object) instead; the Vault stores literals only.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Heading shown above the detail view in the preview (node.fieldLabel). Leave blank to omit. Default: "Vault".',
+      },
+      {
+        name: "Description",
+        description:
+          "Optional author note (node.description). Shown under the field label in the preview and as the node card subtitle; does not affect execution.",
+      },
+      {
+        name: "Key / value pairs",
+        description:
+          "The stored entries (node.entries — a list of { id, key, value }). Each row is a mono key input + a value input with add / remove controls. Only rows with a non-empty key are written; if two rows share a key the later one wins. Default: one empty pair keyed key1.",
+      },
+      {
+        name: "Mask values",
+        description:
+          "Toggle (node.masked) that hides every value behind dots in the preview detail view, with a single Reveal/Hide button. Display-only — the stored object always holds the real values. Default: off.",
+      },
+      {
+        name: "State binding",
+        description:
+          "State slot the assembled object is written to (node.binding, name-mode). Default slot: state1.",
+      },
+    ],
+    io: {
+      reads:
+        "Nothing — the values come from the node's own entries, not from state.",
+      writes:
+        "State slot named by node.binding — a `{ [key]: value }` object (string values) with one property per entry that has a non-empty key. If the binding resolves to an empty name the node no-ops. Runs synchronously in the run and live-change chains.",
+    },
+    tips: [
+      "Values are literal strings — they are not interpolated, so {{state}} tokens are stored verbatim; use a Template node if you need interpolation.",
+      "Read individual values downstream with a JSONPath node (e.g. apiKey) or a Code node; an HTTP Request header value can pull from the object via an upstream JSONPath.",
+      "Masking is preview-only and not real encryption — the values are stored in plain text in the tool definition; don't treat it as secure secret storage.",
+      "Bindings are name-based; renaming/removing the referenced slot in the State node silently resolves to empty and the node no-ops.",
+      "Entries with a blank key are ignored (in the editor and the detail view), so a half-typed row won't appear in the object.",
+    ],
+    example:
+      'A Vault node (Field label "API config", entries { baseUrl: "https://api.example.com", apiKey: "sk-123" }, masked on, binding config) writes config = { baseUrl: "https://api.example.com", apiKey: "sk-123" }. An HTTP Request node interpolates {{baseUrl}} (via a JSONPath that pulls config.baseUrl into a slot) and sends the key as a header.',
   },
 };
 

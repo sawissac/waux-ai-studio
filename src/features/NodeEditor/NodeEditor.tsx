@@ -38,8 +38,12 @@ import {
 import type { MessageKey } from "@/constants/i18n";
 import {
   ACCENT_CLASSES,
+  CHART_HEIGHT_RANGE,
+  CHART_TYPES,
   CODE_INPUT_LANGUAGES,
+  COUNTER_MODES,
   DATE_MODES,
+  DOWNLOAD_FORMATS,
   EDITOR_HEIGHTS,
   ENCODE_OPERATIONS,
   FILE_OUTPUT_FORMATS,
@@ -52,6 +56,8 @@ import {
   SCHEMA_TYPES,
   SORT_DIRECTIONS,
   SORT_TYPES,
+  SPRITE_FPS_RANGE,
+  SPRITE_FRAME_RANGE,
   TABLE_PAGE_SIZES,
   uuid,
   VALUELESS_FILTER_OPERATORS,
@@ -64,12 +70,18 @@ import { cn } from "@/lib/utils";
 import type {
   AiNode,
   ButtonNode,
+  ChartNode,
+  ChartType,
   CodeInputLanguage,
   CodeInputNode,
   ConvertHtmlNode,
+  CounterNode,
   CsvNode,
+  CsvToMdNode,
   DateNode,
   DateTimeMode,
+  DownloadFormat,
+  DownloadNode,
   EditorPlacement,
   EncodeNode,
   EncodeOperation,
@@ -99,6 +111,8 @@ import type {
   SortDirection,
   SortNode,
   SortType,
+  SpriteAnimation,
+  SpriteNode,
   StateEntry,
   StateNode,
   TableNode,
@@ -111,6 +125,7 @@ import type {
   ToolNode,
   ToolNodeType,
   TsTypeNode,
+  VaultNode,
   ViewportDevice,
   ViewportNode,
 } from "@/types/tool-builder";
@@ -238,7 +253,11 @@ function BindingControl({
     | JsonNode
     | CsvNode
     | TableNode
-    | CodeInputNode;
+    | ChartNode
+    | SpriteNode
+    | CodeInputNode
+    | DownloadNode
+    | VaultNode;
 }) {
   const { stateNode, updateNode } = useToolBuilder();
   const { t } = useTranslation();
@@ -1370,7 +1389,10 @@ function DescriptionField({
     | JsonPathNode
     | MathNode
     | SchemaValidateNode
-    | EncodeNode;
+    | EncodeNode
+    | CsvToMdNode
+    | CounterNode
+    | VaultNode;
 }) {
   const { updateNode } = useToolBuilder();
   const { t } = useTranslation();
@@ -2166,6 +2188,251 @@ function EncodeEditor({ node }: { node: EncodeNode }) {
   );
 }
 
+/**
+ * Editor for the CSV → Markdown logic node.
+ *
+ * @param props.node - The CsvToMdNode being configured.
+ */
+function CsvToMdEditor({ node }: { node: CsvToMdNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <InOutFields
+        inValue={node.input.value}
+        outValue={node.output.value}
+        onIn={(v) => updateNode(node.id, { input: { mode: "name", value: v } })}
+        onOut={(v) =>
+          updateNode(node.id, { output: { mode: "name", value: v } })
+        }
+      />
+      <p className="text-[11px] text-muted-foreground">{t("csv_to_md.help")}</p>
+    </div>
+  );
+}
+
+/**
+ * Editor for the Counter logic node — input, metric, output.
+ *
+ * @param props.node - The CounterNode being configured.
+ */
+function CounterEditor({ node }: { node: CounterNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label={t("field.fieldLabel")}>
+        <input
+          value={node.fieldLabel}
+          onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <DescriptionField node={node} />
+      <InOutFields
+        inValue={node.input.value}
+        outValue={node.output.value}
+        onIn={(v) => updateNode(node.id, { input: { mode: "name", value: v } })}
+        onOut={(v) =>
+          updateNode(node.id, { output: { mode: "name", value: v } })
+        }
+      />
+      <Field label={t("counter.mode")}>
+        <div className="flex flex-wrap gap-1.5">
+          {COUNTER_MODES.map((m) => {
+            const active = node.modes.includes(m);
+            return (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={active}
+                onClick={() =>
+                  updateNode(node.id, {
+                    modes: active
+                      ? node.modes.filter((x) => x !== m)
+                      : COUNTER_MODES.filter(
+                          (x) => node.modes.includes(x) || x === m,
+                        ),
+                  })
+                }
+                className={cn(
+                  "inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium transition-colors duration-(--motion-duration-fast) active:scale-[0.98]",
+                  active
+                    ? "border-foreground bg-primary text-primary-foreground"
+                    : "hover:bg-accent",
+                )}
+              >
+                {t(`counter.mode.${m}`)}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+      <p className="text-[11px] text-muted-foreground">{t("counter.help")}</p>
+    </div>
+  );
+}
+
+/**
+ * Editor for the Download input node.
+ *
+ * @param props.node - The DownloadNode being configured.
+ */
+function DownloadEditor({ node }: { node: DownloadNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label={t("field.fieldLabel")}>
+        <input
+          value={node.fieldLabel}
+          onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label={t("field.description")}>
+        <input
+          value={node.description ?? ""}
+          placeholder={t("field.descPlaceholder")}
+          onChange={(e) => updateNode(node.id, { description: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label={t("download.buttonText")}>
+        <input
+          value={node.buttonText}
+          onChange={(e) => updateNode(node.id, { buttonText: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <BindingControl node={node} />
+      <Field label={t("download.format")}>
+        <Select
+          value={node.format}
+          onValueChange={(v) =>
+            updateNode(node.id, { format: v as DownloadFormat })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {DOWNLOAD_FORMATS.map((f) => (
+              <SelectItem key={f.value} value={f.value}>
+                {f.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={t("download.fileName")}>
+        <input
+          value={node.fileName}
+          placeholder={t("download.fileName.placeholder")}
+          onChange={(e) => updateNode(node.id, { fileName: e.target.value })}
+          className={inputCls}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("download.fileName.help")}
+        </p>
+      </Field>
+      <p className="text-[11px] text-muted-foreground">{t("download.help")}</p>
+    </div>
+  );
+}
+
+/**
+ * Editor for the Vault data node — the "detail view" where key/value pairs are
+ * stored. Author edits the entry list, the bound output slot, and masking.
+ *
+ * @param props.node - The VaultNode being configured.
+ */
+function VaultEditor({ node }: { node: VaultNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const setEntries = (entries: VaultNode["entries"]) =>
+    updateNode(node.id, { entries });
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label={t("field.fieldLabel")}>
+        <input
+          value={node.fieldLabel}
+          onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <DescriptionField node={node} />
+      <Field label={t("vault.entries")}>
+        <div className="flex flex-col gap-1.5">
+          {node.entries.map((entry) => (
+            <div key={entry.id} className="flex items-center gap-1.5">
+              <input
+                value={entry.key}
+                placeholder={t("vault.keyPlaceholder")}
+                onChange={(e) =>
+                  setEntries(
+                    node.entries.map((x) =>
+                      x.id === entry.id ? { ...x, key: e.target.value } : x,
+                    ),
+                  )
+                }
+                className={cn(inputCls, "font-mono")}
+              />
+              <input
+                value={entry.value}
+                placeholder={t("vault.valuePlaceholder")}
+                onChange={(e) =>
+                  setEntries(
+                    node.entries.map((x) =>
+                      x.id === entry.id ? { ...x, value: e.target.value } : x,
+                    ),
+                  )
+                }
+                className={inputCls}
+              />
+              <button
+                type="button"
+                aria-label={t("vault.removeEntry")}
+                onClick={() =>
+                  setEntries(node.entries.filter((x) => x.id !== entry.id))
+                }
+                className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setEntries([
+              ...node.entries,
+              {
+                id: uuid(),
+                key: `key${node.entries.length + 1}`,
+                value: "",
+              },
+            ])
+          }
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+        >
+          <Plus size={14} /> {t("vault.addEntry")}
+        </button>
+      </Field>
+      <ToggleRow
+        label={t("vault.masked")}
+        description={t("vault.masked.desc")}
+        checked={node.masked}
+        onChange={(next) => updateNode(node.id, { masked: next })}
+      />
+      <BindingControl node={node} />
+      <p className="text-[11px] text-muted-foreground">{t("vault.help")}</p>
+    </div>
+  );
+}
+
 /** Per-type editor body. */
 function EditorBody({
   node,
@@ -2253,6 +2520,14 @@ function EditorBody({
       return <SchemaValidateEditor node={node} />;
     case "encode":
       return <EncodeEditor node={node} />;
+    case "csv_to_md":
+      return <CsvToMdEditor node={node} />;
+    case "counter":
+      return <CounterEditor node={node} />;
+    case "download":
+      return <DownloadEditor node={node} />;
+    case "vault":
+      return <VaultEditor node={node} />;
     case "number":
       return <NumberEditor node={node} />;
     case "select":
@@ -2265,87 +2540,6 @@ function EditorBody({
       return <FileEditor node={node} />;
     case "image":
       return <ImageEditor node={node} />;
-    case "canvas": {
-      const isPanel = placement === "panel";
-      return (
-        <div className={cn("flex flex-col gap-4", isPanel && "flex-1 min-h-0")}>
-          <Field label={t("canvas.elementId")}>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 truncate rounded-md border bg-muted/40 px-2.5 py-1.5 font-mono text-xs">
-                {node.elementId}
-              </code>
-              <button
-                type="button"
-                onClick={() =>
-                  navigator.clipboard?.writeText(node.elementId).catch(() => {})
-                }
-                className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-[0.98]"
-              >
-                <Copy size={14} /> {t("common.copy")}
-              </button>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              {t("canvas.elementId.help")}
-            </p>
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("canvas.width")}>
-              <input
-                type="number"
-                min={1}
-                value={node.width}
-                onChange={(e) =>
-                  updateNode(node.id, {
-                    width: Math.max(1, Number(e.target.value) || 1),
-                  })
-                }
-                className={inputCls}
-              />
-            </Field>
-            <Field label={t("canvas.height")}>
-              <input
-                type="number"
-                min={1}
-                value={node.height}
-                onChange={(e) =>
-                  updateNode(node.id, {
-                    height: Math.max(1, Number(e.target.value) || 1),
-                  })
-                }
-                className={inputCls}
-              />
-            </Field>
-          </div>
-          <Field label={t("canvas.binding")}>
-            <StateSelect
-              value={node.binding.value}
-              allowEmpty
-              onChange={(v) =>
-                updateNode(node.id, { binding: { mode: "name", value: v } })
-              }
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {t("canvas.binding.help")}
-            </p>
-          </Field>
-          <Field
-            label={t("canvas.draw")}
-            className={isPanel ? "flex-1 min-h-0" : undefined}
-          >
-            <CodeEditor
-              language="javascript"
-              height={isPanel ? "100%" : 300}
-              className={isPanel ? "flex-1 min-h-0" : undefined}
-              value={node.draw}
-              onChange={(draw) => updateNode(node.id, { draw })}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {t("canvas.draw.help")}
-            </p>
-          </Field>
-        </div>
-      );
-    }
     case "text_run":
       return (
         <div className="flex flex-col gap-4">
@@ -2656,6 +2850,332 @@ function EditorBody({
           </p>
         </div>
       );
+    case "chart": {
+      const setYFields = (yFields: string[]) =>
+        updateNode(node.id, { yFields });
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label={t("field.fieldLabel")}>
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("field.description")}>
+            <input
+              value={node.description ?? ""}
+              placeholder={t("field.descPlaceholder")}
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("chart.type")}>
+            <Select
+              value={node.chartType}
+              onValueChange={(v) =>
+                updateNode(node.id, { chartType: v as ChartType })
+              }
+            >
+              <SelectTrigger className="h-8 w-full">
+                <SelectValue placeholder={t("chart.pickType")} />
+              </SelectTrigger>
+              <SelectContent>
+                {CHART_TYPES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {t("chart.type.help")}
+            </p>
+          </Field>
+          <Field label={t("chart.xField")}>
+            <input
+              value={node.xField}
+              placeholder={t("chart.xFieldPlaceholder")}
+              onChange={(e) => updateNode(node.id, { xField: e.target.value })}
+              className={cn(inputCls, "font-mono")}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {t("chart.xField.help")}
+            </p>
+          </Field>
+          <Field label={t("chart.yFields")}>
+            <div className="flex flex-col gap-1.5">
+              {node.yFields.map((f, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <input
+                    value={f}
+                    placeholder={t("chart.fieldPlaceholder")}
+                    onChange={(e) =>
+                      setYFields(
+                        node.yFields.map((x, xi) =>
+                          xi === i ? e.target.value : x,
+                        ),
+                      )
+                    }
+                    className={cn(inputCls, "font-mono")}
+                  />
+                  <button
+                    type="button"
+                    aria-label={t("chart.removeField")}
+                    onClick={() =>
+                      setYFields(node.yFields.filter((_, xi) => xi !== i))
+                    }
+                    className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setYFields([...node.yFields, ""])}
+              className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+            >
+              <Plus size={14} /> {t("chart.addField")}
+            </button>
+            <p className="text-[11px] text-muted-foreground">
+              {t("chart.yFields.help")}
+            </p>
+          </Field>
+          <ToggleRow
+            label={t("chart.showLegend")}
+            description={t("chart.showLegend.desc")}
+            checked={node.showLegend}
+            onChange={(next) => updateNode(node.id, { showLegend: next })}
+          />
+          <ToggleRow
+            label={t("chart.showGrid")}
+            description={t("chart.showGrid.desc")}
+            checked={node.showGrid}
+            onChange={(next) => updateNode(node.id, { showGrid: next })}
+          />
+          <Field label={t("chart.height")}>
+            <input
+              type="number"
+              step={10}
+              value={node.height}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) {
+                  updateNode(node.id, { height: n });
+                }
+              }}
+              onBlur={(e) => {
+                const n = Number(e.target.value);
+                const clamped = Math.min(
+                  CHART_HEIGHT_RANGE.max,
+                  Math.max(
+                    CHART_HEIGHT_RANGE.min,
+                    Number.isFinite(n) ? n : 280,
+                  ),
+                );
+                updateNode(node.id, { height: clamped });
+              }}
+              className={inputCls}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {t("chart.height.help", {
+                min: CHART_HEIGHT_RANGE.min,
+                max: CHART_HEIGHT_RANGE.max,
+              })}
+            </p>
+          </Field>
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">
+            {t("chart.footer")}
+          </p>
+        </div>
+      );
+    }
+    case "sprite": {
+      const states = stateNode?.states ?? [];
+      const setAnim = (id: string, patch: Partial<SpriteAnimation>) =>
+        updateNode(node.id, {
+          animations: node.animations.map((a) =>
+            a.id === id ? { ...a, ...patch } : a,
+          ),
+        });
+      const clampInt = (
+        raw: string,
+        min: number,
+        max: number,
+        fallback: number,
+      ) => {
+        const n = Math.round(Number(raw));
+        return Math.min(max, Math.max(min, Number.isFinite(n) ? n : fallback));
+      };
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label={t("field.fieldLabel")}>
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("field.description")}>
+            <input
+              value={node.description ?? ""}
+              placeholder={t("field.descPlaceholder")}
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label={t("sprite.frameWidth")}>
+              <input
+                type="number"
+                step={1}
+                value={node.frameWidth}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) {
+                    updateNode(node.id, { frameWidth: n });
+                  }
+                }}
+                onBlur={(e) =>
+                  updateNode(node.id, {
+                    frameWidth: clampInt(
+                      e.target.value,
+                      SPRITE_FRAME_RANGE.min,
+                      SPRITE_FRAME_RANGE.max,
+                      96,
+                    ),
+                  })
+                }
+                className={inputCls}
+              />
+            </Field>
+            <Field label={t("sprite.frameHeight")}>
+              <input
+                type="number"
+                step={1}
+                value={node.frameHeight}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) {
+                    updateNode(node.id, { frameHeight: n });
+                  }
+                }}
+                onBlur={(e) =>
+                  updateNode(node.id, {
+                    frameHeight: clampInt(
+                      e.target.value,
+                      SPRITE_FRAME_RANGE.min,
+                      SPRITE_FRAME_RANGE.max,
+                      96,
+                    ),
+                  })
+                }
+                className={inputCls}
+              />
+            </Field>
+          </div>
+          <Field label={t("sprite.fps")}>
+            <input
+              type="number"
+              step={1}
+              value={node.fps}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) {
+                  updateNode(node.id, { fps: n });
+                }
+              }}
+              onBlur={(e) =>
+                updateNode(node.id, {
+                  fps: clampInt(
+                    e.target.value,
+                    SPRITE_FPS_RANGE.min,
+                    SPRITE_FPS_RANGE.max,
+                    12,
+                  ),
+                })
+              }
+              className={inputCls}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {t("sprite.fps.help", {
+                min: SPRITE_FPS_RANGE.min,
+                max: SPRITE_FPS_RANGE.max,
+              })}
+            </p>
+          </Field>
+          <BindingControl node={node} />
+          <Field label={t("sprite.animations")}>
+            <div className="flex flex-col gap-2">
+              {node.animations.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex flex-col gap-2 rounded-md border bg-muted/30 p-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium">
+                      {t(`sprite.action.${a.action}`)}
+                    </span>
+                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={a.loop}
+                        onChange={(e) =>
+                          setAnim(a.id, { loop: e.target.checked })
+                        }
+                      />
+                      {t("sprite.loop")}
+                    </label>
+                  </div>
+                  <Select
+                    value={a.binding.value || "__default__"}
+                    onValueChange={(v) =>
+                      setAnim(a.id, {
+                        binding: {
+                          mode: "name",
+                          value: v === "__default__" ? "" : v,
+                        },
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">
+                        {t("sprite.defaultSheet")}
+                      </SelectItem>
+                      {states.map((s) => (
+                        <SelectItem key={s.id} value={s.name}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {t("sprite.animations.help")}
+            </p>
+          </Field>
+          <p className="text-[11px] text-muted-foreground">
+            {t("sprite.footer")}
+          </p>
+        </div>
+      );
+    }
     case "code_input":
       return (
         <div className="flex flex-col gap-4">

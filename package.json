@@ -10,7 +10,8 @@
     "prepare": "husky",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "env-dev": "dotenv -e .env.dev -- next dev"
+    "env-dev": "dotenv -e .env.dev -- next dev",
+    "push": "pnpm supabase db push"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [

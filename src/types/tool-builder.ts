@@ -32,6 +32,8 @@ export type ToolNodeType =
   | "json"
   | "csv"
   | "table"
+  | "chart"
+  | "sprite"
   | "code_input"
   | "viewport"
   | "convert_html"
@@ -50,7 +52,10 @@ export type ToolNodeType =
   | "math"
   | "schema_validate"
   | "encode"
-  | "canvas"
+  | "csv_to_md"
+  | "counter"
+  | "download"
+  | "vault"
   | "ai";
 
 /** Languages the Code editor input node can highlight (Monaco built-ins). */
@@ -296,7 +301,7 @@ export interface FileNode extends BaseNode {
 /**
  * Image upload with a live thumbnail. The chosen image is written to the bound
  * state slot as a `data:` URL — ready to feed an AI vision prompt or render in
- * a Canvas / Markdown node.
+ * a Markdown node.
  */
 export interface ImageNode extends BaseNode {
   type: "image";
@@ -380,6 +385,81 @@ export interface TableNode extends BaseNode {
   binding: StateBinding;
   /** Default rows per page in the preview. */
   pageSize: TablePageSize;
+}
+
+/** Visualization styles the Chart node can render. */
+export type ChartType = "bar" | "line" | "area" | "pie" | "scatter";
+
+/**
+ * Read-only chart over the bound state slot. Accepts the same shapes as the
+ * Table node — an array of objects, an array of arrays, or a JSON string of
+ * either (e.g. CSV rows) — and auto-resolves which columns to plot: the first
+ * text/date column becomes the category (X) axis and every numeric column
+ * becomes a value (Y) series. Either can be overridden. Rendered with d3.
+ */
+export interface ChartNode extends BaseNode {
+  type: "chart";
+  fieldLabel: string;
+  description: string;
+  /** State slot holding the array (or JSON string) to plot. */
+  binding: StateBinding;
+  /** Visualization style. */
+  chartType: ChartType;
+  /** Category / X-axis column key. Empty string = auto-detect. */
+  xField: string;
+  /** Numeric series column keys to plot. Empty = auto-detect all numeric. */
+  yFields: string[];
+  /** Show the series / category legend. */
+  showLegend: boolean;
+  /** Show axis gridlines. */
+  showGrid: boolean;
+  /** Chart height in px (preview). */
+  height: number;
+}
+
+/** Built-in sprite animation actions, surfaced as preview control buttons. */
+export type SpriteAction = "idle" | "intro" | "left" | "right" | "click";
+
+/** One named animation track inside a {@link SpriteNode}. */
+export interface SpriteAnimation {
+  /** Stable id for list keying. */
+  id: string;
+  /** Action key — labels the control button and is the trigger target. */
+  action: SpriteAction;
+  /**
+   * State slot holding this track's frame array. Empty string = fall back to
+   * the node's default `binding`, so several actions can share one frame set.
+   */
+  binding: StateBinding;
+  /** Loop forever (true) or play once then settle back to the idle track. */
+  loop: boolean;
+}
+
+/**
+ * Sprite animation viewer (preview-only). Reads an array of image frames from
+ * a bound state slot and plays them as a flip-book at `fps`, scaled to
+ * `frameWidth` × `frameHeight`. Frames may be image URLs, `data:` URLs, or
+ * objects with a `src` / `url` field, and may arrive as a real array or a JSON
+ * string of one. Each {@link SpriteAnimation} track is a control button in the
+ * preview (idle / intro / left / right / click by default); a track with its
+ * own `binding` plays that frame set, otherwise it reuses the node's default
+ * `binding`. The first/idle track auto-plays and play-once tracks settle back
+ * to it. The node never writes to state.
+ */
+export interface SpriteNode extends BaseNode {
+  type: "sprite";
+  fieldLabel: string;
+  description: string;
+  /** Default frames source: a state slot holding the array of image frames. */
+  binding: StateBinding;
+  /** Frame display width in px. */
+  frameWidth: number;
+  /** Frame display height in px. */
+  frameHeight: number;
+  /** Playback speed in frames per second. */
+  fps: number;
+  /** Animation tracks exposed as control buttons; the first is the idle loop. */
+  animations: SpriteAnimation[];
 }
 
 /**
@@ -724,6 +804,120 @@ export interface EncodeNode extends BaseNode {
   operation: EncodeOperation;
 }
 
+/**
+ * Convert a tabular array held in `input` into a GitHub-Flavored Markdown
+ * table and write the result into `output`. Accepts the same shapes as the
+ * Table node — an array of objects (keys become headers) or an array of
+ * arrays (first row becomes headers). Primitive arrays produce a single
+ * `value` column.
+ */
+export interface CsvToMdNode extends BaseNode {
+  type: "csv_to_md";
+  description: string;
+  /** State slot holding the tabular array to convert. */
+  input: StateBinding;
+  /** State slot the generated Markdown table is written into. */
+  output: StateBinding;
+}
+
+/** What the Counter node tallies from its input. */
+export type CounterMode =
+  | "words"
+  | "characters"
+  | "characters_no_spaces"
+  | "letters"
+  | "uppercase"
+  | "lowercase"
+  | "digits"
+  | "punctuation"
+  | "whitespace"
+  | "lines"
+  | "sentences"
+  | "paragraphs"
+  | "avg_word_length"
+  | "avg_sentence_length"
+  | "longest_word"
+  | "shortest_word"
+  | "array_items"
+  | "object_keys"
+  | "unique_words";
+
+/**
+ * Count one or more metrics of the value held in `input` and write the results
+ * to `output` as a `{ [mode]: number }` object. Each entry in `modes` is
+ * tallied: text metrics (`words`, `characters`, `characters_no_spaces`,
+ * `letters`, `lines`, `sentences`, `unique_words`) operate on the input coerced
+ * to a string; structural metrics (`array_items`, `object_keys`) operate on the
+ * input parsed as JSON/array. The preview shows every selected count live.
+ * Runs synchronously in the chain and re-runs live as the input changes.
+ */
+export interface CounterNode extends BaseNode {
+  type: "counter";
+  fieldLabel: string;
+  description: string;
+  /** State slot holding the value to count. */
+  input: StateBinding;
+  /** State slot the `{ [mode]: number }` result object is written into. */
+  output: StateBinding;
+  /** Which metrics to tally (in display order). */
+  modes: CounterMode[];
+}
+
+/** File formats the Download node can export state content as. */
+export type DownloadFormat = "csv" | "png" | "jpeg" | "md" | "svg";
+
+/**
+ * Renders a download button in the preview. When clicked it reads the bound
+ * state slot and exports its content as the chosen `format`:
+ * `csv` (array via PapaParse or string), `md`/`svg` (plain text), or
+ * `png`/`jpeg` (data URL from image upload or SVG string rendered to canvas).
+ * The generated file is named `<fileName>.<format>`.
+ */
+export interface DownloadNode extends BaseNode {
+  type: "download";
+  fieldLabel: string;
+  description: string;
+  /** Label on the download button. */
+  buttonText: string;
+  /** State slot holding the content to export. */
+  binding: StateBinding;
+  /** Target file format. */
+  format: DownloadFormat;
+  /** Base file name (no extension). */
+  fileName: string;
+}
+
+/** One key/value pair stored in a {@link VaultNode}. */
+export interface VaultEntry {
+  /** Stable id for list keying. */
+  id: string;
+  /** Object key written into the assembled vault object. */
+  key: string;
+  /** Literal value stored under `key`. */
+  value: string;
+}
+
+/**
+ * Key/value store rendered as a read-only "detail view" in the preview. The
+ * author fills in {@link VaultEntry} pairs in the node editor; the runtime
+ * assembles them into a `{ [key]: value }` object and writes it to the bound
+ * state slot so downstream nodes (Template, HTTP headers, Code, …) can read it.
+ * Each entry with a non-empty `key` contributes one property (later duplicate
+ * keys win). When `masked` is on the preview hides every value behind dots with
+ * a reveal toggle (handy for tokens / secrets); the stored object is unaffected.
+ */
+export interface VaultNode extends BaseNode {
+  type: "vault";
+  fieldLabel: string;
+  description: string;
+  /** State slot the assembled `{ [key]: value }` object is written into. */
+  binding: StateBinding;
+  /** The stored key/value pairs, in display order. */
+  entries: VaultEntry[];
+  /** Hide values behind dots in the preview detail view (reveal on demand). */
+  masked: boolean;
+}
+
 /** Custom logic block. Body defines `function run(state) { ... }`. */
 export interface CodeNode extends BaseNode {
   type: "code";
@@ -750,25 +944,6 @@ export interface TsTypeNode extends BaseNode {
   input: StateBinding;
   /** State slot the generated TypeScript is written into. */
   output: StateBinding;
-}
-
-/**
- * A real HTML `<canvas>` the author paints with a JS draw script. The script
- * body is wrapped in an AsyncFunction with signature `(ctx, canvas, state)` and
- * re-runs on mount and whenever the bound state slot changes.
- */
-export interface CanvasNode extends BaseNode {
-  type: "canvas";
-  /** Auto-generated UUID used as the rendered `<canvas>` id. */
-  elementId: string;
-  /** Canvas backing-store width in pixels. */
-  width: number;
-  /** Canvas backing-store height in pixels. */
-  height: number;
-  /** JS draw body run as `(ctx, canvas, state) => { … }`. */
-  draw: string;
-  /** Optional state slot passed as `state` and used as a redraw trigger. */
-  binding: StateBinding;
 }
 
 /**
@@ -804,6 +979,8 @@ export type ToolNode =
   | JsonNode
   | CsvNode
   | TableNode
+  | ChartNode
+  | SpriteNode
   | CodeInputNode
   | ViewportNode
   | ConvertHtmlNode
@@ -822,7 +999,10 @@ export type ToolNode =
   | MathNode
   | SchemaValidateNode
   | EncodeNode
-  | CanvasNode
+  | CsvToMdNode
+  | CounterNode
+  | DownloadNode
+  | VaultNode
   | AiNode;
 
 /** A named, ordered chain of nodes. */
@@ -850,11 +1030,15 @@ export type RenderNode =
   | JsonNode
   | CsvNode
   | TableNode
+  | ChartNode
+  | SpriteNode
   | CodeInputNode
   | ViewportNode
   | ConvertHtmlNode
   | ThemedNode
-  | CanvasNode;
+  | CounterNode
+  | DownloadNode
+  | VaultNode;
 
 /** Node kinds that produce visible output in the preview. */
 export const RENDER_NODE_TYPES: ReadonlySet<ToolNodeType> =
@@ -872,11 +1056,15 @@ export const RENDER_NODE_TYPES: ReadonlySet<ToolNodeType> =
     "json",
     "csv",
     "table",
+    "chart",
+    "sprite",
     "code_input",
     "viewport",
     "convert_html",
     "themed",
-    "canvas",
+    "counter",
+    "download",
+    "vault",
   ]);
 
 /** Type guard: does this node render in the preview? */

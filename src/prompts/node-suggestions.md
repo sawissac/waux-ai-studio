@@ -2,7 +2,7 @@
 
 Candidate node types to add to the catalog, grouped by role. Existing catalog already
 covers display/transform (Table, Markdown, JSON, CSV, View Port, Themed, HTML Sanitize,
-TS Type Converter, Canvas, AI). These fill the gaps.
+TS Type Converter, AI). These fill the gaps.
 
 ## Input nodes (collect data)
 
@@ -14,9 +14,10 @@ TS Type Converter, Canvas, AI). These fill the gaps.
 | Date / Time picker | Temporal input.                                            |
 | File upload        | Generic file (not just CSV); output bytes / base64 / text. |
 | Image upload       | Preview + write data URL; feeds AI vision.                 |
-| Key-Value pairs    | Dynamic dict editor (headers, query params).               |
-| Secret             | Masked field for API keys; not persisted in plain text.    |
+| Key-Value pairs    | Shipped as Vault: key/value store -> object on state.      |
+| Secret             | Vault masking; display-only, not encrypted.                |
 | Color picker       | Pairs with the Themed node.                                |
+| Counter            | Live count of words / chars / lines / array items.         |
 
 ## Logic nodes (process data)
 

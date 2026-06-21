@@ -1,0 +1,12 @@
+-- ---------------------------------------------------------------------------
+-- Add the `chart` node type.
+--
+-- `chart` — Read-only d3 visualization over a bound state slot. Accepts the
+--           same shapes as the Table node (array of objects, array of arrays,
+--           or a JSON string of either) and auto-resolves which columns to
+--           plot. Renders as bar, line, area, pie, or scatter.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'chart';

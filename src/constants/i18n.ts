@@ -249,6 +249,12 @@ const en = {
   "node.table.label": "Table",
   "node.table.blurb":
     "Display bound array data in a sortable, resizable, paginated table. Data is auto-optimized for display.",
+  "node.chart.label": "Chart",
+  "node.chart.blurb":
+    "Plot bound array data with d3 — bar, line, area, pie, or scatter. Columns auto-resolve from CSV/JSON.",
+  "node.sprite.label": "Sprite",
+  "node.sprite.blurb":
+    "Play a bound sprite sheet as an animation — slice it by frame size and switch idle / intro / left / right / click tracks.",
   "node.code_input.label": "Code editor",
   "node.code_input.blurb":
     "Write or paste code in a Monaco editor with a selectable language; raw source writes to bound state.",
@@ -302,9 +308,6 @@ const en = {
   "node.encode.label": "Encode / Decode",
   "node.encode.blurb":
     "Base64 / URL encode-decode, or a one-way SHA-256 hash over a string; output writes to state.",
-  "node.canvas.label": "Canvas",
-  "node.canvas.blurb":
-    "A real <canvas> you paint with a JS draw script (2D context).",
   "node.ai.label": "AI",
   "node.ai.blurb":
     "Ask Gemini or OpenRouter. Interpolate state via {{name}} in the prompt; reply writes to bound state.",
@@ -445,18 +448,6 @@ const en = {
   "code.code.help":
     "Runs top-to-bottom in the chain; reads & writes state directly.",
 
-  // Node editor — Canvas
-  "canvas.elementId": "Element ID",
-  "canvas.elementId.help":
-    "Auto-generated UUID. The rendered <canvas> id; the draw script also gets it as `canvas`.",
-  "canvas.width": "Width (px)",
-  "canvas.height": "Height (px)",
-  "canvas.binding": "State binding (optional)",
-  "canvas.binding.help":
-    "Bound slot value is passed as `state` and re-runs the draw script on change.",
-  "canvas.draw": "Draw script (JS)",
-  "canvas.draw.help": "Runs as (ctx, canvas, state) => { … }. Paint into ctx.",
-
   // Node editor — Button
   "button.labelOptional": "Label (optional)",
   "button.labelPlaceholder": "Heading shown above the button",
@@ -479,6 +470,50 @@ const en = {
     "Default page size in the preview — end users can switch between {sizes}.",
   "table.footer":
     "Displays the bound state as a table — bind an array (e.g. CSV rows, a JSON array, or a code-node result). Data is auto-optimized for display; every column sorts (text, numbers, and auto-detected dates) and resizes by dragging the header edge.",
+  "chart.type": "Chart type",
+  "chart.pickType": "Pick chart type…",
+  "chart.type.help":
+    "Bar / line / area plot value columns against the category axis; pie sizes slices by the first value column; scatter plots the first two numeric columns.",
+  "chart.xField": "X / category field",
+  "chart.xFieldPlaceholder": "auto-detect",
+  "chart.xField.help":
+    "Column for the x-axis / category. Leave blank to auto-detect (first text or date column).",
+  "chart.yFields": "Value fields (Y)",
+  "chart.yFields.help":
+    "Columns to plot, aggregated per category — numeric columns are summed, text/date columns are counted. Leave empty to auto-detect numeric columns (or count rows when there are none). Add several for grouped bars / multiple lines.",
+  "chart.fieldPlaceholder": "column name",
+  "chart.addField": "Add value field",
+  "chart.removeField": "Remove value field",
+  "chart.height": "Chart height (px)",
+  "chart.height.help": "Chart height in the preview ({min}–{max}px).",
+  "chart.showLegend": "Legend",
+  "chart.showLegend.desc": "Show a legend for the series / categories.",
+  "chart.showGrid": "Gridlines",
+  "chart.showGrid.desc": "Show axis gridlines (cartesian charts only).",
+  "chart.footer":
+    "Plots the bound state — bind an array (e.g. CSV rows, a JSON array, or a code-node result). Columns auto-resolve: the first text/date column is the category axis and numeric columns become value series. Override either above.",
+  "chart.empty":
+    "No chartable data in the bound state yet. Bind an array (e.g. from a CSV, JSON, or code node) with at least one numeric column.",
+  "sprite.frameWidth": "Frame width (px)",
+  "sprite.frameHeight": "Frame height (px)",
+  "sprite.fps": "Speed (fps)",
+  "sprite.fps.help": "Playback speed in frames per second ({min}–{max}).",
+  "sprite.animations": "Animations",
+  "sprite.animations.help":
+    "Each track is a control button. Bind its own sheet, or leave on default frames to reuse the node's binding. Toggle loop off for one-shot tracks (they settle back to idle).",
+  "sprite.loop": "Loop",
+  "sprite.defaultSheet": "Default frames",
+  "sprite.footer":
+    "Plays a bound sprite sheet (one image sliced into frame-sized cells, left-to-right) or an array of frame images. Bind the sheet under State binding above.",
+  "sprite.empty":
+    "No sprite bound yet. Bind a sprite sheet image (URL or data URL) — it's sliced into frames by the width & height above.",
+  "sprite.play": "Play",
+  "sprite.pause": "Pause",
+  "sprite.action.idle": "Idle",
+  "sprite.action.intro": "Intro",
+  "sprite.action.left": "Left",
+  "sprite.action.right": "Right",
+  "sprite.action.click": "Click",
   "codeInput.language": "Language",
   "codeInput.pickLanguage": "Pick language…",
   "codeInput.language.help":
@@ -723,6 +758,74 @@ NOTES
   "encode.operation": "Operation",
   "encode.help":
     "Transforms the input string. SHA-256 is a one-way hash (hex).",
+
+  // CSV → Markdown node
+  "node.csv_to_md.label": "CSV → Markdown",
+  "node.csv_to_md.blurb":
+    "Convert a tabular array (CSV rows, JSON array) into a GFM Markdown table; result writes to state.",
+  "csv_to_md.help":
+    "Reads an array from the input state (array of objects, array of arrays, or primitives) and writes a GitHub-Flavored Markdown table to the output state. Re-runs live as the input changes.",
+
+  // Counter node
+  "node.counter.label": "Counter",
+  "node.counter.blurb":
+    "Count words, characters, letters, lines, sentences, array items, or object keys — pick several at once; shows the live counts and writes them to state.",
+  "counter.mode": "Count",
+  "counter.empty": "Pick at least one metric to count.",
+  "counter.mode.words": "Words",
+  "counter.mode.characters": "Characters",
+  "counter.mode.characters_no_spaces": "Characters (no spaces)",
+  "counter.mode.letters": "Letters",
+  "counter.mode.uppercase": "Uppercase",
+  "counter.mode.lowercase": "Lowercase",
+  "counter.mode.digits": "Digits",
+  "counter.mode.punctuation": "Punctuation",
+  "counter.mode.whitespace": "Whitespace",
+  "counter.mode.lines": "Lines",
+  "counter.mode.sentences": "Sentences",
+  "counter.mode.paragraphs": "Paragraphs",
+  "counter.mode.avg_word_length": "Avg word length",
+  "counter.mode.avg_sentence_length": "Avg sentence length",
+  "counter.mode.longest_word": "Longest word",
+  "counter.mode.shortest_word": "Shortest word",
+  "counter.mode.unique_words": "Unique words",
+  "counter.mode.array_items": "Array items",
+  "counter.mode.object_keys": "Object keys",
+  "counter.help":
+    "Reads the input state, tallies every selected metric, and writes them to the output state as a { metric: number } object. Text metrics coerce the input to a string; array / object metrics parse it as JSON. Re-runs live as the input changes.",
+
+  // Download node
+  "node.download.label": "Download",
+  "node.download.blurb":
+    "Render a download button that exports bound state as CSV, Markdown, SVG, PNG, or JPEG.",
+  "download.format": "Format",
+  "download.format.help":
+    "File format to export. CSV: array or string. PNG/JPEG: data URL or SVG string rendered to canvas. MD/SVG: plain text.",
+  "download.fileName": "File name",
+  "download.fileName.placeholder": "export",
+  "download.fileName.help":
+    'Base file name without extension (e.g. "report" → "report.csv").',
+  "download.buttonText": "Button text",
+  "download.help":
+    "Renders a download button in the preview. Reads the bound state slot and exports its content as the chosen format.",
+
+  // Vault node
+  "node.vault.label": "Vault",
+  "node.vault.blurb":
+    "Store key/value pairs in a detail view. Assembled into an object on bound state for downstream nodes; mask values to hide tokens & secrets.",
+  "vault.entries": "Key / value pairs",
+  "vault.keyPlaceholder": "key",
+  "vault.valuePlaceholder": "value",
+  "vault.addEntry": "Add pair",
+  "vault.removeEntry": "Remove pair",
+  "vault.masked": "Mask values",
+  "vault.masked.desc":
+    "Hide values behind dots in the preview, with a reveal toggle.",
+  "vault.empty": "Add a key / value pair to store.",
+  "vault.reveal": "Reveal",
+  "vault.hide": "Hide",
+  "vault.help":
+    "Each pair with a non-empty key is written to the bound state slot as a { key: value } object (later duplicate keys win). Masking only affects the preview — the stored values are unchanged.",
 
   // Common
   "common.cancel": "Cancel",
@@ -974,6 +1077,12 @@ const my: Record<MessageKey, string> = {
   "node.table.label": "ဇယား",
   "node.table.blurb":
     "Bound array data ကို စီ၍ရ၊ အရွယ်ပြောင်း၍ရ၊ စာမျက်နှာခွဲ ဇယားဖြင့် ပြသသည်။ Data ကို ပြသရန် auto-optimize လုပ်သည်။",
+  "node.chart.label": "ဇယားကွက်",
+  "node.chart.blurb":
+    "Bound array data ကို d3 ဖြင့် ပုံဆွဲသည် — bar, line, area, pie, scatter။ ကော်လံများ CSV/JSON မှ အလိုအလျောက် ရွေးသည်။",
+  "node.sprite.label": "Sprite",
+  "node.sprite.blurb":
+    "Bound sprite sheet ကို animation အဖြစ် ဖွင့်သည် — frame အရွယ်ဖြင့် ဖြတ်၍ idle / intro / left / right / click track များ ပြောင်းသည်။",
   "node.code_input.label": "ကုဒ် တည်းဖြတ်",
   "node.code_input.blurb":
     "ဘာသာစကား ရွေး၍ Monaco editor တွင် ကုဒ် ရေး/paste; raw source ကို bound state သို့ ရေးသည်။",
@@ -1027,9 +1136,6 @@ const my: Record<MessageKey, string> = {
   "node.encode.label": "Encode / Decode",
   "node.encode.blurb":
     "String ပေါ် Base64 / URL encode-decode သို့ တစ်လမ်းသွား SHA-256 hash; output ကို state သို့ ရေးသည်။",
-  "node.canvas.label": "Canvas",
-  "node.canvas.blurb":
-    "JS draw script (2D context) ဖြင့် ဆွဲသော တကယ့် <canvas>။",
   "node.ai.label": "AI",
   "node.ai.blurb":
     "Gemini သို့ OpenRouter ကို မေး။ Prompt ထဲ {{name}} ဖြင့် state interpolate; အဖြေကို bound state သို့ ရေးသည်။",
@@ -1158,18 +1264,6 @@ const my: Record<MessageKey, string> = {
   "code.code.help":
     "ကွင်းဆက်ထဲ အပေါ်မှအောက် run သည်; state ကို တိုက်ရိုက် ဖတ်/ရေးသည်။",
 
-  "canvas.elementId": "Element ID",
-  "canvas.elementId.help":
-    "Auto-generated UUID။ Render လုပ်သော <canvas> id; draw script က `canvas` အဖြစ်လည်း ရသည်။",
-  "canvas.width": "အကျယ် (px)",
-  "canvas.height": "အမြင့် (px)",
-  "canvas.binding": "State binding (optional)",
-  "canvas.binding.help":
-    "Bound slot တန်ဖိုးကို `state` အဖြစ် ပေးပြီး ပြောင်းသည်နှင့် draw script ကို ပြန် run သည်။",
-  "canvas.draw": "Draw script (JS)",
-  "canvas.draw.help":
-    "(ctx, canvas, state) => { … } အဖြစ် run သည်။ ctx ထဲ ဆွဲပါ။",
-
   "button.labelOptional": "Label (optional)",
   "button.labelPlaceholder": "ခလုတ်အပေါ် ပြသမည့် ခေါင်းစဉ်",
   "button.footer": "လက်ရှိ state ပေါ်တွင် run သည် — input field မရှိ။",
@@ -1190,6 +1284,50 @@ const my: Record<MessageKey, string> = {
     "Preview ထဲ မူရင်း page size — အသုံးပြုသူများ {sizes} ကြား ပြောင်းနိုင်သည်။",
   "table.footer":
     "Bound state ကို ဇယားအဖြစ် ပြသည် — array တစ်ခု bind လုပ်ပါ (ဥပမာ CSV တန်း, JSON array, သို့ code-node ရလဒ်)။ Data ကို ပြသရန် auto-optimize လုပ်သည်; ကော်လံတိုင်း စီသည် (စာသား, ဂဏန်း, နှင့် auto-detect ရက်စွဲ) နှင့် header အစွန်း ဆွဲ၍ အရွယ်ပြောင်းသည်။",
+  "chart.type": "ဇယားအမျိုးအစား",
+  "chart.pickType": "ဇယားအမျိုးအစား ရွေးပါ…",
+  "chart.type.help":
+    "Bar / line / area သည် value ကော်လံများကို category ဝင်ရိုးဖြင့် ပုံဆွဲသည်; pie သည် ပထမ value ကော်လံဖြင့် အချပ်အရွယ်သတ်မှတ်သည်; scatter သည် ပထမ numeric ကော်လံနှစ်ခုကို ပုံဆွဲသည်။",
+  "chart.xField": "X / category ကော်လံ",
+  "chart.xFieldPlaceholder": "အလိုအလျောက်",
+  "chart.xField.help":
+    "x-ဝင်ရိုး / category အတွက် ကော်လံ။ အလိုအလျောက်ရွေးရန် ဗလာထားပါ (ပထမ စာသား သို့ ရက်စွဲ ကော်လံ)။",
+  "chart.yFields": "Value ကော်လံများ (Y)",
+  "chart.yFields.help":
+    "category အလိုက် စုစည်းပြီး ပုံဆွဲမည့် ကော်လံများ — numeric ကော်လံများကို ပေါင်းသည်၊ text/date ကော်လံများကို ရေတွက်သည်။ numeric ကော်လံများ အလိုအလျောက်ရွေးရန် ဗလာထားပါ (မရှိပါက တန်းများ ရေတွက်သည်)။ grouped bar / line များအတွက် အများကြီး ထည့်ပါ။",
+  "chart.fieldPlaceholder": "ကော်လံအမည်",
+  "chart.addField": "Value ကော်လံ ထည့်ပါ",
+  "chart.removeField": "Value ကော်လံ ဖယ်ပါ",
+  "chart.height": "ဇယားအမြင့် (px)",
+  "chart.height.help": "Preview ထဲ ဇယားအမြင့် ({min}–{max}px)။",
+  "chart.showLegend": "ရှင်းလင်းချက်",
+  "chart.showLegend.desc": "Series / category များအတွက် ရှင်းလင်းချက် ပြပါ။",
+  "chart.showGrid": "ဂရစ်လိုင်းများ",
+  "chart.showGrid.desc": "ဝင်ရိုး ဂရစ်လိုင်းများ ပြပါ (cartesian ဇယားများသာ)။",
+  "chart.footer":
+    "Bound state ကို ပုံဆွဲသည် — array တစ်ခု bind လုပ်ပါ (ဥပမာ CSV တန်း, JSON array, သို့ code-node ရလဒ်)။ ကော်လံများ အလိုအလျောက်ရွေးသည်: ပထမ စာသား/ရက်စွဲ ကော်လံသည် category ဝင်ရိုး၊ numeric ကော်လံများသည် value series ဖြစ်သည်။ အပေါ်တွင် ပြောင်းနိုင်သည်။",
+  "chart.empty":
+    "Bound state ထဲ ပုံဆွဲနိုင်သော data မရှိသေးပါ။ numeric ကော်လံ အနည်းဆုံးတစ်ခုပါသော array တစ်ခု bind လုပ်ပါ (ဥပမာ CSV, JSON, သို့ code node မှ)။",
+  "sprite.frameWidth": "Frame အကျယ် (px)",
+  "sprite.frameHeight": "Frame အမြင့် (px)",
+  "sprite.fps": "မြန်နှုန်း (fps)",
+  "sprite.fps.help": "တစ်စက္ကန့်လျှင် frame အရေအတွက် ({min}–{max})။",
+  "sprite.animations": "Animation များ",
+  "sprite.animations.help":
+    "track တစ်ခုစီသည် ခလုတ်တစ်ခုဖြစ်သည်။ ၎င်း၏ sheet ကိုယ်ပိုင် bind လုပ်ပါ၊ သို့ default frames ထားက node ၏ binding ကို ပြန်သုံးသည်။ တစ်ကြိမ်ပြ track များအတွက် loop ပိတ်ပါ (idle သို့ ပြန်သွားသည်)။",
+  "sprite.loop": "Loop",
+  "sprite.defaultSheet": "Default frames",
+  "sprite.footer":
+    "Bound sprite sheet (ပုံတစ်ခုကို frame အရွယ် cell များအဖြစ် ဘယ်မှညာ ဖြတ်) သို့ frame ပုံ array ကို ဖွင့်သည်။ sheet ကို အပေါ်က State binding တွင် bind လုပ်ပါ။",
+  "sprite.empty":
+    "Sprite မ bind ရသေးပါ။ sprite sheet ပုံ (URL သို့ data URL) bind လုပ်ပါ — အပေါ်က အကျယ်/အမြင့်ဖြင့် frame များအဖြစ် ဖြတ်သည်။",
+  "sprite.play": "ဖွင့်",
+  "sprite.pause": "ရပ်",
+  "sprite.action.idle": "Idle",
+  "sprite.action.intro": "Intro",
+  "sprite.action.left": "Left",
+  "sprite.action.right": "Right",
+  "sprite.action.click": "Click",
   "codeInput.language": "ဘာသာစကား",
   "codeInput.pickLanguage": "ဘာသာစကား ရွေးပါ…",
   "codeInput.language.help":
@@ -1416,6 +1554,70 @@ FRACTIONS & UNITS
   "encode.operation": "လုပ်ဆောင်ချက်",
   "encode.help":
     "Input string ကို အသွင်ပြောင်းသည်။ SHA-256 သည် တစ်လမ်းသွား hash (hex)။",
+
+  "node.csv_to_md.label": "CSV → Markdown",
+  "node.csv_to_md.blurb":
+    "Tabular array (CSV တန်းများ၊ JSON array) ကို GFM Markdown ဇယားအဖြစ် ပြောင်းသည်; ရလဒ်ကို state သို့ ရေးသည်။",
+  "csv_to_md.help":
+    "Input state မှ array ဖတ်၍ (objects array, arrays array, သို့ primitives) GitHub-Flavored Markdown ဇယားကို output state သို့ ရေးသည်။ Input ပြောင်းသည်နှင့် live update ဖြစ်သည်။",
+
+  "node.counter.label": "Counter",
+  "node.counter.blurb":
+    "စာလုံး၊ အက္ခရာ၊ စာကြောင်း၊ ဝါကျ၊ array အရာ၊ object key များကို ရေတွက်သည် — တစ်ပြိုင်နက် အများ ရွေးနိုင်သည်; ရေတွက်မှုများကို live ပြ၍ state သို့ ရေးသည်။",
+  "counter.mode": "ရေတွက်ရန်",
+  "counter.empty": "ရေတွက်ရန် တိုင်းတာချက် အနည်းဆုံး တစ်ခု ရွေးပါ။",
+  "counter.mode.words": "စာလုံးများ",
+  "counter.mode.characters": "အက္ခရာများ",
+  "counter.mode.characters_no_spaces": "အက္ခရာများ (နေရာလွတ် မပါ)",
+  "counter.mode.letters": "စာလုံးတန်းများ",
+  "counter.mode.uppercase": "စာလုံးကြီး",
+  "counter.mode.lowercase": "စာလုံးငယ်",
+  "counter.mode.digits": "ဂဏန်းများ",
+  "counter.mode.punctuation": "ပုဒ်ဖြတ်ပုဒ်ရပ်",
+  "counter.mode.whitespace": "နေရာလွတ်",
+  "counter.mode.lines": "စာကြောင်းများ",
+  "counter.mode.sentences": "ဝါကျများ",
+  "counter.mode.paragraphs": "စာပိုဒ်များ",
+  "counter.mode.avg_word_length": "ပျမ်းမျှ စာလုံးအရှည်",
+  "counter.mode.avg_sentence_length": "ပျမ်းမျှ ဝါကျအရှည်",
+  "counter.mode.longest_word": "အရှည်ဆုံး စာလုံး",
+  "counter.mode.shortest_word": "အတိုဆုံး စာလုံး",
+  "counter.mode.unique_words": "ထူးခြားစာလုံးများ",
+  "counter.mode.array_items": "Array အရာများ",
+  "counter.mode.object_keys": "Object key များ",
+  "counter.help":
+    "Input state ကို ဖတ်၍ ရွေးထားသော တိုင်းတာချက်အားလုံးကို ရေတွက်ပြီး { metric: number } object အဖြစ် output state သို့ ရေးသည်။ စာသား တိုင်းတာချက်များသည် input ကို string အဖြစ် ပြောင်း၏; array / object တိုင်းတာချက်များသည် JSON အဖြစ် parse လုပ်သည်။ Input ပြောင်းသည်နှင့် live update ဖြစ်သည်။",
+
+  "node.download.label": "ဒေါင်းလုပ်",
+  "node.download.blurb":
+    "Bound state ကို CSV၊ Markdown၊ SVG၊ PNG သို့မဟုတ် JPEG အဖြစ် export လုပ်သော ဒေါင်းလုပ် ခလုတ် ပြသည်။",
+  "download.format": "ဖော်မတ်",
+  "download.format.help":
+    "Export မည့် ဖိုင် ဖော်မတ်။ CSV: array သို့ string။ PNG/JPEG: data URL သို့ SVG string → canvas။ MD/SVG: plain text။",
+  "download.fileName": "ဖိုင်နာမည်",
+  "download.fileName.placeholder": "export",
+  "download.fileName.help":
+    'Extension မပါသော base file name (ဥပမာ "report" → "report.csv")。',
+  "download.buttonText": "ခလုတ် စာသား",
+  "download.help":
+    "Preview တွင် ဒေါင်းလုပ် ခလုတ် ပြသည်။ Bound state slot ဖတ်၍ ရွေးထားသော ဖော်မတ်ဖြင့် export လုပ်သည်။",
+
+  "node.vault.label": "Vault",
+  "node.vault.blurb":
+    "Key/value အတွဲများကို detail view တွင် သိမ်းသည်။ Downstream node များအတွက် bound state ပေါ်တွင် object အဖြစ် စုစည်းသည်; token / secret များ ဖုံးကွယ်ရန် value များကို mask လုပ်နိုင်သည်။",
+  "vault.entries": "Key / value အတွဲများ",
+  "vault.keyPlaceholder": "key",
+  "vault.valuePlaceholder": "value",
+  "vault.addEntry": "အတွဲ ထည့်ရန်",
+  "vault.removeEntry": "အတွဲ ဖယ်ရန်",
+  "vault.masked": "Value များ ဖုံးကွယ်ရန်",
+  "vault.masked.desc":
+    "Preview တွင် value များကို အစက်များဖြင့် ဖုံးကွယ်ပြီး ပြသရန် toggle ပါသည်။",
+  "vault.empty": "သိမ်းရန် key / value အတွဲ တစ်ခု ထည့်ပါ။",
+  "vault.reveal": "ပြရန်",
+  "vault.hide": "ဖုံးရန်",
+  "vault.help":
+    "Key မဗလာဖြစ်သော အတွဲတိုင်းကို bound state slot သို့ { key: value } object အဖြစ် ရေးသည် (key ထပ်လျှင် နောက်ဆုံးက အနိုင်ရ)။ Mask သည် preview ကိုသာ သက်ရောက်သည် — သိမ်းထားသော value များ မပြောင်းလဲပါ။",
 
   "common.cancel": "မလုပ်တော့",
   "common.delete": "ဖျက်",

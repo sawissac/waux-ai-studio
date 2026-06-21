@@ -80,7 +80,7 @@ export default function RootLayout({
       className={`${inter.variable} ${poppins.variable} h-full antialiased`}
       suppressHydrationWarning={true}
     >
-      <body className="flex min-h-full flex-col" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <GlobalErrorSwallow />
         <StoreProvider>
           <AppConfigProvider>

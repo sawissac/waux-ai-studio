@@ -2,13 +2,14 @@
 
 import {
   AlertTriangle,
+  Download,
   Eye,
   EyeOff,
   Globe,
   Loader2,
   Upload,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -34,6 +35,99 @@ function normalizeViewportUrl(raw: string): string {
       : "";
   } catch {
     return "";
+  }
+}
+
+/**
+ * Trigger a file download from the bound state value for a Download node.
+ *
+ * - `csv`: array via PapaParse.unparse, or string as-is.
+ * - `md` / `svg`: state string → text file.
+ * - `png` / `jpeg`: if state is a `data:image/…` URL download directly;
+ *   otherwise attempt SVG → canvas → image.
+ */
+async function downloadFromState(
+  content: unknown,
+  format: DownloadNode["format"],
+  baseName: string,
+): Promise<void> {
+  const name = (baseName || "export").trim();
+
+  if (format === "csv") {
+    let csvStr: string;
+    if (Array.isArray(content)) {
+      csvStr = Papa.unparse(content);
+    } else {
+      csvStr = typeof content === "string" ? content : JSON.stringify(content);
+    }
+    const blob = new Blob([csvStr], { type: "text/csv" });
+    triggerDownload(URL.createObjectURL(blob), `${name}.csv`, true);
+    return;
+  }
+
+  if (format === "md") {
+    const str =
+      typeof content === "string" ? content : JSON.stringify(content, null, 2);
+    const blob = new Blob([str], { type: "text/markdown" });
+    triggerDownload(URL.createObjectURL(blob), `${name}.md`, true);
+    return;
+  }
+
+  if (format === "svg") {
+    const str = typeof content === "string" ? content : String(content ?? "");
+    const blob = new Blob([str], { type: "image/svg+xml" });
+    triggerDownload(URL.createObjectURL(blob), `${name}.svg`, true);
+    return;
+  }
+
+  // png / jpeg
+  const str = typeof content === "string" ? content : "";
+  if (str.startsWith("data:image/")) {
+    triggerDownload(str, `${name}.${format}`, false);
+    return;
+  }
+  // Attempt SVG string → canvas → image
+  try {
+    const svgBlob = new Blob([str], { type: "image/svg+xml" });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    await new Promise<void>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || 800;
+        canvas.height = img.naturalHeight || 600;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("canvas context unavailable"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(svgUrl);
+        const mime = format === "jpeg" ? "image/jpeg" : "image/png";
+        triggerDownload(canvas.toDataURL(mime), `${name}.${format}`, false);
+        resolve();
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(svgUrl);
+        reject(new Error("image load failed"));
+      };
+      img.src = svgUrl;
+    });
+  } catch {
+    // Nothing useful to download; silently no-op.
+  }
+}
+
+/** Create a temporary anchor and click it to trigger a browser file download. */
+function triggerDownload(href: string, filename: string, revoke: boolean) {
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  if (revoke) {
+    setTimeout(() => URL.revokeObjectURL(href), 10_000);
   }
 }
 
@@ -64,19 +158,24 @@ function resolveSelectOptions(
   }));
 }
 
+import Papa from "papaparse";
+
 import { CodeEditor } from "@/components/ui/code-editor";
 import {
   DATE_INPUT_TYPE,
   EDITOR_HEIGHTS,
   VIEWPORT_DEVICES,
 } from "@/constants/tool-builder";
+import { ChartView } from "@/features/PreviewPane/components/ChartView";
 import { ConvertHtmlSite } from "@/features/PreviewPane/components/ConvertHtmlSite";
 import { DataTable } from "@/features/PreviewPane/components/DataTable";
 import {
   DeviceFrame,
   DeviceToggle,
 } from "@/features/PreviewPane/components/DeviceFrame";
+import { SpriteView } from "@/features/PreviewPane/components/SpriteView";
 import { ThemedSite } from "@/features/PreviewPane/components/ThemedSite";
+import { VaultView } from "@/features/PreviewPane/components/VaultView";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { useTranslation } from "@/hooks/useTranslation";
 import { parseCsv } from "@/lib/csv";
@@ -90,8 +189,8 @@ import {
 } from "@/lib/tool-builder-runtime";
 import { cn } from "@/lib/utils";
 import type {
-  CanvasNode,
   CsvNode,
+  DownloadNode,
   FileNode,
   SelectNode,
   SelectOption,
@@ -101,66 +200,6 @@ import type {
   ViewportNode,
 } from "@/types/tool-builder";
 import { isRenderNode } from "@/types/tool-builder";
-
-/** AsyncFunction constructor — lets canvas draw scripts use top-level `await`. */
-const AsyncFunction = Object.getPrototypeOf(async function () {})
-  .constructor as FunctionConstructor;
-
-/**
- * Renders a real `<canvas>` and runs the node's draw script against its 2D
- * context. The script body is wrapped as `(ctx, canvas, state) => { … }` and
- * re-executes on mount and whenever the draw source, dimensions, or bound
- * `stateValue` change. Author errors are swallowed to the console so the
- * preview stays alive.
- *
- * @param props.node - The canvas node holding dimensions and draw source.
- * @param props.stateValue - Current value of the bound state slot (or undefined).
- */
-function CanvasNodeView({
-  node,
-  stateValue,
-}: {
-  node: CanvasNode;
-  stateValue: unknown;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      return;
-    }
-    try {
-      const fn = new AsyncFunction("ctx", "canvas", "state", node.draw);
-      void Promise.resolve(fn(ctx, canvas, stateValue)).catch((err) => {
-        console.error(
-          `[ToolBuilder] canvas node "${node.id}" draw failed:`,
-          err instanceof Error ? (err.stack ?? err.message) : err,
-        );
-      });
-    } catch (err) {
-      console.error(
-        `[ToolBuilder] canvas node "${node.id}" draw failed:`,
-        err instanceof Error ? (err.stack ?? err.message) : err,
-      );
-    }
-  }, [node.id, node.draw, node.width, node.height, stateValue]);
-
-  return (
-    <div className="rounded-xl border border-border/50 bg-background/50 p-4 shadow-sm backdrop-blur-sm">
-      <canvas
-        ref={canvasRef}
-        width={node.width}
-        height={node.height}
-        className="max-w-full"
-      />
-    </div>
-  );
-}
 
 /**
  * Seed the preview's shared simulated screen from the first website node's
@@ -483,18 +522,6 @@ export function PreviewPane({
             >
               <div className="flex flex-col gap-6">
                 {renderNodes.map((node, nodeIndex) => {
-                  if (node.type === "canvas") {
-                    const cName = resolveBinding(node.binding, stateNode);
-                    const cValue = cName ? runtime[cName] : undefined;
-                    return (
-                      <CanvasNodeView
-                        key={node.id}
-                        node={node}
-                        stateValue={cValue}
-                      />
-                    );
-                  }
-
                   if (node.type === "button") {
                     return (
                       <div key={node.id} className="flex flex-col gap-2">
@@ -640,6 +667,88 @@ export function PreviewPane({
                             }
                           />
                         )}
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "counter") {
+                    const outName = resolveBinding(node.output, stateNode);
+                    const raw = outName ? runtime[outName] : undefined;
+                    const counts =
+                      raw !== null &&
+                      typeof raw === "object" &&
+                      !Array.isArray(raw)
+                        ? (raw as Record<string, unknown>)
+                        : {};
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        {node.modes.length === 0 ? (
+                          <div className="rounded-xl border border-dashed border-border/50 px-4 py-6 text-center text-xs text-muted-foreground">
+                            {t("counter.empty")}
+                          </div>
+                        ) : node.modes.length > 6 ? (
+                          // Many metrics — collapse into one combined container
+                          // with dense label/value rows instead of large cards.
+                          <div className="grid grid-cols-2 gap-x-px gap-y-px border-2 border-foreground bg-foreground shadow-nb sm:grid-cols-3">
+                            {node.modes.map((m) => (
+                              <div
+                                key={m}
+                                className="flex items-center justify-between gap-2 bg-card px-3 py-2 leading-tight"
+                              >
+                                <span className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  {t(`counter.mode.${m}`)}
+                                </span>
+                                <span className="shrink-0 font-display text-base font-extrabold tabular-nums">
+                                  {String(counts[m] ?? 0)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            {node.modes.map((m) => (
+                              <div
+                                key={m}
+                                className="flex flex-col gap-0.5 border-2 border-foreground bg-card px-3 py-2.5 leading-tight shadow-nb"
+                              >
+                                <span className="font-display text-xl font-extrabold tabular-nums">
+                                  {String(counts[m] ?? 0)}
+                                </span>
+                                <span className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  {t(`counter.mode.${m}`)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "vault") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        <VaultView node={node} />
                       </div>
                     );
                   }
@@ -884,7 +993,7 @@ export function PreviewPane({
                             {node.description}
                           </p>
                         )}
-                        <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
+                        <label className="relative inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
                           <Upload size={14} className="shrink-0" />
                           <span className="max-w-60 truncate">
                             {has
@@ -921,7 +1030,7 @@ export function PreviewPane({
                             {node.description}
                           </p>
                         )}
-                        <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
+                        <label className="relative inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
                           <Upload size={14} className="shrink-0" />
                           <span className="max-w-60 truncate">
                             {src
@@ -1074,7 +1183,7 @@ export function PreviewPane({
                             {node.description}
                           </p>
                         )}
-                        <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
+                        <label className="relative inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
                           <Upload size={14} className="shrink-0" />
                           <span className="max-w-60 truncate">
                             {meta?.fileName ?? t("preview.csv.choose")}
@@ -1165,6 +1274,40 @@ export function PreviewPane({
                     );
                   }
 
+                  if (node.type === "download") {
+                    const content = name ? runtime[name] : undefined;
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              downloadFromState(
+                                content,
+                                node.format,
+                                node.fileName,
+                              )
+                            }
+                            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 border-2 border-foreground bg-primary px-4 text-sm font-bold text-primary-foreground shadow-nb nb-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+                          >
+                            <Download size={14} aria-hidden />
+                            {node.buttonText}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   if (node.type === "table") {
                     return (
                       <div key={node.id} className="flex flex-col gap-2">
@@ -1179,6 +1322,44 @@ export function PreviewPane({
                         <DataTable
                           value={runtime[name]}
                           pageSize={node.pageSize}
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "chart") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <ChartView node={node} value={runtime[name]} />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "sprite") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <SpriteView
+                          node={node}
+                          runtime={runtime}
+                          stateNode={stateNode}
                         />
                       </div>
                     );
@@ -1227,7 +1408,7 @@ export function PreviewPane({
 
                   if (node.type === "markdown") {
                     const currentValue = runtime[name] ?? "";
-                    const mode = mdMode[node.id] ?? "write";
+                    const mode = mdMode[node.id] ?? "preview";
                     return (
                       <div key={node.id} className="flex flex-col gap-2">
                         <div className="flex items-center justify-between gap-2">

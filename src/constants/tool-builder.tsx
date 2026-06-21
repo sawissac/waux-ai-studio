@@ -9,18 +9,21 @@
 import {
   AlignLeft,
   ArrowDownUp,
+  BarChart3,
   Binary,
   Braces,
+  Calculator,
   CalendarClock,
   ChevronsLeftRight,
   CodeXml,
-  Columns3,
   Database,
+  Download,
   FileCode2,
   FileSpreadsheet,
   FileText,
   FileType2,
   FileUp,
+  Film,
   Filter as FilterIcon,
   FormInput,
   GitMerge,
@@ -38,14 +41,19 @@ import {
   Sigma,
   Sparkles,
   Table,
+  TableProperties,
   ToggleRight,
   Type as TypeIcon,
+  Vault,
   Webhook,
 } from "lucide-react";
 
 import type {
+  ChartType,
   CodeInputLanguage,
+  CounterMode,
   DateTimeMode,
+  DownloadFormat,
   EncodeOperation,
   FileOutputFormat,
   FilterOperator,
@@ -57,6 +65,7 @@ import type {
   SchemaRule,
   SortDirection,
   SortType,
+  SpriteAction,
   TablePageSize,
   ToolNode,
   ToolNodeType,
@@ -227,6 +236,26 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     group: "Inputs",
     icon: Table,
     slug: "@table",
+  },
+  chart: {
+    type: "chart",
+    label: "Chart",
+    blurb:
+      "Plot bound array data with d3 — bar, line, area, pie, or scatter. Columns auto-resolve from CSV/JSON.",
+    accent: "blue",
+    group: "Inputs",
+    icon: BarChart3,
+    slug: "@chart",
+  },
+  sprite: {
+    type: "sprite",
+    label: "Sprite",
+    blurb:
+      "Play a bound array of image frames as a sprite animation — idle, intro, left, right & click tracks with size & fps controls.",
+    accent: "blue",
+    group: "Inputs",
+    icon: Film,
+    slug: "@sprite",
   },
   code_input: {
     type: "code_input",
@@ -407,14 +436,45 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     icon: Binary,
     slug: "@encode",
   },
-  canvas: {
-    type: "canvas",
-    label: "Canvas",
-    blurb: "A real <canvas> you paint with a JS draw script (2D context).",
+  csv_to_md: {
+    type: "csv_to_md",
+    label: "CSV → Markdown",
+    blurb:
+      "Convert a tabular array (CSV rows, JSON array) into a GFM Markdown table; result writes to state.",
+    accent: "amber",
+    group: "Logic",
+    icon: TableProperties,
+    slug: "@csv_to_md",
+  },
+  counter: {
+    type: "counter",
+    label: "Counter",
+    blurb:
+      "Count words, characters, letters, lines, sentences, array items, or object keys; shows the live count and writes it to state.",
     accent: "emerald",
-    group: "Website Site",
-    icon: Columns3,
-    slug: "@canvas",
+    group: "Inputs",
+    icon: Calculator,
+    slug: "@counter",
+  },
+  download: {
+    type: "download",
+    label: "Download",
+    blurb:
+      "Render a download button that exports bound state as CSV, Markdown, SVG, PNG, or JPEG.",
+    accent: "emerald",
+    group: "Inputs",
+    icon: Download,
+    slug: "@download",
+  },
+  vault: {
+    type: "vault",
+    label: "Vault",
+    blurb:
+      "Store key/value pairs in a detail view; assembled into an object on bound state. Mask values to hide tokens & secrets.",
+    accent: "violet",
+    group: "Data",
+    icon: Vault,
+    slug: "@vault",
   },
   ai: {
     type: "ai",
@@ -431,7 +491,7 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
 /** Palette order: groups, and node types within each group. */
 export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
   [
-    { group: "Data", types: ["state"] },
+    { group: "Data", types: ["state", "vault"] },
     {
       group: "Inputs",
       types: [
@@ -448,7 +508,11 @@ export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
         "json",
         "csv",
         "table",
+        "chart",
+        "sprite",
         "code_input",
+        "counter",
+        "download",
       ],
     },
     {
@@ -467,12 +531,13 @@ export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
         "math",
         "schema_validate",
         "encode",
+        "csv_to_md",
         "ai",
       ],
     },
     {
       group: "Website Site",
-      types: ["viewport", "convert_html", "html_sanitize", "themed", "canvas"],
+      types: ["viewport", "convert_html", "html_sanitize", "themed"],
     },
   ];
 
@@ -497,6 +562,33 @@ export const EDITOR_HEIGHTS = {
 
 /** Rows-per-page options for the Table input node, in menu order. */
 export const TABLE_PAGE_SIZES: TablePageSize[] = [30, 50, 100];
+
+/** Visualization styles for the Chart node, in menu order. */
+export const CHART_TYPES: { value: ChartType; label: string }[] = [
+  { value: "bar", label: "Bar" },
+  { value: "line", label: "Line" },
+  { value: "area", label: "Area" },
+  { value: "pie", label: "Pie" },
+  { value: "scatter", label: "Scatter" },
+];
+
+/** Clamp range (px) for the Chart node's preview height control. */
+export const CHART_HEIGHT_RANGE = { min: 120, max: 800 } as const;
+
+/** Sprite animation actions, in control-bar order (label resolved via i18n). */
+export const SPRITE_ACTIONS: SpriteAction[] = [
+  "idle",
+  "intro",
+  "left",
+  "right",
+  "click",
+];
+
+/** Clamp range (px) for the Sprite node's frame width / height controls. */
+export const SPRITE_FRAME_RANGE = { min: 16, max: 512 } as const;
+
+/** Clamp range for the Sprite node's playback speed (frames per second). */
+export const SPRITE_FPS_RANGE = { min: 1, max: 60 } as const;
 
 /**
  * Simulated screens for the View Port node, in toggle order. Fixed-size
@@ -614,6 +706,29 @@ export const ENCODE_OPERATIONS: { value: EncodeOperation; label: string }[] = [
   { value: "hash_sha256", label: "SHA-256 hash" },
 ];
 
+/** Counter metrics, in menu order (label resolved via i18n at render). */
+export const COUNTER_MODES: CounterMode[] = [
+  "words",
+  "characters",
+  "characters_no_spaces",
+  "letters",
+  "uppercase",
+  "lowercase",
+  "digits",
+  "punctuation",
+  "whitespace",
+  "lines",
+  "sentences",
+  "paragraphs",
+  "avg_word_length",
+  "avg_sentence_length",
+  "longest_word",
+  "shortest_word",
+  "unique_words",
+  "array_items",
+  "object_keys",
+];
+
 /** Schema-rule value types, in menu order. */
 export const SCHEMA_TYPES: SchemaRule["type"][] = [
   "any",
@@ -622,6 +737,15 @@ export const SCHEMA_TYPES: SchemaRule["type"][] = [
   "boolean",
   "object",
   "array",
+];
+
+/** Download formats for the Download node, in menu order. */
+export const DOWNLOAD_FORMATS: { value: DownloadFormat; label: string }[] = [
+  { value: "csv", label: ".csv" },
+  { value: "md", label: ".md" },
+  { value: "svg", label: ".svg" },
+  { value: "png", label: ".png" },
+  { value: "jpeg", label: ".jpeg" },
 ];
 
 /** Browser-safe UUID v4. */
@@ -792,6 +916,37 @@ export function createNode(type: ToolNodeType): ToolNode {
         description: "",
         binding: { mode: "name", value: "state1" },
         pageSize: TABLE_PAGE_SIZES[0],
+      };
+    case "chart":
+      return {
+        id,
+        type,
+        fieldLabel: "Chart",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        chartType: "bar",
+        xField: "",
+        yFields: [],
+        showLegend: true,
+        showGrid: true,
+        height: 280,
+      };
+    case "sprite":
+      return {
+        id,
+        type,
+        fieldLabel: "Sprite",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        frameWidth: 96,
+        frameHeight: 96,
+        fps: 12,
+        animations: SPRITE_ACTIONS.map((action) => ({
+          id: uuid(),
+          action,
+          binding: { mode: "name", value: "" },
+          loop: action !== "intro" && action !== "click",
+        })),
       };
     case "code_input":
       return {
@@ -971,27 +1126,45 @@ export function createNode(type: ToolNodeType): ToolNode {
         output: { mode: "name", value: "state1" },
         operation: "base64_encode",
       };
-    case "canvas": {
-      const elementId = uuid();
+    case "csv_to_md":
       return {
         id,
         type,
-        elementId,
-        width: 320,
-        height: 200,
-        binding: { mode: "name", value: "" },
-        draw: [
-          "// ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement",
-          "// state: value of the bound state slot (undefined if none).",
-          "ctx.clearRect(0, 0, canvas.width, canvas.height);",
-          'ctx.fillStyle = "#10b981";',
-          "ctx.fillRect(20, 20, 120, 80);",
-          'ctx.fillStyle = "#111827";',
-          'ctx.font = "16px sans-serif";',
-          'ctx.fillText(String(state ?? "Canvas"), 24, 130);',
-        ].join("\n"),
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
       };
-    }
+    case "counter":
+      return {
+        id,
+        type,
+        fieldLabel: "Counter",
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
+        modes: ["words", "characters"],
+      };
+    case "download":
+      return {
+        id,
+        type,
+        fieldLabel: "Download",
+        description: "",
+        buttonText: "Download",
+        binding: { mode: "name", value: "state1" },
+        format: "csv",
+        fileName: "export",
+      };
+    case "vault":
+      return {
+        id,
+        type,
+        fieldLabel: "Vault",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        entries: [{ id: uuid(), key: "key1", value: "" }],
+        masked: false,
+      };
     case "ai":
       return {
         id,

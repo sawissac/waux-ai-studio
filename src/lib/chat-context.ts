@@ -344,7 +344,6 @@ const BODY_FIELDS: ReadonlySet<string> = new Set([
   "code",
   "prompt",
   "template",
-  "draw",
 ]);
 
 /** Describe one node as a numbered build-instruction block for {@link buildToolPrompt}. */
