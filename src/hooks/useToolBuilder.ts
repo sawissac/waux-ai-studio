@@ -7,6 +7,7 @@ import {
   addNode,
   addStateSlot,
   addTool,
+  applyBuildSpec,
   clearNodeSelection,
   deleteNode,
   deleteTool,
@@ -21,6 +22,7 @@ import {
   updateNode,
 } from "@/stores/slices/toolBuilderSlice";
 import type {
+  BuildSpec,
   EditorPlacement,
   StateNode,
   Tool,
@@ -94,6 +96,7 @@ export function useToolBuilder() {
       dispatch(renameStateSlot({ id, oldName, newName })),
     addStateSlot: (name: string, value?: string) =>
       dispatch(addStateSlot({ name, value })),
+    applyBuildSpec: (spec: BuildSpec) => dispatch(applyBuildSpec(spec)),
     clearNodeSelection: () => dispatch(clearNodeSelection()),
     setEditorPlacement: (p: EditorPlacement) => dispatch(setEditorPlacement(p)),
     setSearch: (q: string) => dispatch(setSearch(q)),

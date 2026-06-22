@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   CheckCircle2,
-  Circle,
   Download,
   Loader2,
   Plus,
@@ -11,8 +10,9 @@ import {
   Sparkles,
   Square,
   Upload,
+  Wand2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/ui/markdown";
@@ -24,8 +24,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { buildChatSystemPrompt } from "@/constants/ai-prompts";
+import {
+  buildChatSystemPrompt,
+  PROMPT_ENHANCER_SYSTEM_PROMPT,
+} from "@/constants/ai-prompts";
 import { uuid } from "@/constants/tool-builder";
+import { NodeDetailDialog } from "@/features/NodeDocs/components/NodeDetailDialog";
 import { useChatModelPref } from "@/hooks/useChatModelPref";
 import { useProviderModels } from "@/hooks/useProviderModels";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
@@ -37,14 +41,20 @@ import {
 } from "@/lib/ai-providers";
 import {
   buildChatToolContext,
-  BUILDER_TOOLS,
-  createBuilderToolDispatcher,
-  NODE_DOCS_TOOL,
+  parseBuildSpec,
+  planFromSpec,
   type PlanProposal,
+  validateTool,
 } from "@/lib/chat-context";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/hooks";
-import type { AiProvider, StateNode, Tool } from "@/types/tool-builder";
+import type {
+  AiProvider,
+  BuildSpec,
+  StateNode,
+  Tool,
+  ToolNodeType,
+} from "@/types/tool-builder";
 
 /** One turn in the transcript. */
 interface ChatItem {
@@ -88,6 +98,23 @@ const SUGGESTIONS = [
   "chat.suggest.2",
   "chat.suggest.3",
 ] as const;
+
+/** Rotating "thinking…" phrases cycled while a reply is in flight. */
+const THINKING_KEYS = [
+  "chat.thinking.1",
+  "chat.thinking.2",
+  "chat.thinking.3",
+  "chat.thinking.4",
+  "chat.thinking.5",
+  "chat.thinking.6",
+  "chat.thinking.7",
+  "chat.thinking.8",
+  "chat.thinking.9",
+  "chat.thinking.10",
+] as const;
+
+/** How long (ms) each rotating "thinking…" phrase stays before the next. */
+const THINKING_ROTATE_MS = 2000;
 
 /**
  * Recover a plan from an assistant reply that contains the propose_plan args as
@@ -220,15 +247,17 @@ export function ChatView({
   const onUnreadRef = useRef(onUnread);
   onUnreadRef.current = onUnread;
 
-  // Build tools mutate through Redux; `getTool` reads fresh store state after
-  // each call so the assistant observes its own prior edits within one turn.
+  // The whole tool is rebuilt atomically from the model's JSON spec via
+  // applyBuildSpec; `store` is read afterwards to validate the result.
   const store = useAppStore();
-  const { addNode, updateNode, deleteNode, addStateSlot, reorderNodes } =
-    useToolBuilder();
-  // Plan-confirm gate: propose_plan parks a plan here for the user to approve;
-  // mutations stay blocked until `confirmedRef` is flipped by a Confirm click.
+  const { applyBuildSpec } = useToolBuilder();
+  // Plan-confirm gate: a build request first parks a plan here for the user to
+  // approve; the build spec is only applied after they reply to approve.
   const [pendingPlan, setPendingPlan] = useState<PlanProposal | null>(null);
-  const confirmedRef = useRef(false);
+  // When the model emits a build spec early (skipping the plan step), we stash
+  // it here, show its derived plan instead of the raw JSON, and apply it
+  // directly on approval — no second model call.
+  const pendingSpecRef = useRef<BuildSpec | null>(null);
   // The plan being built — kept past confirmation so the post-build review can
   // compare against it. `selfFixCount` caps the user-triggered fix passes.
   const confirmedPlanRef = useRef<PlanProposal | null>(null);
@@ -238,15 +267,9 @@ export function ChatView({
   const [buildPlan, setBuildPlan] = useState<PlanProposal | null>(null);
   // Where we are in that lifecycle (see {@link BuildPhase}).
   const [buildPhase, setBuildPhase] = useState<BuildPhase>(null);
-  // Mirror for the onToolCall closure, which would otherwise read stale state.
-  const buildPhaseRef = useRef<BuildPhase>(null);
-  buildPhaseRef.current = buildPhase;
-  // How many plan steps are done — advanced as each node is added during the
-  // build so the checklist ticks live.
-  const [completedSteps, setCompletedSteps] = useState(0);
-  // True when propose_plan was actually called (as a tool) this turn, so the
-  // JSON-dump fallback doesn't double-handle a plan the tool already registered.
-  const proposedThisTurnRef = useRef(false);
+  // Node type whose docs are open in a modal — set by clicking an @slug in a
+  // reply, cleared when the dialog closes.
+  const [docType, setDocType] = useState<ToolNodeType | null>(null);
 
   /** Fresh snapshot of the open tool, straight from the store. */
   const getOpenTool = useCallback((): Tool | null => {
@@ -254,19 +277,24 @@ export function ChatView({
     return s.tools.find((tl) => tl.id === s.selectedToolId) ?? null;
   }, [store]);
 
-  const builderDispatch = useMemo(
-    () =>
-      createBuilderToolDispatcher({
-        getTool: getOpenTool,
-        addNode,
-        updateNode,
-        deleteNode,
-        addStateSlot,
-        moveNode: reorderNodes,
-        onProposePlan: (plan) => setPendingPlan(plan),
-        isPlanConfirmed: () => confirmedRef.current,
-      }),
-    [getOpenTool, addNode, updateNode, deleteNode, addStateSlot, reorderNodes],
+  /**
+   * Apply a build spec to the open tool atomically, then return the assistant
+   * message to show — a success line, or a warning line listing any dead wires
+   * found by {@link validateTool} for the user to fix.
+   */
+  const applyBuiltSpec = useCallback(
+    (spec: BuildSpec): string => {
+      applyBuildSpec(spec);
+      const built = getOpenTool();
+      const count = built?.nodes.length ?? 0;
+      const issues = validateTool(built);
+      return issues.length
+        ? `${t("chat.build.warnings", { n: issues.length })}\n\n${issues
+            .map((w) => `- ${w}`)
+            .join("\n")}`
+        : t("chat.build.done", { n: count });
+    },
+    [applyBuildSpec, getOpenTool, t],
   );
 
   const [messages, setMessages] = useState<ChatItem[]>([]);
@@ -275,6 +303,9 @@ export function ChatView({
   const { provider, model: savedModel, save: savePref } = useChatModelPref();
   const model = savedModel ?? DEFAULT_MODELS[provider];
   const [sending, setSending] = useState(false);
+  // Prompt-enhancer ("Enhance" button): rewrites the composer text in place via
+  // a one-shot model call, independent of the main send request.
+  const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const providerModels = useProviderModels(provider);
@@ -283,11 +314,20 @@ export function ChatView({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const enhanceAbortRef = useRef<AbortController | null>(null);
+  // Turn kind of the last request, so retry() repeats build vs chat correctly.
+  const lastExpectSpecRef = useRef(false);
 
   const empty = messages.length === 0;
 
   // Abort any in-flight request when the view unmounts.
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      enhanceAbortRef.current?.abort();
+    },
+    [],
+  );
 
   // Keep the latest message in view as the transcript grows / thinking shows.
   useEffect(() => {
@@ -325,16 +365,26 @@ export function ChatView({
 
   /**
    * Send `history` (ending with the latest user turn) to the active provider
-   * and append the reply, or surface a friendly error. Shared by send + retry.
+   * and handle the reply. Two turn kinds, no tool-calling:
+   *
+   * - `expectSpec` false (chat / plan turn): show the reply; if it carries a
+   *   build plan (JSON or recovered from text), park it as the pending plan so
+   *   an affirmative reply triggers the build.
+   * - `expectSpec` true (build / fix turn): parse the single JSON build spec the
+   *   model emits, apply it to the open tool atomically, then move to review.
+   *
+   * @param history - Transcript ending with the turn to answer.
+   * @param expectSpec - Whether this turn must return a build spec.
    */
   const runAssistant = useCallback(
-    async (history: ChatItem[]) => {
+    async (history: ChatItem[], expectSpec = false) => {
+      // Remember the turn kind so a retry after a failure repeats it correctly.
+      lastExpectSpecRef.current = expectSpec;
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
       setError(null);
       setSending(true);
-      proposedThisTurnRef.current = false;
 
       const system = buildChatSystemPrompt(
         buildChatToolContext(tool, stateNode),
@@ -347,29 +397,6 @@ export function ChatView({
         messages: apiMessages,
         model: model || undefined,
         signal: ac.signal,
-        tools: [NODE_DOCS_TOOL, ...BUILDER_TOOLS],
-        // Higher round budget than the default 4 — building a tool takes many
-        // inspect/add/configure calls in a single turn.
-        maxToolRounds: 16,
-        // All tools (incl. get_node_docs) route through builderDispatch so it
-        // can record which node docs have been read and gate add/update on it.
-        // While building, tick the plan checklist forward on each added node.
-        onToolCall: (name: string, args: Record<string, unknown>) => {
-          const result = builderDispatch(name, args);
-          if (name === "propose_plan") {
-            proposedThisTurnRef.current = true;
-          }
-          if (name === "add_node" && buildPhaseRef.current === "building") {
-            try {
-              if (JSON.parse(result)?.ok) {
-                setCompletedSteps((c) => c + 1);
-              }
-            } catch {
-              // Non-JSON result — the checklist just won't advance this step.
-            }
-          }
-          return result;
-        },
       };
 
       try {
@@ -377,36 +404,52 @@ export function ChatView({
           provider === "openrouter"
             ? await callOpenRouter(opts)
             : await callGemini(opts);
-        // Fallback: when the model dumps the propose_plan args as JSON text
-        // instead of calling the tool, recover the plan, register it as pending
-        // (so an affirmative reply builds it), and show it as a readable plan.
+
+        if (expectSpec) {
+          // Build / fix turn: apply the JSON spec the model returned. Empty
+          // `nodes` is valid here — it's an approved "clear all nodes" build.
+          const spec = parseBuildSpec(reply, true);
+          if (!spec) {
+            setError(t("chat.error.spec"));
+            setBuildPhase(null);
+            setBuildPlan(null);
+            confirmedPlanRef.current = null;
+            return;
+          }
+          const text = applyBuiltSpec(spec);
+          setMessages([...history, { id: uuid(), role: "assistant", text }]);
+          if (!activeRef.current) {
+            onUnreadRef.current?.();
+          }
+          setBuildPhase("review");
+          return;
+        }
+
+        // Chat / plan turn: never show a raw build spec. If the model jumped
+        // straight to a spec (skipping the plan step), intercept it — stash it,
+        // and show its derived plan for approval instead of the JSON. Otherwise
+        // recover a plan from the reply, or just render the prose answer.
         let displayText = reply || "…";
-        if (
-          !proposedThisTurnRef.current &&
-          !confirmedRef.current &&
-          !buildPhaseRef.current
-        ) {
+        const spec = parseBuildSpec(reply);
+        if (spec) {
+          const plan = planFromSpec(spec);
+          pendingSpecRef.current = spec;
+          setPendingPlan(plan);
+          displayText = formatPlanMessage(plan, t);
+        } else {
+          pendingSpecRef.current = null;
           const recovered = extractPlanFromText(reply);
           if (recovered) {
             setPendingPlan(recovered);
             displayText = formatPlanMessage(recovered, t);
           }
         }
-        const next: ChatItem[] = [
+        setMessages([
           ...history,
           { id: uuid(), role: "assistant", text: displayText },
-        ];
-        setMessages(next);
-        // Flag unread when the reply lands while the user is on another tab.
+        ]);
         if (!activeRef.current) {
           onUnreadRef.current?.();
-        }
-
-        // A build or fix turn just finished. Don't force the checklist to full —
-        // leave it at what actually got built so the user can SEE any unfinished
-        // steps — then ask whether the result is correct. Only fix on "No".
-        if (confirmedRef.current && confirmedPlanRef.current) {
-          setBuildPhase("review");
         }
       } catch (e) {
         if (ac.signal.aborted) {
@@ -419,21 +462,18 @@ export function ChatView({
             : t("chat.error.generic"),
         );
         // A build/fix turn failed — drop the build UI so the user can retry.
-        if (confirmedRef.current) {
+        if (expectSpec) {
           setBuildPhase(null);
           setBuildPlan(null);
           confirmedPlanRef.current = null;
         }
       } finally {
-        // Close the build gate after every turn; it reopens only when the user
-        // confirms a plan or clicks "No, fix it" on the review card.
-        confirmedRef.current = false;
         if (!ac.signal.aborted) {
           setSending(false);
         }
       }
     },
-    [tool, stateNode, model, provider, t, builderDispatch],
+    [tool, stateNode, model, provider, t, applyBuiltSpec],
   );
 
   /** Append the user's message and request a reply. No-ops while blank/sending. */
@@ -444,16 +484,17 @@ export function ChatView({
     }
     setInput("");
     resetComposerHeight();
-    // A pending plan is approved by an affirmative chat reply (no card): open the
-    // gate, keep the SAME plan on screen as a live checklist, and build it.
+    // A pending plan is approved by an affirmative chat reply: keep the SAME
+    // plan on screen and build it.
     if (pendingPlan && isAffirmative(text)) {
       startBuild(pendingPlan, text);
       return;
     }
-    // Any other message is a new request: drop a pending plan and any in-flight
-    // build review so the gate stays closed until a fresh approval.
+    // Any other message is a new request: drop a pending plan + its stashed spec
+    // and any in-flight build review so nothing builds without fresh approval.
     if (pendingPlan) {
       setPendingPlan(null);
+      pendingSpecRef.current = null;
     }
     if (buildPhase) {
       setBuildPhase(null);
@@ -468,42 +509,113 @@ export function ChatView({
     void runAssistant(history);
   }
 
-  /** Re-send the last user turn after a failed attempt. */
+  /**
+   * Rewrite the current composer text into a clearer prompt (for building a tool
+   * or asking a question) via a one-shot model call, then drop the result back
+   * into the composer for the user to review and send. No-ops while blank or
+   * while a send/enhance is already in flight. Uses its own AbortController so
+   * it never disturbs the main chat request.
+   */
+  async function enhance() {
+    const text = input.trim();
+    if (!text || sending || enhancing) {
+      return;
+    }
+    enhanceAbortRef.current?.abort();
+    const ac = new AbortController();
+    enhanceAbortRef.current = ac;
+    setError(null);
+    setEnhancing(true);
+    try {
+      const opts = {
+        messages: [
+          { role: "system" as const, content: PROMPT_ENHANCER_SYSTEM_PROMPT },
+          { role: "user" as const, content: text },
+        ],
+        model: model || undefined,
+        signal: ac.signal,
+      };
+      const reply =
+        provider === "openrouter"
+          ? await callOpenRouter(opts)
+          : await callGemini(opts);
+      const improved = reply.trim();
+      if (improved) {
+        setInput(improved);
+        // Let the textarea regrow to the new content on the next frame.
+        requestAnimationFrame(() => {
+          const el = textareaRef.current;
+          if (el) {
+            autoGrow(el);
+            el.focus();
+          }
+        });
+      }
+    } catch (e) {
+      if (!ac.signal.aborted) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(
+          /missing apikey/i.test(msg)
+            ? t("chat.error.noKey", { provider: PROVIDER_LABELS[provider] })
+            : t("chat.enhance.error"),
+        );
+      }
+    } finally {
+      if (!ac.signal.aborted) {
+        setEnhancing(false);
+      }
+    }
+  }
+
+  /** Re-send the last user turn after a failed attempt (same turn kind). */
   function retry() {
     if (sending || messages.at(-1)?.role !== "user") {
       return;
     }
-    void runAssistant(messages);
+    void runAssistant(messages, lastExpectSpecRef.current);
   }
 
   /** Stop the in-flight request and tear down the build lifecycle. */
   function stop() {
     abortRef.current?.abort();
     setSending(false);
-    confirmedRef.current = false;
+    pendingSpecRef.current = null;
     confirmedPlanRef.current = null;
     setBuildPlan(null);
     setBuildPhase(null);
   }
 
   /**
-   * Approve a pending plan from a chat reply: open the build gate, keep the SAME
-   * plan on screen as a live checklist, and run the build turn. `userText` is
-   * the user's actual approval message, shown in the transcript.
+   * Approve a pending plan, keeping the SAME plan on screen. When the model
+   * already returned the build spec (stashed early, gun-jumping the plan step),
+   * apply it directly — no second model call. Otherwise ask the model for the
+   * spec via a build turn. `userText` is the user's approval message.
    */
   function startBuild(plan: PlanProposal, userText: string) {
     setPendingPlan(null);
-    confirmedRef.current = true;
-    // Remember the plan + reset the fix budget so the post-build review can
-    // compare the result against it.
+    // Remember the plan + reset the fix budget so a later review can fix it.
     confirmedPlanRef.current = plan;
     selfFixCountRef.current = 0;
     setBuildPlan(plan);
+
+    // Fast path: the spec is already in hand — apply it and go straight to review.
+    const stashed = pendingSpecRef.current;
+    if (stashed) {
+      pendingSpecRef.current = null;
+      const text = applyBuiltSpec(stashed);
+      setMessages([
+        ...messages,
+        { id: uuid(), role: "user", text: userText },
+        { id: uuid(), role: "assistant", text },
+      ]);
+      setBuildPhase("review");
+      return;
+    }
+
+    // Otherwise run a build turn: hidden directive tells the model the plan is
+    // approved and to emit ONLY the JSON build spec (a bare "yes" sometimes
+    // makes it restate the plan instead).
     setBuildPhase("building");
-    setCompletedSteps(0);
-    // Hidden directive: tell the model the plan is approved and to build NOW with
-    // the build tools — never re-emit the plan as text/JSON. A bare "yes" alone
-    // sometimes makes the model dump the plan JSON instead of building.
     const planText = `${plan.summary}\n${plan.steps
       .map((s, i) => `${i + 1}. ${s}`)
       .join("\n")}`;
@@ -518,7 +630,7 @@ export function ChatView({
       },
     ];
     setMessages(history);
-    void runAssistant(history);
+    void runAssistant(history, true);
   }
 
   /** Review: user confirms the build is correct — end the build lifecycle. */
@@ -528,7 +640,6 @@ export function ChatView({
     }
     setBuildPhase(null);
     setBuildPlan(null);
-    confirmedRef.current = false;
     confirmedPlanRef.current = null;
   }
 
@@ -546,7 +657,6 @@ export function ChatView({
       return;
     }
     selfFixCountRef.current += 1;
-    confirmedRef.current = true; // reopen the gate for the fix turn
     setBuildPhase("fixing");
     const planText = `${plan.summary}\n${plan.steps
       .map((s, i) => `${i + 1}. ${s}`)
@@ -573,7 +683,7 @@ export function ChatView({
       },
     ];
     setMessages(history);
-    void runAssistant(history);
+    void runAssistant(history, true);
   }
 
   /** Clear the transcript and cancel any in-flight request. */
@@ -583,12 +693,11 @@ export function ChatView({
     setError(null);
     setSending(false);
     setPendingPlan(null);
-    confirmedRef.current = false;
+    pendingSpecRef.current = null;
     confirmedPlanRef.current = null;
     selfFixCountRef.current = 0;
     setBuildPlan(null);
     setBuildPhase(null);
-    setCompletedSteps(0);
   }
 
   /** Section heading used in exported Markdown for a given role. */
@@ -603,7 +712,9 @@ export function ChatView({
    */
   function exportChat() {
     const visible = messages.filter((m) => !m.hidden);
-    if (visible.length === 0) {return;}
+    if (visible.length === 0) {
+      return;
+    }
     const md =
       `# ${t("chat.greeting")}\n\n` +
       visible.map((m) => `## ${roleHeading(m.role)}\n\n${m.text}`).join("\n\n");
@@ -636,7 +747,9 @@ export function ChatView({
     for (let i = 1; i < parts.length; i += 2) {
       const heading = parts[i].trim().toLowerCase();
       const text = parts[i + 1]?.trim() ?? "";
-      if (!text) {continue;}
+      if (!text) {
+        continue;
+      }
       out.push({
         id: uuid(),
         role: heading === userLabel ? "user" : "assistant",
@@ -650,7 +763,9 @@ export function ChatView({
   async function importChat(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-importing the same file later
-    if (!file) {return;}
+    if (!file) {
+      return;
+    }
     try {
       const parsed = parseChatMarkdown(await file.text());
       if (parsed.length === 0) {
@@ -661,12 +776,11 @@ export function ChatView({
       abortRef.current?.abort();
       setSending(false);
       setPendingPlan(null);
-      confirmedRef.current = false;
+      pendingSpecRef.current = null;
       confirmedPlanRef.current = null;
       selfFixCountRef.current = 0;
       setBuildPlan(null);
       setBuildPhase(null);
-      setCompletedSteps(0);
       setError(null);
       setMessages(parsed);
     } catch {
@@ -684,6 +798,7 @@ export function ChatView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <NodeDetailDialog type={docType} onClose={() => setDocType(null)} />
       <div className="flex shrink-0 items-center gap-2 border-b-2 border-foreground px-3 py-2.5">
         <Select
           value={provider}
@@ -787,9 +902,14 @@ export function ChatView({
               {messages
                 .filter((m) => !m.hidden)
                 .map((message) => (
-                  <MessageRow key={message.id} message={message} t={t} />
+                  <MessageRow
+                    key={message.id}
+                    message={message}
+                    t={t}
+                    onNodeClick={setDocType}
+                  />
                 ))}
-              {sending && <ThinkingRow label={t("chat.thinking")} />}
+              {sending && <ThinkingRow t={t} />}
             </div>
           )}
         </div>
@@ -797,13 +917,6 @@ export function ChatView({
 
       <div className="shrink-0 border-t-2 border-foreground bg-background p-3 sm:p-4">
         <div className="mx-auto max-w-4xl">
-          {buildPlan && buildPhase === "building" && (
-            <BuildProgressCard
-              plan={buildPlan}
-              completed={completedSteps}
-              t={t}
-            />
-          )}
           {buildPhase === "fixing" && <FixingCard t={t} />}
           {buildPlan && buildPhase === "review" && (
             <BuildReviewCard
@@ -842,6 +955,17 @@ export function ChatView({
               aria-label={t("chat.placeholder")}
               className="max-h-40 min-h-8 flex-1 resize-none bg-transparent px-1.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
             />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={enhance}
+              disabled={!input.trim() || sending || enhancing}
+              title={t("chat.enhance.title")}
+              aria-label={enhancing ? t("chat.enhancing") : t("chat.enhance")}
+            >
+              {enhancing ? <Loader2 className="animate-spin" /> : <Wand2 />}
+            </Button>
             {sending ? (
               <Button
                 type="button"
@@ -880,13 +1004,16 @@ export function ChatView({
  *
  * @param props.message - The message to render.
  * @param props.t - Translator for the role label.
+ * @param props.onNodeClick - Opens a node's docs when its `@slug` is clicked.
  */
 function MessageRow({
   message,
   t,
+  onNodeClick,
 }: {
   message: ChatItem;
   t: ReturnType<typeof useTranslation>["t"];
+  onNodeClick?: (type: ToolNodeType) => void;
 }) {
   const isUser = message.role === "user";
   return (
@@ -918,12 +1045,17 @@ function MessageRow({
         <div
           className={cn(
             "prose prose-sm max-w-none border-2 border-foreground px-3 py-2 text-sm wrap-break-word shadow-nb-sm *:first:mt-0 *:last:mb-0",
+            // The user bubble sits on the yellow `primary` fill, but the
+            // typography plugin hardcodes gray `--tw-prose-*` colors (bullets,
+            // list numbers, bold, code, headings) tuned for a light surface, so
+            // they render faint here. Pin every prose color to `currentColor`
+            // (= primary-foreground) so all Markdown stays legible on the fill.
             isUser
-              ? "bg-primary text-primary-foreground"
+              ? "bg-primary text-primary-foreground [--tw-prose-body:currentColor] [--tw-prose-headings:currentColor] [--tw-prose-bold:currentColor] [--tw-prose-counters:currentColor] [--tw-prose-bullets:currentColor] [--tw-prose-code:currentColor] [--tw-prose-quotes:currentColor] [--tw-prose-quote-borders:currentColor] [--tw-prose-links:currentColor] [--tw-prose-hr:currentColor] [--tw-prose-captions:currentColor] [--tw-prose-th-borders:currentColor] [--tw-prose-td-borders:currentColor]"
               : "bg-card text-card-foreground dark:prose-invert",
           )}
         >
-          <Markdown content={message.text} />
+          <Markdown content={message.text} onNodeClick={onNodeClick} />
         </div>
       </div>
     </div>
@@ -932,11 +1064,32 @@ function MessageRow({
 
 /**
  * Assistant-side placeholder shown while a reply is in flight: avatar chip plus
- * a spinner and "thinking" label.
+ * a spinner and a rotating "thinking…" phrase. Starts on a random phrase and
+ * advances every {@link THINKING_ROTATE_MS} with a fade, so long waits feel
+ * alive; under reduced motion it holds a single random phrase (no rotation).
  *
- * @param props.label - Localized "thinking…" text.
+ * @param props.t - Translator for the localized phrases.
  */
-function ThinkingRow({ label }: { label: string }) {
+function ThinkingRow({ t }: { t: ReturnType<typeof useTranslation>["t"] }) {
+  const [index, setIndex] = useState(() =>
+    Math.floor(Math.random() * THINKING_KEYS.length),
+  );
+
+  useEffect(() => {
+    if (document.documentElement.hasAttribute("data-reduced-motion")) {
+      return;
+    }
+    const id = window.setInterval(() => {
+      // Step to a different random phrase each tick (never repeat in place).
+      setIndex(
+        (i) =>
+          (i + 1 + Math.floor(Math.random() * (THINKING_KEYS.length - 1))) %
+          THINKING_KEYS.length,
+      );
+    }, THINKING_ROTATE_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
   return (
     <div className="flex animate-in gap-2.5 fade-in duration-(--motion-duration-base) [html[data-reduced-motion]_&]:animate-none">
       <span className="grid size-8 shrink-0 place-items-center border-2 border-foreground bg-primary text-primary-foreground shadow-nb-sm">
@@ -944,84 +1097,13 @@ function ThinkingRow({ label }: { label: string }) {
       </span>
       <div className="inline-flex items-center gap-2 border-2 border-foreground bg-card px-3 py-2 text-sm text-muted-foreground shadow-nb-sm">
         <Loader2 size={14} className="animate-spin" />
-        {label}
+        <span
+          key={index}
+          className="animate-in fade-in slide-in-from-bottom-1 duration-(--motion-duration-base) [html[data-reduced-motion]_&]:animate-none"
+        >
+          {t(THINKING_KEYS[index])}
+        </span>
       </div>
-    </div>
-  );
-}
-
-/**
- * Live build checklist shown after the user approves a plan. Renders the SAME
- * approved plan (summary + ordered steps) and ticks each step as the assistant
- * adds its node, so the build screen mirrors exactly what was confirmed instead
- * of replacing it.
- *
- * @param props.plan - The approved plan being built.
- * @param props.completed - Number of steps finished so far.
- * @param props.t - Translator.
- */
-function BuildProgressCard({
-  plan,
-  completed,
-  t,
-}: {
-  plan: PlanProposal;
-  completed: number;
-  t: ReturnType<typeof useTranslation>["t"];
-}) {
-  // Keep the in-progress step visible as the list scrolls inside its capped box.
-  const activeStepRef = useRef<HTMLLIElement>(null);
-  useEffect(() => {
-    const reduced = document.documentElement.hasAttribute(
-      "data-reduced-motion",
-    );
-    activeStepRef.current?.scrollIntoView({
-      block: "nearest",
-      behavior: reduced ? "auto" : "smooth",
-    });
-  }, [completed]);
-
-  return (
-    <div className="mb-2 border-2 border-foreground bg-card p-3 shadow-nb-sm">
-      <div className="flex items-center gap-2">
-        <Loader2 size={15} className="shrink-0 animate-spin" />
-        <span className="text-sm font-bold">{t("chat.build.title")}</span>
-      </div>
-      <p className="mt-1.5 text-sm">{plan.summary}</p>
-      {plan.steps.length > 0 && (
-        <ol className="mt-2 flex max-h-[35vh] flex-col gap-1 overflow-y-auto pr-1">
-          {plan.steps.map((step, i) => {
-            const done = i < completed;
-            const active = i === completed;
-            return (
-              <li
-                key={i}
-                ref={active ? activeStepRef : undefined}
-                className={cn(
-                  "flex items-start gap-2 text-sm",
-                  done || active ? "text-foreground" : "text-muted-foreground",
-                )}
-              >
-                <span className="mt-0.5 shrink-0">
-                  {done ? (
-                    <CheckCircle2 size={15} className="text-primary" />
-                  ) : active ? (
-                    <Loader2 size={15} className="animate-spin" />
-                  ) : (
-                    <Circle size={15} />
-                  )}
-                </span>
-                <span>
-                  <span className="font-bold">
-                    {t("chat.build.step", { n: i + 1 })}.
-                  </span>{" "}
-                  {step}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      )}
     </div>
   );
 }

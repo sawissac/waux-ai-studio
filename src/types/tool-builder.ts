@@ -1012,6 +1012,38 @@ export interface Tool {
   nodes: ToolNode[];
 }
 
+/**
+ * One node in a chat-assistant build spec: the node type plus a partial config
+ * patch merged over the type's defaults. Internal ids are never supplied — they
+ * are generated when the spec is applied.
+ */
+export interface BuildSpecNode {
+  /** Node kind to create. */
+  type: ToolNodeType;
+  /** Partial config merged over {@link createNode}'s defaults (no id/type). */
+  config?: Record<string, unknown>;
+  /**
+   * Optional local label the model assigns so other nodes can target this one
+   * (a Button/Text `targets` or `resetTargets` entry). Resolved to the node's
+   * generated id when applied, then discarded — it is never a node field.
+   */
+  ref?: string;
+}
+
+/**
+ * A complete tool the chat assistant emits in ONE reply (no incremental tool
+ * calls): the shared-state slots plus the ordered node chain. Applying it
+ * rebuilds the open tool's nodes atomically — the spec IS the resulting state.
+ */
+export interface BuildSpec {
+  /** Optional tool name (ignored when blank). */
+  name?: string;
+  /** Shared-state slots the State Control is built from. */
+  slots: { name: string; value?: string }[];
+  /** Ordered nodes, top-to-bottom (excluding the State Control). */
+  nodes: BuildSpecNode[];
+}
+
 /** Where a selected node's editor is surfaced. */
 export type EditorPlacement = "panel" | "inline";
 

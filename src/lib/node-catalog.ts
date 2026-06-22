@@ -137,3 +137,23 @@ export function getNodeReferenceFor(
 ): NodeReference | undefined {
   return getNodeReference().find((n) => n.type === type);
 }
+
+/**
+ * Resolve a node `@slug` (e.g. `@text_run`, with or without the leading `@`) to
+ * its node type, or `null` for an unknown slug. Used to make slug mentions in
+ * prose — like the Builder chat assistant's plans — clickable to open docs.
+ *
+ * @param slug - The `@slug` to resolve (case-insensitive, `@` optional).
+ */
+export function nodeTypeForSlug(slug: string): ToolNodeType | null {
+  const norm = slug.trim().toLowerCase().replace(/^@/, "");
+  if (!norm) {
+    return null;
+  }
+  for (const [type, meta] of Object.entries(NODE_META)) {
+    if (meta.slug.toLowerCase().replace(/^@/, "") === norm) {
+      return type as ToolNodeType;
+    }
+  }
+  return null;
+}

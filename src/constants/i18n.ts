@@ -110,6 +110,16 @@ const en = {
   "chat.suggest.2": "Add an AI summarizer to this tool",
   "chat.suggest.3": "Connect an HTTP request to a table",
   "chat.thinking": "Thinking…",
+  "chat.thinking.1": "Thinking…",
+  "chat.thinking.2": "Wiring up the nodes…",
+  "chat.thinking.3": "Reading the node catalog…",
+  "chat.thinking.4": "Mapping the data flow…",
+  "chat.thinking.5": "Planning the build…",
+  "chat.thinking.6": "Connecting state slots…",
+  "chat.thinking.7": "Composing your tool…",
+  "chat.thinking.8": "Crunching the chain…",
+  "chat.thinking.9": "Sketching the steps…",
+  "chat.thinking.10": "Almost there…",
   "chat.retry": "Retry",
   "chat.provider": "Provider",
   "chat.model": "Model",
@@ -120,9 +130,9 @@ const en = {
   "chat.plan.confirm": "Build it",
   "chat.plan.cancel": "Cancel",
   "chat.plan.confirmed":
-    "I approve this plan — build it NOW. Immediately call the build tools: add_state_slot for each slot, get_node_docs before each node type, then add_node and update_node to add and wire every step, then get_tool to verify. Do NOT reply with the plan, do NOT output any JSON, and do NOT call propose_plan again. The approved plan:\n{plan}",
+    'I approve this plan — build it NOW. Reply with ONLY a single fenced ```json code block containing the COMPLETE build spec for the whole tool, shaped { "name": "…", "slots": [{ "name": "…", "value": "" }], "nodes": [{ "type": "@slug", "config": { … } }] }. No prose, no plan, no extra text. The approved plan:\n{plan}',
   "chat.plan.selfFix":
-    "Self-review the tool you just built against the approved plan. Use get_tool to inspect the live nodes, their config, wiring, and any warnings, and check that each planned step is actually built, correctly connected, and that the tool will work end to end. For anything that does not match the plan or will not work, diagnose the ROOT CAUSE (not just the symptom), reply with a short bug-fix list (problem → root cause → fix), then fix each item with the build tools and re-check with get_tool. If everything matches the plan and works, reply that the build is complete. Approved plan —\n{plan}\nDo not ask again.",
+    'Re-emit the COMPLETE corrected build spec for the whole tool as ONLY one fenced ```json code block ({ "slots", "nodes" }), fixing every problem against the approved plan and the current tool\'s state. Diagnose the ROOT CAUSE, not just the symptom, and keep the parts that already work. No prose. Approved plan —\n{plan}\nDo not ask again.',
   "chat.fix.title": "Reviewing & fixing",
   "chat.fix.reviewing": "Reviewing the build against the plan…",
   "chat.plan.cancelled": "Cancelled — don't build that plan.",
@@ -130,6 +140,11 @@ const en = {
     "If this looks good, reply **yes** or **build it** and I'll create the nodes and wire them as described.",
   "chat.build.title": "Building your tool",
   "chat.build.step": "Step {n}",
+  "chat.build.done": "Built your tool — {n} nodes. Check the preview.",
+  "chat.build.warnings":
+    "Built with {n} issue(s) to review — reply with what's wrong to fix.",
+  "chat.error.spec":
+    "Couldn't read a build spec from the reply. Try again or rephrase.",
   "chat.review.title": "Is this correct?",
   "chat.review.body":
     "I built the plan. Check the preview — does it work the way you wanted?",
@@ -151,6 +166,11 @@ const en = {
   "chat.error.generic": "Something went wrong. Try again.",
   "chat.error.noKey":
     "Add a {provider} API key (key icon, left panel) to chat.",
+  "chat.enhance": "Enhance",
+  "chat.enhance.title":
+    "Enhance — rewrite your message into a clearer prompt for building or asking",
+  "chat.enhancing": "Enhancing…",
+  "chat.enhance.error": "Couldn't enhance that prompt. Try again.",
 
   // Node panel (palette)
   "palette.title": "Node",
@@ -939,6 +959,16 @@ const my: Record<MessageKey, string> = {
   "chat.suggest.2": "ဤ tool တွင် AI အကျဉ်းချုပ် ထည့်",
   "chat.suggest.3": "HTTP request ကို table နှင့် ချိတ်ဆက်",
   "chat.thinking": "စဉ်းစားနေသည်…",
+  "chat.thinking.1": "စဉ်းစားနေသည်…",
+  "chat.thinking.2": "nodes များ ချိတ်ဆက်နေသည်…",
+  "chat.thinking.3": "node စာရင်းကို ဖတ်နေသည်…",
+  "chat.thinking.4": "ဒေတာစီးဆင်းမှုကို ရေးဆွဲနေသည်…",
+  "chat.thinking.5": "တည်ဆောက်မှုကို စီစဉ်နေသည်…",
+  "chat.thinking.6": "state slots များ ချိတ်ဆက်နေသည်…",
+  "chat.thinking.7": "သင့် tool ကို တည်ဆောက်နေသည်…",
+  "chat.thinking.8": "chain ကို တွက်ချက်နေသည်…",
+  "chat.thinking.9": "အဆင့်များ ရေးဆွဲနေသည်…",
+  "chat.thinking.10": "နီးပါးပြီ…",
   "chat.retry": "ပြန်ကြိုးစား",
   "chat.provider": "Provider",
   "chat.model": "Model",
@@ -949,9 +979,9 @@ const my: Record<MessageKey, string> = {
   "chat.plan.confirm": "တည်ဆောက်",
   "chat.plan.cancel": "ပယ်ဖျက်",
   "chat.plan.confirmed":
-    "ဤအစီအစဉ်ကို အတည်ပြုပါသည် — ယခု ချက်ချင်း တည်ဆောက်ပါ။ build tools များကို ချက်ချင်း ခေါ်ပါ — slot တစ်ခုစီအတွက် add_state_slot၊ node အမျိုးအစားတစ်ခုစီမတိုင်မီ get_node_docs၊ ပြီးနောက် အဆင့်တိုင်းကို add_node နှင့် update_node ဖြင့် ထည့်ပြီး ချိတ်ဆက်ပါ၊ ပြီးလျှင် get_tool ဖြင့် စစ်ဆေးပါ။ အစီအစဉ်ကို ပြန်မဖြေပါနှင့်၊ JSON ထုတ်မပြပါနှင့်၊ propose_plan ကိုလည်း ထပ်မခေါ်ပါနှင့်။ အတည်ပြုထားသော အစီအစဉ်—\n{plan}",
+    'ဤအစီအစဉ်ကို အတည်ပြုပါသည် — ယခု ချက်ချင်း တည်ဆောက်ပါ။ tool တစ်ခုလုံးအတွက် ပြည့်စုံသော build spec ပါသည့် fenced ```json code block တစ်ခုတည်းဖြင့်သာ ပြန်ဖြေပါ — ပုံစံ { "name": "…", "slots": [{ "name": "…", "value": "" }], "nodes": [{ "type": "@slug", "config": { … } }] }။ စာသား၊ အစီအစဉ်၊ အပိုစာ မထည့်ပါနှင့်။ အတည်ပြုထားသော အစီအစဉ်—\n{plan}',
   "chat.plan.selfFix":
-    "သင် တည်ဆောက်ပြီးသော tool ကို အတည်ပြုပြီး အစီအစဉ်နှင့် ကိုယ်တိုင် ပြန်စစ်ပါ။ get_tool ဖြင့် live nodes, ၎င်းတို့၏ config, ချိတ်ဆက်မှုနှင့် warning များကို စစ်ဆေးပြီး အစီအစဉ် အဆင့်တစ်ခုစီ တကယ် တည်ဆောက်ထား၊ မှန်ကန်စွာ ချိတ်ဆက်ထား၊ tool အစအဆုံး အလုပ်လုပ်မှု ရှိမရှိ စစ်ပါ။ အစီအစဉ်နှင့် မကိုက်ညီ သို့မဟုတ် အလုပ်မလုပ်သည့် အရာများအတွက် ROOT CAUSE (လက္ခဏာသက်သက် မဟုတ်) ကို ရှာဖွေ၍ bug-fix စာရင်း (ပြဿနာ → root cause → ပြင်နည်း) ကို အတိုချုပ် ဖြေပြီး၊ build tools ဖြင့် တစ်ခုစီ ပြင်ကာ get_tool ဖြင့် ပြန်စစ်ပါ။ အားလုံး ကိုက်ညီ၍ အလုပ်လုပ်လျှင် တည်ဆောက်မှု ပြီးစီးကြောင်း ဖြေပါ။ အတည်ပြုပြီး အစီအစဉ် —\n{plan}\nထပ်မမေးပါနှင့်။",
+    'tool တစ်ခုလုံးအတွက် ပြင်ဆင်ပြီး ပြည့်စုံသော build spec ({ "slots", "nodes" }) ကို fenced ```json code block တစ်ခုတည်းဖြင့်သာ ပြန်ထုတ်ပါ — အတည်ပြုပြီး အစီအစဉ်နှင့် လက်ရှိ tool အခြေအနေနှင့် တိုက်စစ်ကာ ပြဿနာတိုင်းကို ပြင်ပါ။ လက္ခဏာသက်သက် မဟုတ်ဘဲ ROOT CAUSE ကို ရှာပြီး၊ အလုပ်လုပ်နေပြီးသား အပိုင်းများကို ထိန်းထားပါ။ စာသား မထည့်ပါနှင့်။ အတည်ပြုပြီး အစီအစဉ် —\n{plan}\nထပ်မမေးပါနှင့်။',
   "chat.fix.title": "ပြန်စစ်ပြီး ပြင်ဆင်နေသည်",
   "chat.fix.reviewing": "တည်ဆောက်မှုကို အစီအစဉ်နှင့် ပြန်စစ်နေသည်…",
   "chat.plan.cancelled": "ပယ်ဖျက်လိုက်ပြီ — ထို အစီအစဉ်ကို မတည်ဆောက်ပါနှင့်။",
@@ -959,6 +989,12 @@ const my: Record<MessageKey, string> = {
     "ကောင်းပါက **yes** သို့မဟုတ် **build it** ဟု ပြန်ဖြေပါ — ဖော်ပြထားသည့်အတိုင်း node များ ဖန်တီးပြီး ချိတ်ဆက်ပေးပါမည်။",
   "chat.build.title": "သင့် tool ကို တည်ဆောက်နေသည်",
   "chat.build.step": "အဆင့် {n}",
+  "chat.build.done":
+    "သင့် tool ကို တည်ဆောက်ပြီးပါပြီ — node {n} ခု။ Preview ကို စစ်ကြည့်ပါ။",
+  "chat.build.warnings":
+    "ပြန်စစ်ရန် ပြဿနာ {n} ခုဖြင့် တည်ဆောက်ပြီး — ဘာမှားနေသလဲ ပြန်ဖြေပါက ပြင်ပေးပါမည်။",
+  "chat.error.spec":
+    "ပြန်ဖြေချက်မှ build spec ကို ဖတ်၍ မရပါ။ ထပ်ကြိုးစားပါ သို့မဟုတ် ပြန်ရေးပါ။",
   "chat.review.title": "ဒါ မှန်ပါသလား?",
   "chat.review.body":
     "အစီအစဉ်အတိုင်း တည်ဆောက်ပြီးပါပြီ။ Preview ကို စစ်ကြည့်ပါ — သင်လိုချင်သလို အလုပ်လုပ်ပါသလား?",
@@ -981,6 +1017,12 @@ const my: Record<MessageKey, string> = {
   "chat.error.generic": "တစ်ခုခု မှားယွင်းသွားသည်။ ပြန်ကြိုးစားပါ။",
   "chat.error.noKey":
     "ချတ်ရန် {provider} API key (key အိုင်ကွန်၊ ဘယ်ဘက် panel) ထည့်ပါ။",
+  "chat.enhance": "ပိုကောင်းအောင်",
+  "chat.enhance.title":
+    "ပိုကောင်းအောင် — သင့်စာကို ဆောက်ရန် သို့မဟုတ် မေးရန်အတွက် ပိုရှင်းသော prompt အဖြစ် ပြန်ရေးပေးသည်",
+  "chat.enhancing": "ပိုကောင်းအောင် ပြုလုပ်နေသည်…",
+  "chat.enhance.error":
+    "ထို prompt ကို ပိုကောင်းအောင် မလုပ်နိုင်ပါ။ ပြန်ကြိုးစားပါ။",
 
   "palette.title": "Node များ",
   "palette.search": "Node များ စစ်ထုတ်…",

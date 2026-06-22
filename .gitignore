@@ -43,5 +43,8 @@ next-env.d.ts
 .claude
 .agent
 .agents
+.codegraph
+.gemini
 
 graphify-out
+design-system

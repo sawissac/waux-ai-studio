@@ -6,7 +6,6 @@ import {
   PanelRightOpen,
   SlidersHorizontal,
 } from "lucide-react";
-import { useState } from "react";
 
 import {
   ResizableGroup,
@@ -20,6 +19,7 @@ import { NodeEditor } from "@/features/NodeEditor";
 import { PalettePanel } from "@/features/PalettePanel";
 import { ToolsPanel } from "@/features/ToolsPanel";
 import { Topbar } from "@/features/Topbar";
+import { useBuilderUrlState } from "@/hooks/useBuilderUrlState";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { useToolsSync } from "@/hooks/useToolsSync";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -53,18 +53,18 @@ export function ToolBuilder() {
   const showEditorInPanel =
     editorPlacement === "panel" && selectedNode !== null;
 
-  // Center view + side-panel visibility. Switching to chat hides both panels;
-  // returning to a build view (panel / inline) restores them.
-  const [view, setView] = useState<"build" | "chat">("build");
-  const [leftHidden, setLeftHidden] = useState(false);
-  const [rightHidden, setRightHidden] = useState(false);
-
-  function handleViewChange(next: "build" | "chat") {
-    setView(next);
-    const hide = next === "chat";
-    setLeftHidden(hide);
-    setRightHidden(hide);
-  }
+  // Center view + side-panel visibility, persisted in the URL so a reload or a
+  // shared link reopens the same builder tab and panel layout. Switching to
+  // chat hides both panels; returning to a build view (panel / inline) restores
+  // them.
+  const {
+    view,
+    leftHidden,
+    rightHidden,
+    setLeftHidden,
+    setRightHidden,
+    handleViewChange,
+  } = useBuilderUrlState();
 
   return (
     <div className="flex flex-col bg-background text-foreground h-dvh w-dvw">

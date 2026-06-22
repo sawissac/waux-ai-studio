@@ -2,11 +2,72 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 import { createNode, uuid } from "@/constants/tool-builder";
 import type {
+  BuildSpec,
   EditorPlacement,
+  StateNode,
   Tool,
   ToolNode,
   ToolNodeType,
 } from "@/types/tool-builder";
+
+/**
+ * Recursively assign a fresh `id` to every object sitting inside an array that
+ * lacks one. The chat assistant emits node config without ids (options, rules,
+ * map fields, sprite animations, vault entries, …), so this restores the stable
+ * keys the editor and renderers rely on. Objects already carrying an `id` and
+ * non-object array items (e.g. string targets) are left untouched.
+ *
+ * @param value - Any config value to walk in place.
+ */
+function ensureIds(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const obj = item as Record<string, unknown>;
+        if (typeof obj.id !== "string" || !obj.id) {
+          obj.id = uuid();
+        }
+      }
+      ensureIds(item);
+    }
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const v of Object.values(value as Record<string, unknown>)) {
+      ensureIds(v);
+    }
+  }
+}
+
+/**
+ * Collect every name-mode state slot a node config references, walking nested
+ * objects/arrays (sprite animations, etc.). A binding is any object shaped
+ * `{ mode: "name", value: "slot" }` with a non-blank value.
+ *
+ * @param value - Any config value to walk.
+ * @param out - Accumulator the found slot names are added to.
+ */
+function collectBoundSlots(value: unknown, out: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectBoundSlots(item, out);
+    }
+    return;
+  }
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (
+      obj.mode === "name" &&
+      typeof obj.value === "string" &&
+      obj.value.trim()
+    ) {
+      out.add(obj.value.trim());
+    }
+    for (const v of Object.values(obj)) {
+      collectBoundSlots(v, out);
+    }
+  }
+}
 
 /** Load state for the tools list hydrated from the server. */
 export type ToolsLoadState = "idle" | "loading" | "ready";
@@ -220,6 +281,113 @@ const toolBuilderSlice = createSlice({
         value: action.payload.value ?? "",
       });
     },
+    /**
+     * Rebuild the open tool's whole node chain from a chat-assistant build spec
+     * in ONE atomic dispatch (one re-render). Replaces every node with a fresh
+     * State Control built from `slots` followed by each spec node — created from
+     * its type's defaults, patched with the supplied config, and given fresh ids
+     * throughout. The spec is the resulting state, so this both creates and edits
+     * (the assistant always emits the complete desired tool). A `state` node in
+     * `nodes` is ignored — slots are the only source of the State Control.
+     */
+    applyBuildSpec(state, action: PayloadAction<BuildSpec>) {
+      const tool = state.tools.find((t) => t.id === state.selectedToolId);
+      if (!tool) {
+        return;
+      }
+      const { name, slots, nodes } = action.payload;
+      const next: ToolNode[] = [];
+
+      // State Control first, built from the spec's slots (deduped by name).
+      const seen = new Set<string>();
+      const stateNode: StateNode = { id: uuid(), type: "state", states: [] };
+      for (const slot of slots) {
+        const slotName = slot.name?.trim();
+        if (!slotName || seen.has(slotName)) {
+          continue;
+        }
+        seen.add(slotName);
+        stateNode.states.push({
+          id: uuid(),
+          name: slotName,
+          value: slot.value ?? "",
+        });
+      }
+      next.push(stateNode);
+
+      // Built nodes in spec order (State Control excluded) + their generated id
+      // keyed by the model's local `ref`, so run targets can be resolved below.
+      const built: ToolNode[] = [];
+      const refToId = new Map<string, string>();
+      for (const spec of nodes) {
+        if (!spec?.type || spec.type === "state") {
+          continue;
+        }
+        const node = createNode(spec.type);
+        if (spec.config) {
+          Object.assign(node, spec.config);
+        }
+        // Force the id back to a fresh value after the merge (the config patch
+        // is already stripped of id/type, but stay defensive).
+        node.id = uuid();
+        ensureIds(node);
+        if (spec.ref) {
+          refToId.set(spec.ref, node.id);
+        }
+        built.push(node);
+        next.push(node);
+      }
+
+      // Resolve run targets: the model addresses a target node by the `ref` it
+      // assigned, or by its 1-based position in the spec's `nodes` array. Map
+      // each to the node's generated id; drop anything that resolves to nothing
+      // (leaving targets empty = run the whole chain).
+      const resolveTarget = (t: unknown): string | null => {
+        if (typeof t === "string") {
+          if (refToId.has(t)) {
+            return refToId.get(t) ?? null;
+          }
+          const n = Number(t);
+          return Number.isInteger(n) ? (built[n - 1]?.id ?? null) : null;
+        }
+        if (typeof t === "number") {
+          return built[t - 1]?.id ?? null;
+        }
+        return null;
+      };
+      for (const node of built) {
+        const rec = node as unknown as Record<string, unknown>;
+        for (const key of ["targets", "resetTargets"] as const) {
+          const arr = rec[key];
+          if (Array.isArray(arr)) {
+            rec[key] = arr
+              .map(resolveTarget)
+              .filter((id): id is string => id !== null);
+          }
+        }
+      }
+
+      // Safety net: auto-create any slot a node binds to that the spec forgot to
+      // declare, so a node never wires to a non-existent slot (a dead wire).
+      const bound = new Set<string>();
+      for (const node of next) {
+        if (node.type !== "state") {
+          collectBoundSlots(node, bound);
+        }
+      }
+      for (const slotName of bound) {
+        if (!seen.has(slotName)) {
+          seen.add(slotName);
+          stateNode.states.push({ id: uuid(), name: slotName, value: "" });
+        }
+      }
+
+      tool.nodes = next;
+      if (name?.trim()) {
+        tool.name = name.trim();
+      }
+      state.selectedNodeId = null;
+    },
     /** Clear node selection — returns the right panel to the palette. */
     clearNodeSelection(state) {
       state.selectedNodeId = null;
@@ -289,6 +457,7 @@ export const {
   selectNode,
   renameStateSlot,
   addStateSlot,
+  applyBuildSpec,
   clearNodeSelection,
   setEditorPlacement,
   setSearch,
