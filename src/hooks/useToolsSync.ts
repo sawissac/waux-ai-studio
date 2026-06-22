@@ -11,12 +11,17 @@ import type { Tool, ToolNode } from "@/types/tool-builder";
 import { useAuth } from "./useAuth";
 
 /** Fetch all tools + their nodes for the signed-in user. */
-async function fetchAllTools(): Promise<Tool[]> {
+async function fetchAllTools(userId: string): Promise<Tool[]> {
   const supabase = createClient();
 
+  // Filter by owner explicitly. The shared-read RLS policy (needed by the
+  // public share page) is a permissive SELECT policy, so without this filter
+  // it ORs in every other user's `is_shared = true` row — leaking their tools
+  // into this list.
   const { data: toolRows, error } = await supabase
     .from("tools")
     .select("id, name, position")
+    .eq("owner_id", userId)
     .order("position");
 
   if (error) {
@@ -104,10 +109,13 @@ async function persistTools(tools: Tool[], userId: string): Promise<void> {
     }
   }
 
-  // 3. Delete tools in DB that are no longer in the Redux list
+  // 3. Delete tools in DB that are no longer in the Redux list. Scope to the
+  // owner — the shared-read RLS policy would otherwise pull in other users'
+  // shared tool ids and mark them as orphans to delete.
   const { data: dbTools, error: fetchError } = await supabase
     .from("tools")
-    .select("id");
+    .select("id")
+    .eq("owner_id", userId);
   if (fetchError) {
     throw fetchError;
   }
@@ -142,7 +150,7 @@ export function useToolsSync() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["tools", user?.id],
-    queryFn: fetchAllTools,
+    queryFn: () => fetchAllTools(user!.id),
     enabled: !!user,
   });
 
