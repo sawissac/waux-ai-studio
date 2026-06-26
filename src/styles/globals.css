@@ -74,44 +74,53 @@
 }
 
 .dark {
-  --background: #1a1a1a;
-  --foreground: #f5f5f0;
-  --card: #242424;
-  --card-foreground: #f5f5f0;
-  --popover: #242424;
-  --popover-foreground: #f5f5f0;
+  /* NIGHT DARK BLUE — midnight navy surfaces in 3 elevation steps
+     (bg < card < muted), night-blue pop, deep indigo hover wash. Border ink
+     stays a soft night line (never near-white). Neubrutalism unchanged. */
 
-  --primary: #ffd23f;
-  --primary-foreground: #111111;
-  --secondary: #242424;
-  --secondary-foreground: #f5f5f0;
-  --muted: #2e2e2e;
-  --muted-foreground: #a3a3a3;
-  --accent: #333333;
-  --accent-foreground: #f5f5f0;
-  --destructive: #ff5a5f;
+  /* --- Surfaces (midnight navy, 3 elevation steps) ---------------------- */
+  --background: #060c1a; /* midnight */
+  --foreground: #e6ecf7; /* moonlight white */
+  --card: #0c1530;
+  --card-foreground: #e6ecf7;
+  --popover: #0c1530;
+  --popover-foreground: #e6ecf7;
 
-  --border: #f5f5f0; /* light lines on dark */
-  --input: #f5f5f0;
-  --ring: #5b8cff;
+  /* --- Pop colours ------------------------------------------------------- */
+  --primary: #5b8cff; /* night-blue pop */
+  --primary-foreground: #050a18;
+  --secondary: #0c1530;
+  --secondary-foreground: #e6ecf7;
+  --muted: #14213f; /* top elevation step */
+  --muted-foreground: #8b9bc4; /* muted periwinkle */
+  --accent: #1d2c57; /* deep indigo hover wash */
+  --accent-foreground: #9bb4ff; /* periwinkle glow on hover */
+  --destructive: #ff6b70; /* coral — pops against navy */
 
-  --chart-1: #ffd23f;
-  --chart-2: #ff5a5f;
-  --chart-3: #5b8cff;
-  --chart-4: #4ecdc4;
-  --chart-5: #b388ff;
+  /* --- Lines & focus ----------------------------------------------------- */
+  /* Border ink decoupled from text: text is near-white, lines are a soft
+     night tone so blocks read without glaring white edges. */
+  --border: #28386a;
+  --input: #28386a;
+  --ring: #6f9bff; /* bright periwinkle focus */
 
-  --sidebar: #1a1a1a;
-  --sidebar-foreground: #f5f5f0;
-  --sidebar-primary: #ffd23f;
-  --sidebar-primary-foreground: #111111;
-  --sidebar-accent: #333333;
-  --sidebar-accent-foreground: #f5f5f0;
-  --sidebar-border: #f5f5f0;
-  --sidebar-ring: #5b8cff;
+  --chart-1: #5b8cff;
+  --chart-2: #38bdf8;
+  --chart-3: #818cf8;
+  --chart-4: #fbbf24;
+  --chart-5: #f472b6;
 
-  /* Hard shadow stays black so it reads as depth under light borders. */
-  --nb-shadow-color: #000000;
+  --sidebar: #060c1a;
+  --sidebar-foreground: #e6ecf7;
+  --sidebar-primary: #5b8cff;
+  --sidebar-primary-foreground: #050a18;
+  --sidebar-accent: #1d2c57;
+  --sidebar-accent-foreground: #9bb4ff;
+  --sidebar-border: #28386a;
+  --sidebar-ring: #6f9bff;
+
+  /* Hard shadow near-black for depth on the midnight ground. */
+  --nb-shadow-color: #020512;
 }
 
 @theme inline {
@@ -236,14 +245,16 @@
 }
 
 @layer components {
-  /* nb-surface — the canonical block: hard border + hard offset shadow. */
+  /* nb-surface — the canonical block: hard border + hard offset shadow.
+     Border uses the `border` token (= foreground in light, soft warm grey in
+     dark) so dark mode never gets glaring white edges. */
   .nb-surface {
-    border: var(--nb-border-width) solid var(--color-foreground);
+    border: var(--nb-border-width) solid var(--color-border);
     box-shadow: var(--nb-shadow);
     background-color: var(--color-card);
   }
   .nb-surface-lg {
-    border: var(--nb-border-width-lg) solid var(--color-foreground);
+    border: var(--nb-border-width-lg) solid var(--color-border);
     box-shadow: var(--nb-shadow-lg);
     background-color: var(--color-card);
   }
@@ -373,4 +384,21 @@
 
 ::-webkit-scrollbar-corner {
   background: var(--muted);
+}
+
+/* =========================================================================
+   DARK BORDER INK — neubrutalism uses `foreground` as border ink, which is
+   near-white in dark mode (glaring white edges on every block). In dark we
+   retarget the `border-foreground` utilities to the soft warm `border` tone
+   so lines read as definition, not as bright outlines. Light theme is
+   untouched (its foreground and border are both #111). Placed outside any
+   @layer so it overrides the Tailwind utilities regardless of source order.
+   ========================================================================= */
+.dark .border-foreground {
+  border-color: var(--color-border);
+}
+.dark .border-foreground\/15,
+.dark .border-foreground\/30,
+.dark .border-foreground\/40 {
+  border-color: color-mix(in oklab, var(--color-border) 55%, transparent);
 }

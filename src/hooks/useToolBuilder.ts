@@ -19,6 +19,7 @@ import {
   selectTool,
   setEditorPlacement,
   setSearch,
+  setToolIcon,
   updateNode,
 } from "@/stores/slices/toolBuilderSlice";
 import type {
@@ -86,6 +87,8 @@ export function useToolBuilder() {
     addTool: () => dispatch(addTool()),
     renameTool: (id: string, name: string) =>
       dispatch(renameTool({ id, name })),
+    setToolIcon: (id: string, icon: string) =>
+      dispatch(setToolIcon({ id, icon })),
     deleteTool: (id: string) => dispatch(deleteTool(id)),
     addNode: (type: ToolNodeType) => dispatch(addNode(type)),
     deleteNode: (id: string) => dispatch(deleteNode(id)),

@@ -314,3 +314,108 @@ export function sanitizeHtmlDoc(
   }
   return sanitizeHtml(html, buildOptions(allowStyles, allowImages));
 }
+
+/* ===================================================================== *
+ * SVG icon sanitization — for the per-tool sidebar icon.
+ * ===================================================================== */
+
+/** SVG shape/paint tags allowed inside a tool icon (no `<image>`, no `<a>`). */
+const SVG_ICON_TAGS = [
+  "svg",
+  "path",
+  "g",
+  "circle",
+  "rect",
+  "line",
+  "polyline",
+  "polygon",
+  "ellipse",
+  "defs",
+  "use",
+  "symbol",
+  "desc",
+  "title",
+  "linearGradient",
+  "radialGradient",
+  "stop",
+  "clipPath",
+  "mask",
+  "text",
+  "tspan",
+];
+
+/**
+ * Paint/geometry attributes for the icon's inner shapes. Reuses the node
+ * sanitizer's {@link SVG_ATTRS} but drops `href`/`xlink:href` — an icon never
+ * needs to reference an external resource, and dropping them closes the only
+ * URL-bearing attribute (no `data:`/remote fetch, no exfil vector).
+ */
+const SVG_ICON_SHAPE_ATTRS = SVG_ATTRS.filter(
+  (a) => a !== "href" && a !== "xlink:href",
+);
+
+/**
+ * Root `<svg>` attributes. Intentionally excludes `width`/`height` so the
+ * render wrapper controls the size via CSS (consistent icon column), while
+ * `viewBox` is kept so the artwork still scales.
+ */
+const SVG_ICON_ROOT_ATTRS = [
+  "viewbox",
+  "viewBox",
+  "xmlns",
+  "xmlns:xlink",
+  "fill",
+  "stroke",
+  "stroke-width",
+  "stroke-linecap",
+  "stroke-linejoin",
+  "fill-rule",
+  "clip-rule",
+  "preserveaspectratio",
+  "preserveAspectRatio",
+  "role",
+  "aria-hidden",
+  "class",
+];
+
+/** Per-tag attribute allowlist for {@link sanitizeSvgIcon}. */
+const SVG_ICON_ATTRS: sanitizeHtml.IOptions["allowedAttributes"] = {
+  svg: SVG_ICON_ROOT_ATTRS,
+  ...Object.fromEntries(
+    SVG_ICON_TAGS.filter((t) => t !== "svg").map((t) => [
+      t,
+      SVG_ICON_SHAPE_ATTRS,
+    ]),
+  ),
+};
+
+/**
+ * Sanitize a raw SVG string down to a safe, inline-renderable icon.
+ *
+ * Strips everything that isn't pure SVG artwork — `<script>`, `<style>`,
+ * `<foreignObject>`, `<image>`, `<a>`, every `on*` handler, and any URL-bearing
+ * attribute — leaving only shapes, paths, gradients, and presentation
+ * attributes. The result is safe to inject via `dangerouslySetInnerHTML`.
+ *
+ * Returns `""` when the input is blank or contains no `<svg>` root, so callers
+ * can treat a falsy result as "no icon" and render their fallback glyph.
+ *
+ * @param svg - Raw SVG markup (hand-written or AI-generated).
+ * @returns Sanitized SVG markup, or `""` if there is nothing renderable.
+ */
+export function sanitizeSvgIcon(svg: string): string {
+  if (!svg?.trim()) {
+    return "";
+  }
+  const clean = sanitizeHtml(svg, {
+    allowedTags: SVG_ICON_TAGS,
+    allowedAttributes: SVG_ICON_ATTRS,
+    // No URL-bearing attributes survive the allowlist, so no scheme is needed.
+    allowedSchemes: [],
+    allowProtocolRelative: false,
+    disallowedTagsMode: "discard",
+    parser: { lowerCaseAttributeNames: false },
+  }).trim();
+  // Require a real <svg> root — a stripped fragment isn't a usable icon.
+  return /<svg[\s>]/i.test(clean) ? clean : "";
+}

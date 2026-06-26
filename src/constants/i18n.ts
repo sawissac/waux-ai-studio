@@ -74,6 +74,72 @@ const en = {
   "tools.shareCopied": "Share link copied!",
   "tools.previewError": "Could not open preview.",
   "tools.popupBlocked": "Pop-up blocked — allow pop-ups to preview.",
+  "tools.editIcon": "Edit icon",
+  "tools.iconTitle": "Tool icon",
+  "tools.iconDesc":
+    "Paste or edit the SVG, or let AI draw one from what this tool does.",
+  "tools.iconCode": "SVG code",
+  "tools.iconPlaceholder": '<svg viewBox="0 0 24 24">…</svg>',
+  "tools.iconGenerate": "AI generate",
+  "tools.iconGenerating": "Generating icon…",
+  "tools.iconGenerateSuccess": "Icon generated.",
+  "tools.iconGenerateError": "Could not generate an icon.",
+  "tools.iconInvalid": "That doesn't look like a valid SVG icon.",
+  "tools.iconSaved": "Icon updated.",
+  "tools.iconClear": "Clear icon",
+  "tools.iconEmptyPreview": "No icon yet",
+
+  // Gallery — per-tool actions (Tools panel menu) + toasts
+  "gallery.addToGallery": "Add to gallery",
+  "gallery.removeFromGallery": "Remove from gallery",
+  "gallery.makePublic": "Make public",
+  "gallery.makePrivate": "Make private",
+  "gallery.added": "Added to gallery.",
+  "gallery.removed": "Removed from gallery.",
+  "gallery.madePublic": "Tool is now public.",
+  "gallery.madePrivate": "Tool is now private.",
+  "gallery.flagError": "Could not update the gallery.",
+
+  // Gallery — top bar + manage page
+  "gallery.link": "Gallery",
+  "gallery.title": "Gallery",
+  "gallery.subtitle": "Your public showcase of tools.",
+  "gallery.back": "Back to Studio",
+  "gallery.settings": "Gallery settings",
+  "gallery.handle": "Handle",
+  "gallery.handleHint":
+    "Your public URL. Lowercase letters, numbers, and hyphens.",
+  "gallery.handlePlaceholder": "your-handle",
+  "gallery.handleTaken": "That handle is already taken.",
+  "gallery.handleInvalid": "Use 3–32 lowercase letters, numbers, or hyphens.",
+  "gallery.handleRequired": "Claim a handle to publish your gallery.",
+  "gallery.titleLabel": "Title",
+  "gallery.titlePlaceholder": "My Toolkit Gallery",
+  "gallery.description": "Description",
+  "gallery.descriptionPlaceholder": "A short blurb about your tools…",
+  "gallery.public": "Public",
+  "gallery.publicDesc": "Anyone with the link can view your gallery.",
+  "gallery.save": "Save",
+  "gallery.saved": "Gallery saved.",
+  "gallery.saveError": "Could not save the gallery.",
+  "gallery.copyLink": "Copy link",
+  "gallery.linkCopied": "Gallery link copied!",
+  "gallery.openPublic": "Open public page",
+  "gallery.toolsTitle": "Tools",
+  "gallery.toolsHint":
+    "Add tools to your gallery, then choose which are public.",
+  "gallery.empty": "No tools yet — build one in the studio first.",
+  "gallery.inGallery": "In gallery",
+  "gallery.shownBadge": "Shown",
+  "gallery.hiddenBadge": "Hidden",
+  "gallery.publicTool": "Public",
+  "gallery.privateTool": "Private",
+
+  // Gallery — public page
+  "gallery.publicEmpty": "This gallery has no public tools yet.",
+  "gallery.notFound": "This gallery is not available.",
+  "gallery.builtWith": "Built with Toolkits",
+  "gallery.openTool": "Open tool",
 
   // Builder panel
   "builder.title": "Builder",
@@ -92,8 +158,16 @@ const en = {
   "chat.greeting": "How can I help you today?",
   "chat.subtitle": "Start a conversation — this is a preview interface.",
   "chat.placeholder": "Message Builder…",
+  "chat.placeholder.1": "Build a PDF summarizer…",
+  "chat.placeholder.2": "Create an image resizer tool…",
+  "chat.placeholder.3": "Make a CSV cleaner…",
+  "chat.placeholder.4": "Generate a QR code maker…",
+  "chat.placeholder.5": "Build a JSON formatter…",
   "chat.send": "Send",
   "chat.stop": "Stop",
+  "chat.copy": "Copy",
+  "chat.copied": "Copied",
+  "chat.download": "Download",
   "chat.you": "You",
   "chat.assistant": "Assistant",
   "chat.newChat": "New chat",
@@ -844,14 +918,39 @@ NOTES
   "vault.empty": "Add a key / value pair to store.",
   "vault.reveal": "Reveal",
   "vault.hide": "Hide",
+  "vault.copy": "Copy value",
+  "vault.copied": "Copied",
   "vault.help":
     "Each pair with a non-empty key is written to the bound state slot as a { key: value } object (later duplicate keys win). Masking only affects the preview — the stored values are unchanged.",
+
+  // Identity node
+  "node.identity.label": "Identity",
+  "node.identity.blurb":
+    "Generate fake data with faker.js. A JSON template of @modifiers (e.g. @firstName, @email) produces N records written to bound state.",
+  "identity.count": "Records",
+  "identity.count.help": "How many records to generate (0–{max}).",
+  "identity.seed": "Seed",
+  "identity.regenerate": "Regenerate (new seed)",
+  "identity.template": "Template",
+  "identity.template.help":
+    'JSON shape for one record. Put @modifiers in string values — e.g. "@firstName" or "@firstName @lastName". A value that is exactly one token keeps its native type (number / boolean).',
+  "identity.modifiers": "Modifiers",
+  "identity.modifiers.help":
+    "Click a token to copy it, then paste into the template. Tokens are case-insensitive.",
+  "identity.help":
+    "Generates the record array deterministically from the template, count, and seed, and writes it to the bound state slot. Change the seed (or hit Regenerate) for a fresh dataset.",
+  "identity.empty": "Set a record count above 0 to generate.",
+  "identity.invalidTemplate":
+    "Template is not valid JSON — fix it to generate records.",
+  "identity.recordCount": "{n} records",
+  "identity.more": "+{n} more not shown",
 
   // Common
   "common.cancel": "Cancel",
   "common.delete": "Delete",
   "common.rename": "Rename",
   "common.copy": "Copy",
+  "common.save": "Save",
 
   // Welcome splash (post-login branding screen)
   "welcome.eyebrow": "Welcome back",
@@ -925,6 +1024,73 @@ const my: Record<MessageKey, string> = {
   "tools.previewError": "အစမ်းကြည့်ခြင်း ဖွင့်၍ မရပါ။",
   "tools.popupBlocked":
     "Pop-up ပိတ်ထားသည် — အစမ်းကြည့်ရန် pop-up ကို ခွင့်ပြုပါ။",
+  "tools.editIcon": "Icon ပြင်ဆင်",
+  "tools.iconTitle": "ကိရိယာ Icon",
+  "tools.iconDesc":
+    "SVG ကို ကူးထည့်/ပြင်ဆင်ပါ၊ သို့မဟုတ် ဤကိရိယာ၏ လုပ်ဆောင်ချက်အရ AI ဖြင့် ထုတ်ပါ။",
+  "tools.iconCode": "SVG ကုဒ်",
+  "tools.iconPlaceholder": '<svg viewBox="0 0 24 24">…</svg>',
+  "tools.iconGenerate": "AI ထုတ်ပေး",
+  "tools.iconGenerating": "Icon ထုတ်နေသည်…",
+  "tools.iconGenerateSuccess": "Icon ထုတ်ပြီးပါပြီ။",
+  "tools.iconGenerateError": "Icon ထုတ်၍ မရပါ။",
+  "tools.iconInvalid": "၎င်းသည် မှန်ကန်သော SVG icon ပုံစံ မဟုတ်ပါ။",
+  "tools.iconSaved": "Icon ပြင်ဆင်ပြီးပါပြီ။",
+  "tools.iconClear": "Icon ရှင်းလင်း",
+  "tools.iconEmptyPreview": "Icon မရှိသေးပါ",
+
+  // Gallery — per-tool actions + toasts
+  "gallery.addToGallery": "ပြခန်းသို့ ထည့်",
+  "gallery.removeFromGallery": "ပြခန်းမှ ဖယ်",
+  "gallery.makePublic": "အများမြင် ပြုလုပ်",
+  "gallery.makePrivate": "သီးသန့် ပြုလုပ်",
+  "gallery.added": "ပြခန်းသို့ ထည့်ပြီးပါပြီ။",
+  "gallery.removed": "ပြခန်းမှ ဖယ်ပြီးပါပြီ။",
+  "gallery.madePublic": "ကိရိယာ အခု အများမြင် ဖြစ်ပါပြီ။",
+  "gallery.madePrivate": "ကိရိယာ အခု သီးသန့် ဖြစ်ပါပြီ။",
+  "gallery.flagError": "ပြခန်း ပြင်ဆင်၍ မရပါ။",
+
+  // Gallery — top bar + manage page
+  "gallery.link": "ပြခန်း",
+  "gallery.title": "ပြခန်း",
+  "gallery.subtitle": "သင့်ကိရိယာများ၏ အများမြင် ပြခန်း။",
+  "gallery.back": "Studio သို့ ပြန်",
+  "gallery.settings": "ပြခန်း ဆက်တင်များ",
+  "gallery.handle": "Handle",
+  "gallery.handleHint":
+    "သင့် အများမြင် URL။ စာလုံးအသေး၊ ဂဏန်း နှင့် hyphen များ။",
+  "gallery.handlePlaceholder": "your-handle",
+  "gallery.handleTaken": "ထို handle ကို အသုံးပြုပြီးသား ဖြစ်နေပါသည်။",
+  "gallery.handleInvalid":
+    "စာလုံးအသေး၊ ဂဏန်း သို့မဟုတ် hyphen ၃–၃၂ လုံး အသုံးပြုပါ။",
+  "gallery.handleRequired": "ပြခန်း ထုတ်ဝေရန် handle တစ်ခု ယူပါ။",
+  "gallery.titleLabel": "ခေါင်းစဉ်",
+  "gallery.titlePlaceholder": "ကျွန်ုပ်၏ ကိရိယာ ပြခန်း",
+  "gallery.description": "ဖော်ပြချက်",
+  "gallery.descriptionPlaceholder": "သင့်ကိရိယာများအကြောင်း အတိုချုပ်…",
+  "gallery.public": "အများမြင်",
+  "gallery.publicDesc": "လင့်ခ်ရှိသူ မည်သူမဆို သင့်ပြခန်းကို ကြည့်နိုင်သည်။",
+  "gallery.save": "သိမ်း",
+  "gallery.saved": "ပြခန်း သိမ်းပြီးပါပြီ။",
+  "gallery.saveError": "ပြခန်း သိမ်း၍ မရပါ။",
+  "gallery.copyLink": "လင့်ခ် ကူးယူ",
+  "gallery.linkCopied": "ပြခန်း လင့်ခ် ကူးယူပြီးပါပြီ။",
+  "gallery.openPublic": "အများမြင် စာမျက်နှာ ဖွင့်",
+  "gallery.toolsTitle": "ကိရိယာများ",
+  "gallery.toolsHint":
+    "ကိရိယာများ ပြခန်းသို့ ထည့်ပြီး မည်သည့်အရာ အများမြင် ဖြစ်မည်ကို ရွေးပါ။",
+  "gallery.empty": "ကိရိယာ မရှိသေးပါ — studio တွင် အရင် တည်ဆောက်ပါ။",
+  "gallery.inGallery": "ပြခန်းတွင်",
+  "gallery.shownBadge": "ပြသထား",
+  "gallery.hiddenBadge": "ဖျောက်ထား",
+  "gallery.publicTool": "အများမြင်",
+  "gallery.privateTool": "သီးသန့်",
+
+  // Gallery — public page
+  "gallery.publicEmpty": "ဤပြခန်းတွင် အများမြင် ကိရိယာ မရှိသေးပါ။",
+  "gallery.notFound": "ဤပြခန်းကို မရရှိနိုင်ပါ။",
+  "gallery.builtWith": "Toolkits ဖြင့် တည်ဆောက်ထား",
+  "gallery.openTool": "ကိရိယာ ဖွင့်",
 
   "builder.title": "တည်ဆောက်ရေး",
   "builder.placement.panel": "ဘေးတန်း",
@@ -941,8 +1107,16 @@ const my: Record<MessageKey, string> = {
   "chat.greeting": "ဘာများ ကူညီပေးရမလဲ။",
   "chat.subtitle": "စကားစမြည် စတင်ပါ — ဤသည် preview မျက်နှာပြင် ဖြစ်သည်။",
   "chat.placeholder": "Builder သို့ စာပို့…",
+  "chat.placeholder.1": "PDF အကျဉ်းချုပ် tool တည်ဆောက်ပါ…",
+  "chat.placeholder.2": "ပုံ အရွယ်ချိန်ညှိ tool ဖန်တီးပါ…",
+  "chat.placeholder.3": "CSV သန့်စင် tool ပြုလုပ်ပါ…",
+  "chat.placeholder.4": "QR code generator တည်ဆောက်ပါ…",
+  "chat.placeholder.5": "JSON formatter တည်ဆောက်ပါ…",
   "chat.send": "ပို့",
   "chat.stop": "ရပ်",
+  "chat.copy": "ကူးယူ",
+  "chat.copied": "ကူးယူပြီး",
+  "chat.download": "ဒေါင်းလုဒ်",
   "chat.you": "သင်",
   "chat.assistant": "Assistant",
   "chat.newChat": "ချတ် အသစ်",
@@ -1658,13 +1832,38 @@ FRACTIONS & UNITS
   "vault.empty": "သိမ်းရန် key / value အတွဲ တစ်ခု ထည့်ပါ။",
   "vault.reveal": "ပြရန်",
   "vault.hide": "ဖုံးရန်",
+  "vault.copy": "Value ကူးရန်",
+  "vault.copied": "ကူးပြီး",
   "vault.help":
     "Key မဗလာဖြစ်သော အတွဲတိုင်းကို bound state slot သို့ { key: value } object အဖြစ် ရေးသည် (key ထပ်လျှင် နောက်ဆုံးက အနိုင်ရ)။ Mask သည် preview ကိုသာ သက်ရောက်သည် — သိမ်းထားသော value များ မပြောင်းလဲပါ။",
+
+  // Identity node
+  "node.identity.label": "Identity",
+  "node.identity.blurb":
+    "faker.js ဖြင့် အတုဒေတာ ထုတ်လုပ်သည်။ @modifier (ဥပမာ @firstName, @email) ပါသော JSON template က မှတ်တမ်း N ခုကို bound state သို့ ရေးသည်။",
+  "identity.count": "မှတ်တမ်းအရေအတွက်",
+  "identity.count.help": "ထုတ်လုပ်မည့် မှတ်တမ်းအရေအတွက် (0–{max})။",
+  "identity.seed": "Seed",
+  "identity.regenerate": "ပြန်ထုတ်ရန် (seed အသစ်)",
+  "identity.template": "Template",
+  "identity.template.help":
+    'မှတ်တမ်းတစ်ခု၏ JSON ပုံစံ။ string value များတွင် @modifier ထည့်ပါ — ဥပမာ "@firstName" သို့မဟုတ် "@firstName @lastName"။ token တစ်ခုတည်းသာ ဖြစ်သော value သည် ၎င်း၏ မူရင်းအမျိုးအစား (number / boolean) ကို ထိန်းသိမ်းသည်။',
+  "identity.modifiers": "Modifier များ",
+  "identity.modifiers.help":
+    "token တစ်ခုကို နှိပ်၍ ကူးပြီး template ထဲ ကပ်ပါ။ token များသည် စာလုံးအကြီးအသေး ခွဲခြားမှု မရှိပါ။",
+  "identity.help":
+    "template, အရေအတွက်နှင့် seed မှ မှတ်တမ်း array ကို တသမတ်တည်း ထုတ်လုပ်ပြီး bound state slot သို့ ရေးသည်။ ဒေတာအသစ်အတွက် seed ပြောင်းပါ (သို့) Regenerate နှိပ်ပါ။",
+  "identity.empty": "ထုတ်လုပ်ရန် မှတ်တမ်းအရေအတွက်ကို 0 ထက်ကြီးအောင် သတ်မှတ်ပါ။",
+  "identity.invalidTemplate":
+    "Template သည် JSON မှန် မဟုတ်ပါ — မှတ်တမ်းများ ထုတ်လုပ်ရန် ပြင်ဆင်ပါ။",
+  "identity.recordCount": "မှတ်တမ်း {n} ခု",
+  "identity.more": "နောက်ထပ် {n} ခု မပြသပါ",
 
   "common.cancel": "မလုပ်တော့",
   "common.delete": "ဖျက်",
   "common.rename": "အမည်ပြောင်း",
   "common.copy": "ကူး",
+  "common.save": "သိမ်း",
 
   // Welcome splash (post-login branding screen)
   "welcome.eyebrow": "ပြန်လည်ကြိုဆိုပါသည်",

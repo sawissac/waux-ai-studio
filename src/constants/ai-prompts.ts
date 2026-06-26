@@ -339,3 +339,23 @@ export const TOOL_NAME_SYSTEM_PROMPT =
 export function buildToolNamePrompt(toolSpec: string): string {
   return `Name this tool based on what it does for its end user. Here is its full build spec:\n\n${toolSpec}\n\nReply with the name only.`;
 }
+
+/* ===================================================================== *
+ * Tool-icon generation — draw an SVG glyph for the tool from its chain.
+ * ===================================================================== */
+
+/** Base instruction for the "AI generate" icon action in the tools panel. */
+export const TOOL_ICON_SYSTEM_PROMPT =
+  'You design tiny, single-glyph SVG icons for no-code tools built as a top-to-bottom chain of input, logic, and output nodes. You are given the tool\'s full build spec — its input field labels, its Code/AI logic bodies, and its shared-state slots — so you can read what the tool ACTUALLY DOES and draw a metaphor for it (e.g. a tool that converts CSV to a chart → a small bar-chart glyph). Output rules, follow EXACTLY: reply with ONE <svg> element and NOTHING else — no markdown fences, no prose, no explanation. The <svg> MUST set viewBox="0 0 24 24" and MUST NOT set width or height. Use a clean line-icon style (lucide/Feather-like): stroke="currentColor", fill="none", stroke-width="2", stroke-linecap="round", stroke-linejoin="round", so the icon inherits the UI\'s text color. Use only these elements: path, circle, rect, line, polyline, polygon, ellipse, g. Do NOT use <text>, <image>, <script>, <style>, <foreignObject>, event handlers, or external/href references. Keep it simple and legible at 20px — a few strokes, generous padding inside the 24×24 box.';
+
+/**
+ * Build the user-message text asking the model to draw an SVG icon for a tool
+ * from its full, reproducible build spec. Pair with
+ * {@link TOOL_ICON_SYSTEM_PROMPT} as the system instruction.
+ *
+ * @param toolSpec - The tool's build spec (e.g. from `buildToolPrompt`).
+ * @returns A prompt string.
+ */
+export function buildToolIconPrompt(toolSpec: string): string {
+  return `Draw a single SVG line-icon representing what this tool does for its end user. Here is its full build spec:\n\n${toolSpec}\n\nReply with the <svg> element only.`;
+}

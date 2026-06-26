@@ -10,7 +10,7 @@
  * the same entries into a `{ [key]: value }` object on the bound slot for
  * downstream nodes.
  */
-import { Eye, EyeOff, Vault } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, Vault } from "lucide-react";
 import { useState } from "react";
 
 import { useTranslation } from "@/hooks/useTranslation";
@@ -18,6 +18,44 @@ import type { VaultNode } from "@/types/tool-builder";
 
 /** A masked stand-in for a value, length-capped so long secrets stay tidy. */
 const MASK = "••••••••";
+
+/**
+ * Copy-to-clipboard button for a single Vault value. Owns its own "copied"
+ * flash so each row toggles independently. Silently no-ops if the Clipboard
+ * API is unavailable (e.g. non-secure context).
+ *
+ * @param props.value - The raw value to write to the clipboard.
+ */
+function CopyValueButton({ value }: { value: string }): React.ReactElement {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // Clipboard unavailable — leave state untouched.
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      aria-label={copied ? t("vault.copied") : t("vault.copy")}
+      title={copied ? t("vault.copied") : t("vault.copy")}
+      className="inline-flex shrink-0 items-center justify-center rounded-md border border-transparent p-1 text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:border-border hover:bg-accent hover:text-foreground active:scale-95"
+    >
+      {copied ? (
+        <Check size={13} className="text-primary" />
+      ) : (
+        <Copy size={13} />
+      )}
+    </button>
+  );
+}
 
 /**
  * Render a Vault node's key/value pairs as a detail view.
@@ -58,19 +96,26 @@ export function VaultView({ node }: { node: VaultNode }): React.ReactElement {
           return (
             <div
               key={e.id}
-              className="flex items-baseline justify-between gap-3 bg-card px-3 py-2 leading-tight"
+              className="flex items-center justify-between gap-3 bg-card px-3 py-2 leading-tight"
             >
               <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <Vault size={12} className="opacity-50" />
                 {e.key}
               </dt>
-              <dd className="min-w-0 break-all text-right font-mono text-sm">
+              <dd className="flex w-[45%] min-w-0 shrink-0 items-center justify-end gap-1.5 font-mono text-sm">
                 {hidden ? (
                   <span className="tracking-widest text-muted-foreground">
                     {MASK}
                   </span>
+                ) : e.value ? (
+                  <>
+                    <span className="min-w-0 flex-1 truncate" title={e.value}>
+                      {e.value}
+                    </span>
+                    <CopyValueButton value={e.value} />
+                  </>
                 ) : (
-                  e.value || <span className="text-muted-foreground/60">—</span>
+                  <span className="text-muted-foreground/60">—</span>
                 )}
               </dd>
             </div>

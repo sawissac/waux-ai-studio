@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  Check,
   ChevronDown,
   ChevronLeft,
   Copy,
   MoreHorizontal,
   Plus,
+  RefreshCw,
   Trash2,
   X,
 } from "lucide-react";
@@ -46,10 +48,12 @@ import {
   DOWNLOAD_FORMATS,
   EDITOR_HEIGHTS,
   ENCODE_OPERATIONS,
+  FAKER_MODIFIERS,
   FILE_OUTPUT_FORMATS,
   FILTER_OPERATORS,
   HTTP_METHODS,
   HTTP_RESPONSE_TYPES,
+  IDENTITY_MAX_COUNT,
   JOIN_KINDS,
   NODE_META,
   REGEX_MODES,
@@ -93,6 +97,7 @@ import type {
   HttpMethod,
   HttpRequestNode,
   HttpResponseType,
+  IdentityNode,
   ImageNode,
   JoinKind,
   JsonNode,
@@ -257,7 +262,8 @@ function BindingControl({
     | SpriteNode
     | CodeInputNode
     | DownloadNode
-    | VaultNode;
+    | VaultNode
+    | IdentityNode;
 }) {
   const { stateNode, updateNode } = useToolBuilder();
   const { t } = useTranslation();
@@ -2433,6 +2439,142 @@ function VaultEditor({ node }: { node: VaultNode }) {
   );
 }
 
+/**
+ * Editor for the Identity generator node — record count, deterministic seed
+ * (with a Regenerate shortcut), the JSON `@modifier` template, a clickable
+ * modifier reference, and the bound output slot.
+ *
+ * @param props.node - The IdentityNode being configured.
+ */
+function IdentityEditor({ node }: { node: IdentityNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState<string | null>(null);
+
+  /** Copy a `@token` to the clipboard for pasting into the template. */
+  const copyToken = async (token: string) => {
+    try {
+      await navigator.clipboard?.writeText(token);
+      setCopied(token);
+      window.setTimeout(() => setCopied((c) => (c === token ? null : c)), 1200);
+    } catch {
+      // Clipboard unavailable (no permission / no gesture) — no-op.
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label={t("field.fieldLabel")}>
+        <input
+          value={node.fieldLabel}
+          onChange={(e) => updateNode(node.id, { fieldLabel: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <Field label={t("field.description")}>
+        <input
+          value={node.description ?? ""}
+          placeholder={t("field.descPlaceholder")}
+          onChange={(e) => updateNode(node.id, { description: e.target.value })}
+          className={inputCls}
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label={t("identity.count")}>
+          <input
+            type="number"
+            min={0}
+            max={IDENTITY_MAX_COUNT}
+            value={node.count}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) {
+                updateNode(node.id, {
+                  count: Math.max(
+                    0,
+                    Math.min(IDENTITY_MAX_COUNT, Math.floor(n)),
+                  ),
+                });
+              }
+            }}
+            className={inputCls}
+          />
+        </Field>
+        <Field label={t("identity.seed")}>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              value={node.seed}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) {
+                  updateNode(node.id, { seed: Math.floor(n) });
+                }
+              }}
+              className={inputCls}
+            />
+            <button
+              type="button"
+              aria-label={t("identity.regenerate")}
+              title={t("identity.regenerate")}
+              onClick={() =>
+                updateNode(node.id, {
+                  seed: Math.floor(Math.random() * 1_000_000_000),
+                })
+              }
+              className="grid size-8 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground active:scale-95"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+        </Field>
+      </div>
+      <p className="-mt-2 text-[11px] text-muted-foreground">
+        {t("identity.count.help", { max: IDENTITY_MAX_COUNT })}
+      </p>
+      <Field label={t("identity.template")}>
+        <CodeEditor
+          language="json"
+          height={220}
+          value={node.template}
+          onChange={(template) => updateNode(node.id, { template })}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("identity.template.help")}
+        </p>
+      </Field>
+      <Field label={t("identity.modifiers")}>
+        <div className="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto rounded-md border bg-muted/30 p-2">
+          {FAKER_MODIFIERS.map((m) => {
+            const isCopied = copied === m.token;
+            return (
+              <button
+                key={m.token}
+                type="button"
+                onClick={() => copyToken(m.token)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px] transition-colors duration-(--motion-duration-fast) active:scale-95",
+                  isCopied
+                    ? "border-foreground bg-primary text-primary-foreground"
+                    : "hover:bg-accent",
+                )}
+              >
+                {isCopied ? <Check size={11} /> : <Copy size={11} />}
+                {m.token}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          {t("identity.modifiers.help")}
+        </p>
+      </Field>
+      <BindingControl node={node} />
+      <p className="text-[11px] text-muted-foreground">{t("identity.help")}</p>
+    </div>
+  );
+}
+
 /** Per-type editor body. */
 function EditorBody({
   node,
@@ -2528,6 +2670,8 @@ function EditorBody({
       return <DownloadEditor node={node} />;
     case "vault":
       return <VaultEditor node={node} />;
+    case "identity":
+      return <IdentityEditor node={node} />;
     case "number":
       return <NumberEditor node={node} />;
     case "select":

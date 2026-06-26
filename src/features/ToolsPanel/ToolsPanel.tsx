@@ -18,14 +18,18 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Eye,
+  Globe,
+  LayoutGrid,
   Link2,
   Loader2,
+  Lock,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
   Plus,
   Search,
   SearchX,
+  Shapes,
   Sparkles,
   Trash2,
   Wrench,
@@ -33,6 +37,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { ToolIcon } from "@/components/customs/ToolIcon";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -50,9 +55,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AiKeysButton } from "@/features/AiKeysButton";
 import { useChatModelPref } from "@/hooks/useChatModelPref";
+import { useGallery } from "@/hooks/useGallery";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { useTranslation } from "@/hooks/useTranslation";
+import { generateToolIcon } from "@/lib/generate-tool-icon";
 import { generateToolName } from "@/lib/generate-tool-name";
+import { sanitizeSvgIcon } from "@/lib/html-sanitize";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Tool } from "@/types/tool-builder";
@@ -62,11 +70,16 @@ function SortableToolItem({
   selected,
   renaming,
   generating,
+  inGallery,
+  isShared,
   selectTool,
   beginRename,
   generateName,
+  editIcon,
   shareTool,
   previewTool,
+  toggleGallery,
+  toggleShared,
   deleteTool,
   draftName,
   setDraftName,
@@ -78,11 +91,16 @@ function SortableToolItem({
   selected: boolean;
   renaming: boolean;
   generating: boolean;
+  inGallery: boolean;
+  isShared: boolean;
   selectTool: (id: string) => void;
   beginRename: (id: string, name: string) => void;
   generateName: (id: string) => void;
+  editIcon: (id: string) => void;
   shareTool: (id: string) => void;
   previewTool: (id: string) => void;
+  toggleGallery: (id: string) => void;
+  toggleShared: (id: string) => void;
   deleteTool: (id: string) => void;
   draftName: string;
   setDraftName: (val: string) => void;
@@ -132,10 +150,11 @@ function SortableToolItem({
       {...attributes}
       {...listeners}
     >
-      <span
+      <ToolIcon
+        svg={t.icon}
         className={cn(
-          "size-1.5 shrink-0 rounded-full",
-          selected ? "bg-foreground" : "bg-muted-foreground/40",
+          "size-5 shrink-0 transition-colors duration-(--motion-duration-fast)",
+          selected ? "text-primary-foreground" : "text-muted-foreground",
         )}
       />
       {renaming ? (
@@ -168,7 +187,7 @@ function SortableToolItem({
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             className={cn(
-              "grid size-7 place-items-center rounded-md text-muted-foreground transition-[opacity,background-color] duration-[var(--motion-duration-fast)] hover:bg-background active:scale-95",
+              "grid size-7 place-items-center rounded-md text-muted-foreground transition-[opacity,background-color] duration-(--motion-duration-fast) hover:bg-background active:scale-95",
               "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100",
             )}
           >
@@ -183,6 +202,10 @@ function SortableToolItem({
           <DropdownMenuItem onSelect={() => beginRename(t.id, t.name)}>
             <Pencil />
             {translate("tools.rename")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => editIcon(t.id)}>
+            <Shapes />
+            {translate("tools.editIcon")}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={generating}
@@ -199,6 +222,18 @@ function SortableToolItem({
           <DropdownMenuItem onSelect={() => shareTool(t.id)}>
             <Link2 />
             {translate("tools.share")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => toggleGallery(t.id)}>
+            <LayoutGrid />
+            {inGallery
+              ? translate("gallery.removeFromGallery")
+              : translate("gallery.addToGallery")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => toggleShared(t.id)}>
+            {isShared ? <Lock /> : <Globe />}
+            {isShared
+              ? translate("gallery.makePrivate")
+              : translate("gallery.makePublic")}
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
@@ -228,11 +263,13 @@ export function ToolsPanel({ onHide }: { onHide: () => void }) {
     selectTool,
     addTool,
     renameTool,
+    setToolIcon,
     deleteTool,
     reorderTools,
   } = useToolBuilder();
   const { t } = useTranslation();
   const { provider, model } = useChatModelPref();
+  const { flagsById, setToolInGallery, setToolShared } = useGallery();
 
   /** Id of the tool currently being renamed inline, or null. */
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -241,6 +278,14 @@ export function ToolsPanel({ onHide }: { onHide: () => void }) {
 
   /** Id of the tool whose name is being generated by AI, or null. */
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+
+  /** Id of the tool whose icon is being edited in the dialog, or null. */
+  const [iconEditId, setIconEditId] = useState<string | null>(null);
+  /** Draft SVG markup shown in the icon editor (live-previewed). */
+  const [draftIcon, setDraftIcon] = useState("");
+  /** Whether an AI icon generation is in flight. */
+  const [iconGenerating, setIconGenerating] = useState(false);
+  const toolToEditIcon = tools.find((t) => t.id === iconEditId) ?? null;
 
   /** Id of the tool pending delete confirmation, or null. */
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -305,6 +350,69 @@ export function ToolsPanel({ onHide }: { onHide: () => void }) {
     }
   }
 
+  /** Open the icon editor for a tool, seeding the draft with its current SVG. */
+  function beginEditIcon(id: string) {
+    const tool = tools.find((tl) => tl.id === id);
+    setDraftIcon(tool?.icon ?? "");
+    setIconEditId(id);
+  }
+
+  /**
+   * Persist the draft SVG (sanitised) as the open tool's icon. A blank draft
+   * clears the icon; a non-blank draft that sanitises to nothing is rejected
+   * with a toast so the user can fix it rather than silently losing the icon.
+   */
+  function commitIcon() {
+    if (!iconEditId) {
+      return;
+    }
+    const trimmed = draftIcon.trim();
+    if (!trimmed) {
+      setToolIcon(iconEditId, "");
+      setIconEditId(null);
+      return;
+    }
+    const clean = sanitizeSvgIcon(trimmed);
+    if (!clean) {
+      toast.error(t("tools.iconInvalid"));
+      return;
+    }
+    setToolIcon(iconEditId, clean);
+    toast.success(t("tools.iconSaved"));
+    setIconEditId(null);
+  }
+
+  /**
+   * Generate an SVG icon for the tool being edited from its node chain, using
+   * the user's global Builder-chat model, and drop the result into the draft
+   * for review before saving. Surfaces progress + failures via toasts.
+   */
+  async function handleGenerateIcon() {
+    const tool = toolToEditIcon;
+    if (!tool) {
+      return;
+    }
+    if ((tool.nodes ?? []).length === 0) {
+      toast.error(t("tools.generateEmpty"));
+      return;
+    }
+    setIconGenerating(true);
+    const toastId = toast.loading(t("tools.iconGenerating"));
+    try {
+      const svg = await generateToolIcon({ tool, provider, model });
+      setDraftIcon(svg);
+      toast.success(t("tools.iconGenerateSuccess"), { id: toastId });
+    } catch (err) {
+      const msg =
+        err instanceof Error && err.message === "EMPTY_TOOL"
+          ? t("tools.generateEmpty")
+          : t("tools.iconGenerateError");
+      toast.error(msg, { id: toastId });
+    } finally {
+      setIconGenerating(false);
+    }
+  }
+
   async function handleShare(id: string) {
     const supabase = createClient();
     const { error } = await supabase
@@ -342,6 +450,28 @@ export function ToolsPanel({ onHide }: { onHide: () => void }) {
       tab.location.href = url;
     } else {
       toast.error(t("tools.popupBlocked"));
+    }
+  }
+
+  /** Add the tool to / remove it from the owner's gallery. */
+  async function handleToggleGallery(id: string) {
+    const next = !(flagsById.get(id)?.inGallery ?? false);
+    try {
+      await setToolInGallery(id, next);
+      toast.success(next ? t("gallery.added") : t("gallery.removed"));
+    } catch {
+      toast.error(t("gallery.flagError"));
+    }
+  }
+
+  /** Toggle the tool's public visibility (its share flag). */
+  async function handleTogglePublic(id: string) {
+    const next = !(flagsById.get(id)?.isShared ?? false);
+    try {
+      await setToolShared(id, next);
+      toast.success(next ? t("gallery.madePublic") : t("gallery.madePrivate"));
+    } catch {
+      toast.error(t("gallery.flagError"));
     }
   }
 
@@ -436,11 +566,16 @@ export function ToolsPanel({ onHide }: { onHide: () => void }) {
                     selected={t.id === selectedToolId}
                     renaming={t.id === renamingId}
                     generating={t.id === generatingId}
+                    inGallery={flagsById.get(t.id)?.inGallery ?? false}
+                    isShared={flagsById.get(t.id)?.isShared ?? false}
                     selectTool={selectTool}
                     beginRename={beginRename}
                     generateName={handleGenerateName}
+                    editIcon={beginEditIcon}
                     shareTool={handleShare}
                     previewTool={handlePreview}
+                    toggleGallery={handleToggleGallery}
+                    toggleShared={handleTogglePublic}
                     deleteTool={setDeleteConfirmId}
                     draftName={draftName}
                     setDraftName={setDraftName}
@@ -485,6 +620,80 @@ export function ToolsPanel({ onHide }: { onHide: () => void }) {
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
               {t("common.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={iconEditId !== null}
+        onOpenChange={(open) => !open && setIconEditId(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("tools.iconTitle")}</DialogTitle>
+            <DialogDescription>{t("tools.iconDesc")}</DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center gap-4">
+            <div className="grid size-20 shrink-0 place-items-center border-2 border-foreground bg-card text-foreground shadow-nb-sm">
+              {draftIcon.trim() ? (
+                <ToolIcon svg={draftIcon} className="size-10" />
+              ) : (
+                <span className="px-1 text-center text-[0.625rem] leading-tight text-muted-foreground">
+                  {t("tools.iconEmptyPreview")}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-1 flex-col gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleGenerateIcon}
+                disabled={iconGenerating}
+              >
+                {iconGenerating ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Sparkles />
+                )}
+                {t("tools.iconGenerate")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDraftIcon("")}
+                disabled={!draftIcon.trim() || iconGenerating}
+              >
+                {t("tools.iconClear")}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="tool-icon-svg"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              {t("tools.iconCode")}
+            </label>
+            <textarea
+              id="tool-icon-svg"
+              value={draftIcon}
+              onChange={(e) => setDraftIcon(e.target.value)}
+              placeholder={t("tools.iconPlaceholder")}
+              spellCheck={false}
+              rows={6}
+              className="w-full resize-y border-2 border-foreground bg-background p-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIconEditId(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={commitIcon} disabled={iconGenerating}>
+              {t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>

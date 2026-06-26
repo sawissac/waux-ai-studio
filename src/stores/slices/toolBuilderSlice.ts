@@ -149,6 +149,17 @@ const toolBuilderSlice = createSlice({
         tool.name = action.payload.name;
       }
     },
+    /**
+     * Set (or clear) a tool's sidebar icon. The payload's `icon` should already
+     * be sanitised SVG markup; an empty string clears the icon (UI falls back
+     * to the default glyph).
+     */
+    setToolIcon(state, action: PayloadAction<{ id: string; icon: string }>) {
+      const tool = state.tools.find((t) => t.id === action.payload.id);
+      if (tool) {
+        tool.icon = action.payload.icon || undefined;
+      }
+    },
     /** Delete a tool; reselect a neighbour when the open tool is removed. */
     deleteTool(state, action: PayloadAction<string>) {
       const idx = state.tools.findIndex((t) => t.id === action.payload);
@@ -450,6 +461,7 @@ export const {
   selectTool,
   addTool,
   renameTool,
+  setToolIcon,
   deleteTool,
   addNode,
   deleteNode,

@@ -56,6 +56,7 @@ export type ToolNodeType =
   | "counter"
   | "download"
   | "vault"
+  | "identity"
   | "ai";
 
 /** Languages the Code editor input node can highlight (Monaco built-ins). */
@@ -918,6 +919,36 @@ export interface VaultNode extends BaseNode {
   masked: boolean;
 }
 
+/**
+ * Synthetic-data generator built on faker.js. Produces an array of `count`
+ * records shaped by a JSON `template` whose string values may embed `@token`
+ * modifiers (e.g. `"@firstName"`, `"@email"`, or a mixed `"@firstName @lastName"`).
+ * Each `@token` resolves to a fresh faker value per record; a value that is
+ * exactly one token keeps the generated native type (number / boolean), while
+ * a mixed string interpolates each token as text. Generation is deterministic
+ * for a given `seed` — bumping the seed (the editor's "Regenerate") yields a
+ * different but reproducible dataset. The assembled array is written to the
+ * bound state slot so downstream nodes (Table, Filter, JSON, …) can consume it.
+ */
+export interface IdentityNode extends BaseNode {
+  type: "identity";
+  /** Heading shown above the preview. Blank = omit. */
+  fieldLabel: string;
+  description: string;
+  /** How many records to generate (clamped to a sane upper bound at runtime). */
+  count: number;
+  /**
+   * The record shape as a JSON string. String values may contain `@token`
+   * modifiers replaced per record with faker-generated values. Invalid JSON
+   * generates nothing.
+   */
+  template: string;
+  /** Deterministic faker seed; changing it regenerates the dataset. */
+  seed: number;
+  /** State slot the generated array of records is written into. */
+  binding: StateBinding;
+}
+
 /** Custom logic block. Body defines `function run(state) { ... }`. */
 export interface CodeNode extends BaseNode {
   type: "code";
@@ -1003,12 +1034,20 @@ export type ToolNode =
   | CounterNode
   | DownloadNode
   | VaultNode
+  | IdentityNode
   | AiNode;
 
 /** A named, ordered chain of nodes. */
 export interface Tool {
   id: string;
   name: string;
+  /**
+   * Optional sidebar icon as a raw SVG markup string. Always re-sanitized
+   * (`sanitizeSvgIcon`) before it is rendered. Absent/blank ⇒ the UI shows a
+   * default glyph. Edited by hand or AI-generated from the tool's node chain
+   * via the tool options menu.
+   */
+  icon?: string;
   nodes: ToolNode[];
 }
 
@@ -1070,7 +1109,8 @@ export type RenderNode =
   | ThemedNode
   | CounterNode
   | DownloadNode
-  | VaultNode;
+  | VaultNode
+  | IdentityNode;
 
 /** Node kinds that produce visible output in the preview. */
 export const RENDER_NODE_TYPES: ReadonlySet<ToolNodeType> =
@@ -1097,6 +1137,7 @@ export const RENDER_NODE_TYPES: ReadonlySet<ToolNodeType> =
     "counter",
     "download",
     "vault",
+    "identity",
   ]);
 
 /** Type guard: does this node render in the preview? */

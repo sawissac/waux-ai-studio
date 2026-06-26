@@ -25,6 +25,7 @@ import {
   FileUp,
   Film,
   Filter as FilterIcon,
+  Fingerprint,
   FormInput,
   GitMerge,
   Globe,
@@ -476,6 +477,16 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     icon: Vault,
     slug: "@vault",
   },
+  identity: {
+    type: "identity",
+    label: "Identity",
+    blurb:
+      "Generate fake data with faker.js — a JSON template of @modifiers (e.g. @firstName, @email) produces N records on bound state.",
+    accent: "violet",
+    group: "Data",
+    icon: Fingerprint,
+    slug: "@identity",
+  },
   ai: {
     type: "ai",
     label: "AI",
@@ -491,7 +502,7 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
 /** Palette order: groups, and node types within each group. */
 export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
   [
-    { group: "Data", types: ["state", "vault"] },
+    { group: "Data", types: ["state", "vault", "identity"] },
     {
       group: "Inputs",
       types: [
@@ -746,6 +757,95 @@ export const DOWNLOAD_FORMATS: { value: DownloadFormat; label: string }[] = [
   { value: "svg", label: ".svg" },
   { value: "png", label: ".png" },
   { value: "jpeg", label: ".jpeg" },
+];
+
+/** Upper bound on how many records an Identity node will generate. */
+export const IDENTITY_MAX_COUNT = 1000;
+
+/** Default record-shape template for a fresh Identity node. */
+export const IDENTITY_DEFAULT_TEMPLATE = `{
+  "id": "@uuid",
+  "fullName": "@fullName",
+  "username": "@username",
+  "email": "@email",
+  "phone": "@phone"
+}`;
+
+/** Category grouping for the Identity node's faker modifier reference. */
+export type FakerModifierCategory =
+  | "Person"
+  | "Internet"
+  | "Location"
+  | "Business"
+  | "Finance"
+  | "Number"
+  | "Date"
+  | "Text";
+
+/** One `@token` modifier available in an Identity template. */
+export interface FakerModifier {
+  /** Display token, written into the template (e.g. `@firstName`). */
+  token: string;
+  category: FakerModifierCategory;
+}
+
+/**
+ * Catalogue of `@token` modifiers an Identity template understands. Drives the
+ * editor's clickable reference and the docs. Tokens resolve case-insensitively;
+ * the generator map lives in `@/lib/generate-identity` — keep the two in sync.
+ */
+export const FAKER_MODIFIERS: FakerModifier[] = [
+  { token: "@firstName", category: "Person" },
+  { token: "@lastName", category: "Person" },
+  { token: "@fullName", category: "Person" },
+  { token: "@sex", category: "Person" },
+  { token: "@jobTitle", category: "Person" },
+  { token: "@bio", category: "Person" },
+  { token: "@avatar", category: "Person" },
+  { token: "@phone", category: "Person" },
+  { token: "@username", category: "Internet" },
+  { token: "@email", category: "Internet" },
+  { token: "@password", category: "Internet" },
+  { token: "@url", category: "Internet" },
+  { token: "@ip", category: "Internet" },
+  { token: "@ipv6", category: "Internet" },
+  { token: "@mac", category: "Internet" },
+  { token: "@domainName", category: "Internet" },
+  { token: "@userAgent", category: "Internet" },
+  { token: "@emoji", category: "Internet" },
+  { token: "@city", category: "Location" },
+  { token: "@country", category: "Location" },
+  { token: "@countryCode", category: "Location" },
+  { token: "@state", category: "Location" },
+  { token: "@street", category: "Location" },
+  { token: "@zipCode", category: "Location" },
+  { token: "@latitude", category: "Location" },
+  { token: "@longitude", category: "Location" },
+  { token: "@timeZone", category: "Location" },
+  { token: "@company", category: "Business" },
+  { token: "@catchPhrase", category: "Business" },
+  { token: "@product", category: "Business" },
+  { token: "@productDescription", category: "Business" },
+  { token: "@price", category: "Business" },
+  { token: "@currency", category: "Finance" },
+  { token: "@creditCard", category: "Finance" },
+  { token: "@iban", category: "Finance" },
+  { token: "@accountNumber", category: "Finance" },
+  { token: "@amount", category: "Finance" },
+  { token: "@uuid", category: "Number" },
+  { token: "@int", category: "Number" },
+  { token: "@float", category: "Number" },
+  { token: "@boolean", category: "Number" },
+  { token: "@color", category: "Number" },
+  { token: "@pastDate", category: "Date" },
+  { token: "@futureDate", category: "Date" },
+  { token: "@recentDate", category: "Date" },
+  { token: "@birthDate", category: "Date" },
+  { token: "@word", category: "Text" },
+  { token: "@words", category: "Text" },
+  { token: "@sentence", category: "Text" },
+  { token: "@paragraph", category: "Text" },
+  { token: "@slug", category: "Text" },
 ];
 
 /** Browser-safe UUID v4. */
@@ -1164,6 +1264,17 @@ export function createNode(type: ToolNodeType): ToolNode {
         binding: { mode: "name", value: "state1" },
         entries: [{ id: uuid(), key: "key1", value: "" }],
         masked: false,
+      };
+    case "identity":
+      return {
+        id,
+        type,
+        fieldLabel: "Identity",
+        description: "",
+        count: 5,
+        template: IDENTITY_DEFAULT_TEMPLATE,
+        seed: 1,
+        binding: { mode: "name", value: "state1" },
       };
     case "ai":
       return {

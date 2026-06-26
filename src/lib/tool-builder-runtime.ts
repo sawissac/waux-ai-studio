@@ -5,6 +5,7 @@
  */
 import { buildAiNodeSystemPrompt } from "@/constants/ai-prompts";
 import { aiHelpers, callGemini, callOpenRouter } from "@/lib/ai-providers";
+import { generateIdentities } from "@/lib/generate-identity";
 import { sanitizeHtmlDoc } from "@/lib/html-sanitize";
 import { httpRequest } from "@/lib/http-request";
 import { jsonToTs } from "@/lib/json-to-ts";
@@ -26,6 +27,7 @@ import type {
   FilterNode,
   HtmlSanitizeNode,
   HttpRequestNode,
+  IdentityNode,
   JsonPathNode,
   MapNode,
   MathNode,
@@ -536,9 +538,7 @@ function runCsvToMdNode(
     // Array of arrays — first row = headers
     const [headerArr, ...rest] = rows as unknown[][];
     headers = headerArr.map((c) => String(c ?? ""));
-    bodyRows = rest.map((r) =>
-      headers.map((_, i) => String((r)[i] ?? "")),
-    );
+    bodyRows = rest.map((r) => headers.map((_, i) => String(r[i] ?? "")));
   } else if (rows[0] !== null && typeof rows[0] === "object") {
     // Array of objects — keys = headers
     headers = Object.keys(rows[0]);
@@ -690,6 +690,24 @@ function runVaultNode(
 }
 
 /**
+ * Generate an Identity node's fake-data records and write the array to its
+ * bound state slot. Deterministic for the node's `(template, count, seed)`, so
+ * it re-runs harmlessly in the live-change chain. Invalid JSON / zero count
+ * writes an empty array.
+ */
+function runIdentityNode(
+  node: IdentityNode,
+  state: StateMap,
+  stateNode: StateNode | null,
+): void {
+  const outName = resolveBinding(node.binding, stateNode);
+  if (!outName) {
+    return;
+  }
+  state[outName] = generateIdentities(node);
+}
+
+/**
  * Run the synchronous transform nodes (everything except code, ai,
  * http_request, encode — those are async and handled by their callers). Pure,
  * so both {@link runChain} and {@link changeChain} share it for live preview.
@@ -742,6 +760,9 @@ function runSyncTransform(
       return true;
     case "vault":
       runVaultNode(node, state, stateNode);
+      return true;
+    case "identity":
+      runIdentityNode(node, state, stateNode);
       return true;
     default:
       return false;
@@ -1073,6 +1094,11 @@ export function nodeSubtitle(
       return {
         label: "Vault →",
         value: `${node.entries.length} keys → ${resolveBinding(node.binding, stateNode) || "—"}`,
+      };
+    case "identity":
+      return {
+        label: "Generate →",
+        value: `${node.count} × → ${resolveBinding(node.binding, stateNode) || "—"}`,
       };
     case "ai":
       return {

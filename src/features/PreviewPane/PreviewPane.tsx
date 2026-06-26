@@ -173,6 +173,7 @@ import {
   DeviceFrame,
   DeviceToggle,
 } from "@/features/PreviewPane/components/DeviceFrame";
+import { IdentityView } from "@/features/PreviewPane/components/IdentityView";
 import { SpriteView } from "@/features/PreviewPane/components/SpriteView";
 import { ThemedSite } from "@/features/PreviewPane/components/ThemedSite";
 import { VaultView } from "@/features/PreviewPane/components/VaultView";
@@ -749,6 +750,24 @@ export function PreviewPane({
                           </p>
                         )}
                         <VaultView node={node} />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "identity") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="-mt-1 text-xs text-muted-foreground">
+                            {node.description}
+                          </p>
+                        )}
+                        <IdentityView node={node} />
                       </div>
                     );
                   }

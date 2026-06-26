@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- Add `identity` node type.
+--
+-- `identity` — Data node. Synthetic-data generator built on faker.js. Parses a
+--              JSON template of `@modifier` tokens and materialises `count`
+--              records (deterministic per seed), writing the array to a bound
+--              state slot; renders a JSON sample in the preview. Runs
+--              synchronously in the run and live-change chains.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'identity';

@@ -5,6 +5,7 @@ import {
   Boxes,
   Check,
   CloudUpload,
+  GalleryThumbnails,
   Loader2,
   LogOut,
 } from "lucide-react";
@@ -94,6 +95,16 @@ export function Topbar({
               : isError
                 ? t("topbar.error")
                 : t("topbar.save")}
+        </Button>
+
+        <Button asChild variant="outline" size="icon-sm" className="size-7">
+          <Link
+            href="/gallery"
+            aria-label={t("gallery.link")}
+            title={t("gallery.link")}
+          >
+            <GalleryThumbnails className="size-4" />
+          </Link>
         </Button>
 
         <Button asChild variant="outline" size="icon-sm" className="size-7">

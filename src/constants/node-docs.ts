@@ -2029,6 +2029,63 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     example:
       'A Vault node (Field label "API config", entries { baseUrl: "https://api.example.com", apiKey: "sk-123" }, masked on, binding config) writes config = { baseUrl: "https://api.example.com", apiKey: "sk-123" }. An HTTP Request node interpolates {{baseUrl}} (via a JSONPath that pulls config.baseUrl into a slot) and sends the key as a header.',
   },
+  identity: {
+    summary:
+      'The "Identity" node (type "identity", slug @identity, Data group) is a synthetic-data generator built on faker.js. You write a JSON `template` describing one record, where any string value may embed `@token` modifiers (e.g. "@firstName", "@email", or a mixed "@firstName @lastName"); the runtime parses the template, seeds faker deterministically, and materialises `count` records — replacing each `@token` with a fresh faker value per record. The resulting array is written to the bound state slot, and the preview shows a JSON sample. Mental model: a mock-data source — point a Table / Filter / JSON node at its output to view or shape the records.',
+    whenToUse:
+      "Reach for it to seed a tool with realistic placeholder data — users, products, addresses, transactions — without a backend: prototyping a Table/Chart, demoing a transform chain, or stress-testing a Filter/Sort/Map. For real data use an HTTP Request node; for a fixed handful of literal values use Vault.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Heading shown above the preview sample (node.fieldLabel). Leave blank to omit. Default: "Identity".',
+      },
+      {
+        name: "Description",
+        description:
+          "Optional author note (node.description). Shown under the field label and as the node card subtitle; does not affect execution.",
+      },
+      {
+        name: "Records",
+        description:
+          "How many records to generate (node.count). Clamped to 0–1000; 0 generates nothing. Default: 5.",
+      },
+      {
+        name: "Seed",
+        description:
+          "Deterministic faker seed (node.seed). The same template + count + seed always produces the same records; the Regenerate button sets a fresh random seed. Default: 1.",
+      },
+      {
+        name: "Template",
+        description:
+          'The record shape as a JSON string (node.template), edited in a code editor. String values may contain @modifiers. A value that is exactly one token keeps the generated native type (e.g. "@int" → a number); a mixed string interpolates each token as text. Unknown tokens are left verbatim. Invalid JSON generates nothing.',
+      },
+      {
+        name: "Modifiers",
+        description:
+          "A clickable reference of every available @token (copy to clipboard). Tokens resolve case-insensitively and span person, internet, location, business, finance, number, date, and text categories (e.g. @firstName, @email, @city, @company, @price, @uuid, @int, @pastDate, @sentence).",
+      },
+      {
+        name: "State binding",
+        description:
+          "State slot the generated array is written to (node.binding, name-mode). Default slot: state1.",
+      },
+    ],
+    io: {
+      reads: "Nothing — records are generated from the node's own template.",
+      writes:
+        "State slot named by node.binding — an array of `count` generated record objects (or `[]` when the template is invalid JSON or count is 0). If the binding resolves to an empty name the node no-ops. Generation is deterministic for (template, count, seed) and re-runs harmlessly in the run and live-change chains.",
+    },
+    tips: [
+      "Because generation is seeded, the preview never flickers and the data is reproducible — bump the seed (Regenerate) when you want a different set.",
+      "Wire the output to a Table node to view the records as a grid, or to Filter / Sort / Map to shape them before display.",
+      'A value that is exactly one token preserves type, so prefer "@int" / "@boolean" (not "id-@int") when a downstream node expects a real number/boolean.',
+      "Unknown @tokens are left as literal text — handy to spot typos in the preview.",
+      "Bindings are name-based; renaming/removing the referenced slot in the State node silently resolves to empty and the node no-ops.",
+    ],
+    example:
+      'An Identity node (count 10, template { "id": "@uuid", "name": "@fullName", "email": "@email", "age": "@int" }, binding people) writes people = an array of 10 objects like { id: "e4a4…", name: "Laury Aufderhar", email: "Pearl.Medhurst60@gmail.com", age: 42 }. A Table node bound to people renders them; a Filter node keeps age > 18.',
+  },
 };
 
 /**

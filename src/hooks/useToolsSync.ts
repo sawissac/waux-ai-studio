@@ -20,7 +20,7 @@ async function fetchAllTools(userId: string): Promise<Tool[]> {
   // into this list.
   const { data: toolRows, error } = await supabase
     .from("tools")
-    .select("id, name, position")
+    .select("id, name, icon, position")
     .eq("owner_id", userId)
     .order("position");
 
@@ -46,6 +46,7 @@ async function fetchAllTools(userId: string): Promise<Tool[]> {
   return toolRows.map((t) => ({
     id: t.id,
     name: t.name,
+    icon: t.icon ?? undefined,
     nodes: (nodeRows ?? [])
       .filter((n) => n.tool_id === t.id)
       // Spread config (per-type fields) alongside the shared id + type fields.
@@ -72,6 +73,7 @@ async function persistTools(tools: Tool[], userId: string): Promise<void> {
       id: t.id,
       owner_id: userId,
       name: t.name,
+      icon: t.icon ?? null,
       position: i,
     }));
     const { error } = await supabase.from("tools").upsert(toolRows);

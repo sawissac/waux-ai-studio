@@ -2,7 +2,9 @@
 
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
+  Copy,
   Download,
   Loader2,
   Plus,
@@ -64,9 +66,6 @@ interface ChatItem {
   /** Control message (confirm / cancel / self-fix): sent to the model but not shown. */
   hidden?: boolean;
 }
-
-/** Largest height (px) the composer textarea auto-grows to before scrolling. */
-const COMPOSER_MAX_HEIGHT = 160;
 
 /** Max root-cause fix passes the user can trigger per build before it's capped. */
 const MAX_SELF_FIX = 100;
@@ -206,6 +205,19 @@ function isAffirmative(text: string): boolean {
   return en.test(trimmed.toLowerCase()) || my.test(trimmed);
 }
 
+/** Trigger a client-side download of `content` as a Markdown file. */
+function downloadText(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 /**
  * ChatGPT-style assistant for the Builder panel's "chat" tab.
  *
@@ -299,6 +311,7 @@ export function ChatView({
 
   const [messages, setMessages] = useState<ChatItem[]>([]);
   const [input, setInput] = useState("");
+  const [inputFocused, setInputFocused] = useState(false);
   // Provider + model are a global per-user preference (persisted on profiles).
   const { provider, model: savedModel, save: savePref } = useChatModelPref();
   const model = savedModel ?? DEFAULT_MODELS[provider];
@@ -350,12 +363,6 @@ export function ChatView({
     if (el) {
       el.style.height = "auto";
     }
-  }
-
-  /** Grow the composer to fit its content, capped at {@link COMPOSER_MAX_HEIGHT}. */
-  function autoGrow(el: HTMLTextAreaElement) {
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT)}px`;
   }
 
   /** Switch provider and reset the model to that provider's default. */
@@ -542,14 +549,8 @@ export function ChatView({
       const improved = reply.trim();
       if (improved) {
         setInput(improved);
-        // Let the textarea regrow to the new content on the next frame.
-        requestAnimationFrame(() => {
-          const el = textareaRef.current;
-          if (el) {
-            autoGrow(el);
-            el.focus();
-          }
-        });
+        // Refocus the composer on the next frame (it auto-sizes via CSS).
+        requestAnimationFrame(() => textareaRef.current?.focus());
       }
     } catch (e) {
       if (!ac.signal.aborted) {
@@ -718,15 +719,8 @@ export function ChatView({
     const md =
       `# ${t("chat.greeting")}\n\n` +
       visible.map((m) => `## ${roleHeading(m.role)}\n\n${m.text}`).join("\n\n");
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `chat-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.md`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    downloadText(`chat-${ts}.md`, md);
   }
 
   /**
@@ -941,20 +935,23 @@ export function ChatView({
               )}
             </div>
           )}
-          <div className="flex items-end gap-2 border-2 border-foreground bg-card p-2 shadow-nb focus-within:ring-2 focus-within:ring-ring/50">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                autoGrow(e.target);
-              }}
-              onKeyDown={handleKeyDown}
-              rows={1}
-              placeholder={t("chat.placeholder")}
-              aria-label={t("chat.placeholder")}
-              className="max-h-40 min-h-8 flex-1 resize-none bg-transparent px-1.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
-            />
+          <div className="flex items-center gap-2 border-2 border-foreground bg-card p-2 shadow-nb focus-within:ring-2 focus-within:ring-ring/50">
+            <div className="relative flex-1">
+              {!input.trim() && (
+                <AnimatedPlaceholder t={t} animate={!inputFocused} />
+              )}
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                aria-label={t("chat.placeholder")}
+                className="field-sizing-content max-h-40 min-h-9 w-full resize-none content-center bg-transparent px-1.5 py-1.5 pb-0 text-sm leading-5 outline-none"
+              />
+            </div>
             <Button
               type="button"
               size="icon"
@@ -1016,6 +1013,36 @@ function MessageRow({
   onNodeClick?: (type: ToolNodeType) => void;
 }) {
   const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
+  // Stamped once when the row first mounts — the moment the message appeared.
+  const [stamp] = useState(() => new Date());
+  const timeLabel = stamp.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  /** Copy the raw message text and briefly flip the icon to a check. */
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(message.text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked (permissions / insecure context) — ignore.
+    }
+  }
+
+  /** Download just this message as a standalone Markdown file. */
+  function download() {
+    const heading = isUser ? t("chat.you") : t("chat.assistant");
+    const ts = stamp.toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    downloadText(
+      `${message.role}-${ts}.md`,
+      `## ${heading}\n\n${message.text}`,
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -1044,19 +1071,44 @@ function MessageRow({
         </span>
         <div
           className={cn(
-            "prose prose-sm max-w-none border-2 border-foreground px-3 py-2 text-sm wrap-break-word shadow-nb-sm *:first:mt-0 *:last:mb-0",
+            "prose prose-sm max-w-none px-3 py-2 text-sm wrap-break-word *:first:mt-0 *:last:mb-0",
             // The user bubble sits on the yellow `primary` fill, but the
             // typography plugin hardcodes gray `--tw-prose-*` colors (bullets,
             // list numbers, bold, code, headings) tuned for a light surface, so
             // they render faint here. Pin every prose color to `currentColor`
             // (= primary-foreground) so all Markdown stays legible on the fill.
             isUser
-              ? "bg-primary text-primary-foreground [--tw-prose-body:currentColor] [--tw-prose-headings:currentColor] [--tw-prose-bold:currentColor] [--tw-prose-counters:currentColor] [--tw-prose-bullets:currentColor] [--tw-prose-code:currentColor] [--tw-prose-quotes:currentColor] [--tw-prose-quote-borders:currentColor] [--tw-prose-links:currentColor] [--tw-prose-hr:currentColor] [--tw-prose-captions:currentColor] [--tw-prose-th-borders:currentColor] [--tw-prose-td-borders:currentColor]"
-              : "bg-card text-card-foreground dark:prose-invert",
+              ? "border-2 border-foreground bg-primary text-primary-foreground shadow-nb-sm [--tw-prose-body:currentColor] [--tw-prose-headings:currentColor] [--tw-prose-bold:currentColor] [--tw-prose-counters:currentColor] [--tw-prose-bullets:currentColor] [--tw-prose-code:currentColor] [--tw-prose-quotes:currentColor] [--tw-prose-quote-borders:currentColor] [--tw-prose-links:currentColor] [--tw-prose-hr:currentColor] [--tw-prose-captions:currentColor] [--tw-prose-th-borders:currentColor] [--tw-prose-td-borders:currentColor]"
+              : "text-card-foreground dark:prose-invert",
           )}
         >
           <Markdown content={message.text} onNodeClick={onNodeClick} />
         </div>
+        {!isUser && (
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span>{timeLabel}</span>
+            <button
+              type="button"
+              onClick={copy}
+              title={t(copied ? "chat.copied" : "chat.copy")}
+              aria-label={t(copied ? "chat.copied" : "chat.copy")}
+              className="inline-flex items-center gap-1 font-medium transition-colors hover:text-foreground"
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+              {t(copied ? "chat.copied" : "chat.copy")}
+            </button>
+            <button
+              type="button"
+              onClick={download}
+              title={t("chat.download")}
+              aria-label={t("chat.download")}
+              className="inline-flex items-center gap-1 font-medium transition-colors hover:text-foreground"
+            >
+              <Download size={12} />
+              {t("chat.download")}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1095,7 +1147,7 @@ function ThinkingRow({ t }: { t: ReturnType<typeof useTranslation>["t"] }) {
       <span className="grid size-8 shrink-0 place-items-center border-2 border-foreground bg-primary text-primary-foreground shadow-nb-sm">
         <Sparkles size={15} />
       </span>
-      <div className="inline-flex items-center gap-2 border-2 border-foreground bg-card px-3 py-2 text-sm text-muted-foreground shadow-nb-sm">
+      <div className="inline-flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
         <Loader2 size={14} className="animate-spin" />
         <span
           key={index}
@@ -1192,5 +1244,91 @@ function BuildReviewCard({
         </Button>
       </div>
     </div>
+  );
+}
+
+const PLACEHOLDER_KEYS = [
+  "chat.placeholder.1",
+  "chat.placeholder.2",
+  "chat.placeholder.3",
+  "chat.placeholder.4",
+  "chat.placeholder.5",
+] as const;
+
+/**
+ * Typewriter overlay rendered above the chat textarea while it is empty.
+ * Cycles through example prompts, typing each one out, holding, then deleting
+ * before moving to the next. Honors `prefers-reduced-motion` by falling back to
+ * the static base placeholder. Purely decorative (`aria-hidden`) — the textarea
+ * keeps its own `aria-label` for screen readers.
+ */
+function AnimatedPlaceholder({
+  t,
+  animate,
+}: {
+  t: ReturnType<typeof useTranslation>["t"];
+  animate: boolean;
+}) {
+  const phrasesKey = PLACEHOLDER_KEYS.map((k) => t(k)).join("");
+  const [text, setText] = useState("");
+  const [reduced, setReduced] = useState(false);
+  const still = reduced || !animate;
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mq.matches);
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    if (still) {
+      setText("");
+      return;
+    }
+    const phrases = phrasesKey.split("");
+    let phrase = 0;
+    let char = 0;
+    let deleting = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const tick = () => {
+      const current = phrases[phrase];
+      if (!deleting) {
+        char++;
+        setText(current.slice(0, char));
+        if (char >= current.length) {
+          deleting = true;
+          timer = setTimeout(tick, 1800); // hold the full phrase
+          return;
+        }
+        timer = setTimeout(tick, 55);
+      } else {
+        char--;
+        setText(current.slice(0, char));
+        if (char <= 0) {
+          deleting = false;
+          phrase = (phrase + 1) % phrases.length;
+          timer = setTimeout(tick, 350);
+          return;
+        }
+        timer = setTimeout(tick, 28);
+      }
+    };
+    timer = setTimeout(tick, 400);
+    return () => clearTimeout(timer);
+  }, [still, phrasesKey]);
+
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 flex items-center px-1.5 py-1.5 text-sm text-muted-foreground"
+    >
+      <span className="truncate">{still ? t("chat.placeholder") : text}</span>
+      {!still && (
+        <span className="ml-0.5 inline-block h-3.5 w-px shrink-0 animate-pulse bg-muted-foreground" />
+      )}
+    </span>
   );
 }

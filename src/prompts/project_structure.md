@@ -1,6 +1,6 @@
 # Project Structure — File Placement Rules
 
-Last updated: 2026-06-21
+Last updated: 2026-06-25
 
 Where each file type lives. Next.js 16 App Router + TypeScript.
 
@@ -53,6 +53,9 @@ Rule: `page.tsx` is a thin shell that mounts one feature. No markup, no fetching
 
 - `app/(full-frame-public)/login/page.tsx` — `/login` route (thin shell, mounts `AuthLogin` feature)
 - `app/(full-frame-public)/[toolId]/page.tsx` — `/<uuid>` share route (thin shell, mounts `SharedToolView` feature; public, no auth required)
+- `app/(full-frame-public)/g/[handle]/page.tsx` — `/g/<handle>` public gallery route (+ `loading.tsx`; thin shell + `generateMetadata`, mounts `PublicGallery`; public, no auth — the proxy whitelists `/g/*`). The static `g` segment takes priority over the `[toolId]` dynamic at the same level.
+- `app/gallery/page.tsx` — `/gallery` private route (thin shell, mounts the `Gallery` manager; auth-gated by the proxy)
+- `app/api/gallery/[handle]/route.ts` — public gallery data endpoint. Resolves a published gallery by handle under anon RLS and returns its visible tool cards; the owner id is resolved server-side and never serialised. The proxy whitelists `/api/gallery/*`.
 
 - `app/docs/layout.tsx` — docs section shell (mounts `DocsShell` from the `NodeDocs` feature: topbar + `prose` column)
 - `app/docs/nodes/page.mdx` — `/docs/nodes` MDX page. Authored prose + `<NodeDocs />` (the generated node-type reference). MDX is enabled via `next.config.ts` (`createMDX` + `pageExtensions`) and styled globally by `src/mdx-components.tsx`.
@@ -97,7 +100,7 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
   - `index.ts` — barrel: re-exports the `ToolBuilder` component
   - `ToolBuilder.tsx` — entry component; composes the panel features. Owns the center view (builder vs chat) + side-panel visibility: the chat tab hides both side panels, panel/inline restore them, and per-panel toggle buttons (PanelLeft / PanelRight) in the builder header hide/show Tools + Node independently.
 - `Topbar/` — tool name + count header
-- `ToolsPanel/` — left tools list + search
+- `ToolsPanel/` — left tools list + search. Each row shows the tool's icon (`@/components/customs/ToolIcon` renders the sanitized per-tool SVG, falling back to a default glyph). The per-row options menu exposes "Edit icon" — a dialog with a live preview, an SVG-code textarea, and an "AI generate" button (`@/lib/generate-tool-icon`, draws an icon from the tool's node chain) — plus the gallery actions "Add to / Remove from gallery" (toggles `tools.in_gallery`) and "Make public / private" (toggles `tools.is_shared`), wired through `@/hooks/useGallery`.
 - `BuilderPanel/` — center node-chain builder; composes `NodeCard` + `PreviewPane` features. A header segmented control switches the center view between the node builder (panel / inline editor placement) and a chat surface.
   - `components/ChatView.tsx` — feature-private ChatGPT-style chat assistant. Calls the chosen provider (Gemini / OpenRouter; keys via the AI-keys popover in `ToolsPanel`) with a system prompt from `buildChatSystemPrompt` (`@/constants/ai-prompts`) + `buildChatToolContext` (`@/lib/chat-context`) — the open tool's connected node chain, the node catalog, docs for the node types in use, and the exact config schema of every node type. **No function calling.** Building is one-shot: a build request first yields a plan (recovered from the reply via `extractPlanFromText`); once the user approves in chat, the next turn returns the COMPLETE tool as a single JSON build spec (`parseBuildSpec`) that's applied atomically via `applyBuildSpec` (one Redux dispatch), then `validateTool` surfaces any dead wires for the review/fix card. Provider/model pickers, plan/build/review cards, thinking indicator, error + retry. Shown when the "chat" tab is active.
 - `NodeCard/` — single node row; composes the `NodeEditor` feature
@@ -108,7 +111,11 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
   - `components/ChartView.tsx` — Chart-node renderer (d3: bar/line/area/pie/scatter over normalized array data)
   - `components/SpriteView.tsx` — Sprite-node renderer (flip-book animation over a bound frame array / sprite sheet)
   - `components/VaultView.tsx` — Vault-node renderer (read-only key/value detail view with optional value masking)
+  - `components/IdentityView.tsx` — Identity-node renderer (read-only JSON sample of the faker-generated records + a record-count badge; computes the same array as the runtime via `@/lib/generate-identity`)
 - `SharedToolView/` — public share view. Fetches a shared tool via `/api/shared/[toolId]` and renders only `PreviewPane`. No builder UI. Mounted by `app/(full-frame-public)/[toolId]/page.tsx`.
+- `Gallery/` — signed-in gallery manager. Configures the user's public gallery (handle, title, description, master public toggle) and lists every tool with its membership + public/private controls. All state goes through `@/hooks/useGallery` (Supabase, outside the Tool Builder save cycle). Mounted by `app/gallery/page.tsx`.
+  - `components/GalleryToggle.tsx` — feature-private neobrutalist on/off switch (mirrors `Settings/components/SettingToggle`).
+- `PublicGallery/` — public gallery card grid. Fetches `/api/gallery/[handle]`, renders tool cards (icon + name) that link to each tool's public preview (`/<toolId>`). No auth, no builder UI, no owner identity. Mounted by `app/(full-frame-public)/g/[handle]/page.tsx`.
 - `Settings/` — user settings. Exposes `SettingsButton` (gear trigger + dialog) mounted in `Topbar`. Renders the available-settings catalog (`@/constants/settings`); reads/writes via `@/hooks/useAppConfig`. Persistence + theme application live in `@/providers/AppConfigProvider`.
   - `components/SettingToggle.tsx` — feature-private on/off switch.
 - `NodeDocs/` — docs section. `NodeDocs` renders the node-type reference catalogue from `@/lib/node-catalog` (`getNodeCatalog()`) + `@/constants/tool-builder` (icons/accents), localized via `useTranslation` so it stays in lockstep with the in-app palette. Mounted by `app/docs/nodes/page.mdx`. Each card is a button that opens the detail dialog; the selected node is mirrored to the URL hash (`#node-<type>`) for deep-linking.
@@ -145,7 +152,7 @@ Rule: `ui/` is lowercase-kebab. `customs/` and `icons/` are PascalCase.
 
 **ui/** — `button` (shadcn/ui, new-york style, neutral base). `markdown.tsx` — shared `Markdown` renderer (react-markdown + GFM/math/highlight, sanitized; caller wraps in `prose`). Single source for Markdown across the `markdown` input node, AI Markdown output (`PreviewPane`), and the Builder chat assistant (`ChatView`).
 
-**customs/** — `ClickBurst.tsx` — global pointer click-burst effect (neobrutalism square ring + sparks, spring physics via `motion`/framer-motion). Mounted once in `app/layout.tsx`; portals a fixed pointer-events-none overlay. No-ops under reduced motion.
+**customs/** — `ClickBurst.tsx` — global pointer click-burst effect (neobrutalism square ring + sparks, spring physics via `motion`/framer-motion). Mounted once in `app/layout.tsx`; portals a fixed pointer-events-none overlay. No-ops under reduced motion. `ToolIcon.tsx` — renders a tool's icon, re-sanitizing its SVG (`sanitizeSvgIcon`) on every render and falling back to a `Package` glyph; shared by `ToolsPanel`, `Gallery`, and `PublicGallery`.
 
 > **Example usage** (target convention):
 >
@@ -215,6 +222,7 @@ Rule: feature-only hooks stay inside feature folder, not here. Query/mutation ho
 - `useAppConfig.ts` — single access point for global app config / user settings (`state.appConfig`): returns current values + bound setters (incl. catalog-driven `setToggle`). Used by `Settings` and `AppConfigProvider`; components never read the slice directly.
 - `useTranslation.ts` — returns `t(key)` resolving `@/constants/i18n` strings for the active locale (from `useAppConfig`), with `en` fallback. Used by any feature rendering user-facing text (`Topbar`, `Settings`).
 - `useChatModelPref.ts` — global per-user Builder-chat model selection, persisted on `profiles.chat_provider` / `chat_model` (one choice across all tools). TanStack Query read + optimistic `save` (Supabase update). Falls back to `gemini` / app-default model. Used by the `BuilderPanel` chat view.
+- `useGallery.ts` — single access point for the signed-in user's gallery: get-or-create the `galleries` row (handle/title/description/`is_public`), the owner's tools with their gallery flags (`flagsById`), and bound mutations (`updateGallery` — surfaces `HANDLE_TAKEN`/`HANDLE_INVALID`; `setToolInGallery`/`setToolShared`). TanStack Query/Mutation over Supabase, scoped to `owner_id` so the permissive public-read RLS can't leak other users' rows. Flags live OUTSIDE the Tool Builder slice + its save cycle. Used by `Gallery` + `ToolsPanel`.
 
 > **Example usage** (target convention):
 >
@@ -240,7 +248,11 @@ Rule: no React imports unless wrapper hook. No business logic.
 - `node-catalog.ts` — serialisable view of the node catalogue (`getNodeCatalog()`, `getNodeCount()`): flattens `@/constants/tool-builder` (which carries icon components) into plain grouped data + i18n keys, safe to cross server/client and feed non-React readers. Also `getNodeReference()` / `getNodeReferenceFor()` — fully-resolved flat records merging catalogue identity + canonical English label/blurb (`MESSAGES.en`) + the `@/constants/node-docs` detail, the shape intended for an **AI tool call**. Consumed by the `NodeDocs` feature.
 - `chat-context.ts` — pure bridge from the open tool to the chat assistant's prompt inputs (`buildChatToolContext(tool, stateNode)` → `ChatToolContext`): the connected node chain (label/`@slug` + `nodeSubtitle` detail), the compact catalog of every node type, in-depth docs for the node types in use, and the default-config JSON `schemas` for every node type. Feeds `buildChatSystemPrompt` (`@/constants/ai-prompts`). Also exports `parseBuildSpec` (recover + sanitise the model's one-shot JSON build spec into a `BuildSpec` — resolve `type` by id/`@slug`/label, strip protected keys, drop `state` nodes) and `validateTool`/`validateNode` (flag unknown fields + dead state-slot wires for the review/fix turn), plus `buildToolPrompt` (reproducible build instruction, used by tool-name generation). No React; never surfaces internal ids. Consumed by the `BuilderPanel` chat view.
 - `json-to-ts.ts` — pure JSON → TypeScript declaration generator (`jsonToTs`). Used by the Tool Builder's `ts_type` (TS Type Converter) node via the runtime.
+- `generate-tool-name.ts` / `generate-tool-icon.ts` — pure AI orchestration for the tools panel: name a tool, or draw its sidebar SVG icon, from the tool's node chain via the user's Builder-chat model. Both derive prompt context with `buildToolPrompt` (no internal ids leak); the icon helper sanitizes the model's SVG with `sanitizeSvgIcon` before returning it.
+- `generate-identity.ts` — pure faker.js synthetic-data generator (`generateIdentities`). Parses the Identity node's JSON `@modifier` template, seeds faker deterministically per node seed, and materialises `count` records. Used by the runtime (`tool-builder-runtime`) and the `IdentityView` preview renderer. Modifier `@token` → generator map; keep in sync with `FAKER_MODIFIERS` in `@/constants/tool-builder`.
+- `html-sanitize.ts` — `sanitize-html` wrappers: `sanitizeHtmlDoc` (HTML Sanitize node, layout-preserving allowlist) and `sanitizeSvgIcon` (strict SVG-only allowlist for the per-tool sidebar icon; strips scripts, styles, `<image>`, and all URL-bearing attributes).
 - `csv.ts` — pure CSV parser (`parseCsv`, wraps PapaParse) producing an optimized rows array (typed values, empty rows/columns dropped). Used by the Tool Builder's `csv` input node in `PreviewPane`.
+- `gallery.ts` — pure gallery-handle helpers (`HANDLE_PATTERN`, `normalizeHandle`, `isValidHandle`). The handle is a gallery's only public key; the format mirrors the DB `galleries_handle_format` check constraint. Used by `useGallery`, the `Gallery` manager, and the public gallery route/API.
 - `table-data.ts` — pure table-data normalizer (`normalizeTableData`, `compareCells`, `formatCell`): auto-optimizes any array / JSON string into a render-ready grid (typed cells, empty rows/columns dropped) and detects per-column kinds (string/number/date) for sorting. Used by the Tool Builder's `table` input node (`PreviewPane/components/DataTable.tsx`).
 - `supabase/client.ts` — browser Supabase client factory (`createClient()`). Use in `"use client"` components/hooks.
 - `supabase/server.ts` — async server Supabase client factory (`await createClient()`). Use in Server Components, Server Functions, Route Handlers.
@@ -279,7 +291,7 @@ Rule: never hardcode route strings in JSX — use `Routes.X`. Use `.tsx` only wh
 
 - `tool-builder.tsx` — node catalog (`NODE_META`, `ACCENT_CLASSES`, `PALETTE_GROUPS`), the `createNode()` factory, and `uuid()`. `.tsx` because entries reference lucide icon components.
 - `node-docs.ts` — long-form per-node reference docs (`NodeDetail` type, `NODE_DETAILS` keyed by `ToolNodeType`, `getNodeDetail()`). Pure serialisable English content (summary, when-to-use, config controls, state in/out, tips, example) — the _content_ layer behind the docs detail dialog, and AI-tool-call-ready (no React/icons). Short labels/blurbs stay in `i18n.ts`; the depth lives here.
-- `ai-prompts.ts` — **single source of truth for every AI prompt.** Base system prompts (`CODE_EDITOR_SYSTEM_PROMPT`, `AI_NODE_SYSTEM_PROMPT`, `CHAT_SYSTEM_PROMPT`) + pure context builders that assemble the full prompt from live data passed by callers: `stateContext()`, `buildCodeEditorSystemPrompt()` (code-editor Ask AI panel), `buildAiNodeSystemPrompt()` (runtime `@ai` node), and `buildChatSystemPrompt()` / `toolChainContext()` (Builder chat tab — grounds the assistant in the open tool's connected node chain). No React/state reads; never surfaces internal ids. Consumed by `@/components/ui/code-editor`, `@/lib/tool-builder-runtime`, and (next) the chat feature.
+- `ai-prompts.ts` — **single source of truth for every AI prompt.** Base system prompts (`CODE_EDITOR_SYSTEM_PROMPT`, `AI_NODE_SYSTEM_PROMPT`, `CHAT_SYSTEM_PROMPT`) + pure context builders that assemble the full prompt from live data passed by callers: `stateContext()`, `buildCodeEditorSystemPrompt()` (code-editor Ask AI panel), `buildAiNodeSystemPrompt()` (runtime `@ai` node), `buildChatSystemPrompt()` / `toolChainContext()` (Builder chat tab — grounds the assistant in the open tool's connected node chain), and the tools-panel generators `TOOL_NAME_SYSTEM_PROMPT` / `buildToolNamePrompt()` (name a tool) + `TOOL_ICON_SYSTEM_PROMPT` / `buildToolIconPrompt()` (draw a tool's SVG icon). No React/state reads; never surfaces internal ids. Consumed by `@/components/ui/code-editor`, `@/lib/tool-builder-runtime`, and (next) the chat feature.
 - `settings.tsx` — available-settings catalog (`THEME_OPTIONS`, `LOCALE_OPTIONS`, `TOGGLE_SETTINGS`, `SETTINGS_STORAGE_KEY`) consumed by the `Settings` feature. Labels are `MessageKey`s resolved at render. `.tsx` because options carry lucide icons.
 - `i18n.ts` — in-house i18n message catalog (`MESSAGES` per `AppLocale`, `MessageKey` type). Hardcoded `en` + `my` (Burmese) dictionaries; `en` is the source-of-truth key set (the `my: Record<MessageKey, string>` value type forces parity). Covers Topbar, Settings, PreviewPane, the Tools/Builder/Node panels (chrome + node-catalog labels/blurbs), and the full NodeEditor detail form (field labels, helper text, toggles, targets, dialogs). Only author-supplied content (a node's own fieldLabel/description/buttonText) stays untranslated. Resolved via `@/hooks/useTranslation`.
 
@@ -299,6 +311,7 @@ Rule: feature-only types co-locate with component.
 ### Current types
 
 - `tool-builder.ts` — Tool Builder domain types (`Tool`, `ToolNode` union, `StateNode`, `StateBinding`, `EditorPlacement`, …) + `isRenderNode` guard / `RENDER_NODE_TYPES`.
+- `gallery.ts` — Gallery domain types (`Gallery` settings, `GalleryTool` with flags, `GalleryToolCard`, and the public `PublicGallery` payload). No owner/user id on any client-facing shape.
 
 ---
 

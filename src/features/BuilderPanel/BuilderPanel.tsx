@@ -164,7 +164,7 @@ export function BuilderPanel({
                     className="gap-1 text-[11px] capitalize"
                   >
                     <Icon />
-                    {t(`builder.placement.${p}`)}
+                    {tabValue === p && t(`builder.placement.${p}`)}
                   </TabsTrigger>
                 );
               })}
@@ -173,7 +173,7 @@ export function BuilderPanel({
                 className="relative gap-1 text-[11px] capitalize"
               >
                 <MessageSquare />
-                {t("builder.tab.chat")}
+                {tabValue === "chat" && t("builder.tab.chat")}
                 {chatUnread && view !== "chat" && (
                   <span
                     className="absolute -right-0.5 -top-0.5 size-2 rounded-full border border-foreground bg-primary"

@@ -44,6 +44,10 @@ export async function proxy(request: NextRequest) {
       pathname,
     );
   const isSharedApi = pathname.startsWith("/api/shared/");
+  // Public gallery: the /g/<handle> page and its data API. Both serve only
+  // published galleries (RLS-gated) and expose no owner identity.
+  const isGalleryPage = pathname.startsWith("/g/");
+  const isGalleryApi = pathname.startsWith("/api/gallery/");
   // Themed-node fetcher + its font relay; shared tool views call them
   // anonymously. The routes do their own target validation (http(s) only,
   // private hosts rejected).
@@ -62,6 +66,8 @@ export async function proxy(request: NextRequest) {
     !isLanding &&
     !isSharePage &&
     !isSharedApi &&
+    !isGalleryPage &&
+    !isGalleryApi &&
     !isSiteProxy &&
     !isAuthFlow
   ) {
