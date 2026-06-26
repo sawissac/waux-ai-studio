@@ -2086,6 +2086,333 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     example:
       'An Identity node (count 10, template { "id": "@uuid", "name": "@fullName", "email": "@email", "age": "@int" }, binding people) writes people = an array of 10 objects like { id: "e4a4…", name: "Laury Aufderhar", email: "Pearl.Medhurst60@gmail.com", age: 42 }. A Table node bound to people renders them; a Filter node keeps age > 18.',
   },
+  xlsx: {
+    summary:
+      "An end-user input node that uploads (or drops) an Excel workbook (.xlsx/.xls) — the spreadsheet sibling of the CSV node. The chosen worksheet is read client-side with SheetJS, converted to CSV, and run through the same optimizer the CSV node uses (empty rows/columns dropped, numbers/booleans typed, headers trimmed & de-duplicated); the parsed array — not the raw file — is written to the bound state slot.",
+    whenToUse:
+      "Reach for it when the tool's data arrives as an Excel file rather than CSV, or when the source workbook has multiple sheets and the user should pick one. Output is identical in shape to the CSV node, so any downstream Table / Filter / Aggregate works the same way.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Text input (field.fieldLabel). Heading shown above the upload button. Default "Excel file".',
+      },
+      {
+        name: "Description",
+        description:
+          "Text input (field.description). Optional helper line under the label. Default empty.",
+      },
+      {
+        name: "Header row",
+        description:
+          "Toggle (csv.header). When on, the sheet's first row is treated as column names and each row becomes an object keyed by header; off writes positional arrays. Stored in config.hasHeader. Default true.",
+      },
+      {
+        name: "Sheet",
+        description:
+          "Text input (xlsx.sheet) naming the worksheet to read. Blank reads the workbook's first sheet. After upload, a multi-sheet workbook also shows a sheet picker in the preview that re-parses without re-uploading. Stored in config.sheet. Default empty.",
+      },
+      {
+        name: "State binding",
+        description:
+          'Select (BindingControl). The state slot the parsed rows array is written to on upload. Default { mode: "name", value: "state1" }.',
+      },
+    ],
+    io: {
+      reads:
+        'Does not read state at runtime — it is an end-user input/source node (the card subtitle resolves the binding only to display "Using State: <slot>").',
+      writes:
+        "On a successful upload (or sheet switch) writes the parsed rows array to the bound slot; writes nothing on a parse error or with no slot bound.",
+    },
+    tips: [
+      "Parsing happens in the preview on upload (PreviewPane.loadXlsx → parseXlsx), not in the runtime transform pass. The uploaded bytes are retained per node so switching the active sheet re-parses instantly without re-uploading.",
+      "Output matches the CSV node exactly because the sheet is round-tripped through CSV before parsing: numbers/booleans are typed, blank cells become null, empty/ghost columns are dropped, and duplicate headers get _2/_3 suffixes.",
+      "SheetJS is dynamically imported (loads only when a workbook is opened) and pinned to its CVE-free official distribution, not the vulnerable npm `xlsx` package.",
+      "Only one worksheet is read at a time. For several sheets, use one Excel node per sheet (each bound to its own slot).",
+    ],
+    example:
+      'A State node declares a slot `orders`. An Excel node (Field label "Upload orders", Header row ON, Sheet "Q1", binding orders) parses the Q1 sheet of an uploaded workbook into orders = [{ id: 1, customer: "Acme", total: 1240 }, …]. A Table bound to orders displays them; an Aggregate groups by customer.',
+  },
+  aggregate: {
+    summary:
+      "A logic transform that groups an array of object rows by zero or more columns and reduces each group to aggregate columns (count / sum / mean / median / mode / min / max / distinct / stdev / variance) using Arquero. Reads the array from `input`, writes the grouped result array to `output`. Mental model: a pivot/GROUP BY for the chain.",
+    whenToUse:
+      "Reach for it to summarize tabular data — totals or averages per category, counts per group, distinct counts. It is the only node that aggregates across rows; pair it after a CSV/Excel/HTTP source and before a Table or Chart.",
+    config: [
+      {
+        name: "Description",
+        description:
+          "Text input (field.description). Optional note shown as the card subtitle. Default empty.",
+      },
+      {
+        name: "Input / Output",
+        description:
+          "Two state-slot selects (InOutFields). `input` holds the source array; the grouped result array is written to `output`. Both default to state1.",
+      },
+      {
+        name: "Group by",
+        description:
+          "A list of top-level column names (aggregate.groupBy). Rows sharing the same values across these columns form one group. Empty reduces the whole array to a single summary row.",
+      },
+      {
+        name: "Aggregations",
+        description:
+          "A list of output columns. Each has an op (count/sum/mean/median/mode/min/max/distinct/stdev/variance), a source field (ignored for count), and an optional output name (blank = `<op>_<field>`, or `count`).",
+      },
+    ],
+    io: {
+      reads:
+        "The array in the `input` state slot (a real array or JSON string of one; non-object rows are ignored).",
+      writes:
+        "The grouped result array to the `output` slot — one object per group with the group-by columns plus each aggregate column. Re-runs live as the input changes.",
+    },
+    tips: [
+      "Only object rows are aggregated; arrays of arrays or primitives yield []. Run a Map node first if your rows aren't keyed objects.",
+      "`count` ignores its field (it counts rows in the group); every other op reads its column and coerces values numerically where needed.",
+      "With no group-by columns the entire array collapses to one summary row — handy for a grand total / overall average.",
+      "Aggregate expressions are built as Arquero string expressions parsed by Arquero's own (acorn-based) parser limited to the `op` namespace and the row record — there is no eval and no access to ambient scope.",
+      "Colliding output names (or a name that clashes with a group-by column) are auto-suffixed so no column is silently overwritten.",
+    ],
+    example:
+      "Input slot `orders` holds [{ customer: 'Acme', total: 1240 }, { customer: 'Acme', total: 60 }, { customer: 'Globex', total: 500 }]. Group by `customer`; aggregations: count (as `orders`), sum of `total` (as `revenue`). Output → [{ customer: 'Acme', orders: 2, revenue: 1300 }, { customer: 'Globex', orders: 1, revenue: 500 }].",
+  },
+  mermaid: {
+    summary:
+      "A read-only viewer that renders a Mermaid definition string held in the bound state slot as an SVG diagram (flowchart, sequence, pie, gantt, class, …). Rendered with Mermaid at securityLevel 'strict', so the author's diagram text cannot inject scripts. It never writes to state.",
+    whenToUse:
+      "Reach for it to visualize structure or flow that an upstream node produces — a Textarea where the user writes Mermaid, a Code node that builds the definition, or an AI node asked to emit Mermaid. Use it instead of an image when the diagram is generated from data/text.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Text input (field.fieldLabel). Heading above the diagram. Default "Diagram".',
+      },
+      {
+        name: "Description",
+        description:
+          "Text input (field.description). Optional helper line. Default empty.",
+      },
+      {
+        name: "Theme",
+        description:
+          "Select (mermaid.theme) — default / neutral / dark / forest. Drives Mermaid's color theme at render. Default 'default'.",
+      },
+      {
+        name: "State binding",
+        description:
+          'Select (BindingControl). The state slot holding the Mermaid definition source. Default { mode: "name", value: "state1" }.',
+      },
+    ],
+    io: {
+      reads:
+        "The bound state slot, coerced to a string and treated as a Mermaid definition.",
+      writes: null,
+    },
+    tips: [
+      "Pure viewer — it never writes to state. Put it after the node that produces the diagram text.",
+      "Invalid Mermaid syntax shows an inline error message rather than crashing the preview; fix the upstream source and it re-renders.",
+      "Mermaid is dynamically imported and renders at securityLevel 'strict' (labels/links sanitized).",
+      "Empty / unbound slot shows a placeholder prompting you to bind a source.",
+    ],
+    example:
+      "A Textarea node bound to slot `flow` lets the user type `flowchart TD\\n A[Start] --> B[End]`. A Diagram node bound to `flow` (theme 'neutral') renders the flowchart live as they type.",
+  },
+  highlight: {
+    summary:
+      "A read-only viewer that renders a code string from the bound state slot as a syntax-highlighted block using Shiki (the VS Code engine). The source language, color theme, and an optional line-number gutter are configurable, and a copy button lifts the raw source to the clipboard. It never writes to state.",
+    whenToUse:
+      "Reach for it to present code or config nicely at the end of a chain — the output of a TS Type Converter, an AI node that writes code, a Template that builds a snippet, or any code held in state. Use it instead of the Code editor input when the code should be shown, not edited.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Text input (field.fieldLabel). Heading above the block. Default "Code".',
+      },
+      {
+        name: "Description",
+        description:
+          "Text input (field.description). Optional helper line. Default empty.",
+      },
+      {
+        name: "Language",
+        description:
+          "Select (codeInput.language) from the shared CODE_INPUT_LANGUAGES list — drives tokenization. 'plaintext' maps to Shiki's plain text. Default 'javascript'.",
+      },
+      {
+        name: "Theme",
+        description:
+          "Select (highlight.theme) from the bundled Shiki themes (GitHub Dark/Light, Nord, Dracula, Monokai, Min Light). Default 'github-dark'.",
+      },
+      {
+        name: "Line numbers",
+        description:
+          "Toggle (highlight.lineNumbers). Renders a line-number gutter via the `.shiki-lines` CSS. Stored in config.lineNumbers. Default true.",
+      },
+      {
+        name: "State binding",
+        description:
+          'Select (BindingControl). The state slot holding the code to highlight. Default { mode: "name", value: "state1" }.',
+      },
+    ],
+    io: {
+      reads:
+        "The bound state slot, coerced to a string and highlighted as the chosen language.",
+      writes: null,
+    },
+    tips: [
+      "Pure viewer — it never writes to state. The copy button copies the exact source, not the highlighted HTML.",
+      "Shiki is dynamically imported; an unknown grammar or load failure falls back to plain, escaped text rather than failing.",
+      "The themed background comes from Shiki, so the block keeps its own color scheme independent of light/dark mode.",
+      "Empty / unbound slot shows a placeholder prompting you to bind code.",
+    ],
+    example:
+      "A TS Type Converter writes generated TypeScript to slot `types`. A Code View node bound to `types` (language 'typescript', theme 'github-dark', line numbers on) shows it as a highlighted, copyable block.",
+  },
+  qrcode: {
+    summary:
+      "A read-only viewer that encodes the string in the bound state slot as a QR code rendered to crisp SVG (via the `qrcode` library) at a configurable module size and error-correction level. It never writes to state.",
+    whenToUse:
+      "Reach for it to turn a URL or short text built earlier in the chain into a scannable code — a share link from a Template, a value from a Vault, an AI- or code-generated string. Pair it with a Download node (SVG/PNG) to let the user save the image.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Text input (field.fieldLabel). Heading above the code. Default "QR Code".',
+      },
+      {
+        name: "Description",
+        description:
+          "Text input (field.description). Optional helper line. Default empty.",
+      },
+      {
+        name: "Size (px)",
+        description:
+          "Number input (qrcode.size), clamped to QR_SIZE_RANGE (64–512) on blur. The rendered SVG fills this square. Default 200.",
+      },
+      {
+        name: "Error correction",
+        description:
+          "Select (qrcode.level) — L (7%) / M (15%) / Q (25%) / H (30%). Higher levels tolerate more damage but produce a denser code. Default 'M'.",
+      },
+      {
+        name: "State binding",
+        description:
+          'Select (BindingControl). The state slot holding the text/URL to encode. Default { mode: "name", value: "state1" }.',
+      },
+    ],
+    io: {
+      reads: "The bound state slot, coerced to a string and encoded.",
+      writes: null,
+    },
+    tips: [
+      "Pure viewer — it never writes to state.",
+      "The `qrcode` library is dynamically imported; an encode failure (e.g. a string too long for the chosen level) shows an inline message.",
+      "Higher error-correction tolerates damage/occlusion (good for printed codes with a logo) at the cost of a denser grid.",
+      "Empty slot shows a placeholder. To export, point a Download node (format svg or png) at the same slot.",
+    ],
+    example:
+      "A Template node builds `https://example.com/p/{{id}}` into slot `link`. A QR Code node bound to `link` (size 240, level 'Q') renders the scannable code; a Download node (png) bound to `link` exports it.",
+  },
+  tts: {
+    summary:
+      "A preview-only player that reads the string in the bound state slot aloud with the browser's Speech Synthesis engine (via `react-text-to-speech`). It exposes play / pause / stop controls, tunable rate / pitch / volume, and optional word-by-word highlighting. It never writes to state.",
+    whenToUse:
+      "Reach for it to voice text produced earlier in the chain — an AI reply, a Template-built sentence, a translation, or any user-entered message — so the result can be heard, not just read. Useful for accessibility and language-learning tools.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Text input (field.fieldLabel). Heading above the player. Default "Text to Speech".',
+      },
+      {
+        name: "Description",
+        description:
+          "Text input (field.description). Optional helper line. Default empty.",
+      },
+      {
+        name: "Speed",
+        description:
+          "Number input (tts.rate), 0.5–2 (step 0.1). Speaking rate. Default 1.",
+      },
+      {
+        name: "Pitch",
+        description:
+          "Number input (tts.pitch), 0–2 (step 0.1). Voice pitch. Default 1.",
+      },
+      {
+        name: "Volume",
+        description:
+          "Number input (tts.volume), 0–1 (step 0.1). Playback volume. Default 1.",
+      },
+      {
+        name: "Highlight words",
+        description:
+          "Toggle (tts.highlight). Highlights each word in the preview as it is spoken. Default on.",
+      },
+      {
+        name: "State binding",
+        description:
+          'Select (BindingControl). The state slot holding the text to speak. Default { mode: "name", value: "state1" }.',
+      },
+    ],
+    io: {
+      reads: "The bound state slot, coerced to a string and spoken.",
+      writes: null,
+    },
+    tips: [
+      "Pure player — it never writes to state.",
+      "Voices, languages, and availability depend entirely on the user's device/browser Speech Synthesis support.",
+      "Empty / unbound slot shows a placeholder prompting you to bind text.",
+      "Changing the bound text mid-playback stops the current utterance; press play to speak the new value.",
+    ],
+    example:
+      "An AI node writes its reply to slot `answer`. A Text to Speech node bound to `answer` (rate 1, highlight on) reads the answer aloud with word highlighting as the user listens.",
+  },
+  stt: {
+    summary:
+      "A microphone-capture input that transcribes the user's speech with the browser Speech Recognition engine (via `react-speech-recognition`) and writes the live transcript into the bound state slot. It exposes a record / stop control and shows the running transcript. Unlike the read-only viewers, it WRITES to state.",
+    whenToUse:
+      "Reach for it as a hands-free input — dictate a prompt for an AI node, fill a Template, or capture notes — anywhere a Textarea would go but voice is faster or more accessible. Pair it with a Text to Speech node for a full voice round-trip.",
+    config: [
+      {
+        name: "Field label",
+        description:
+          'Text input (field.fieldLabel). Heading above the control. Default "Speech to Text".',
+      },
+      {
+        name: "Description",
+        description:
+          "Text input (field.description). Optional helper line. Default empty.",
+      },
+      {
+        name: "Language (BCP-47)",
+        description:
+          'Text input (stt.lang). The BCP-47 language tag to recognize (e.g. "en-US", "my-MM"). Default "en-US".',
+      },
+      {
+        name: "Continuous",
+        description:
+          "Toggle (stt.continuous). Keep listening after a pause instead of stopping on the first silence. Default off.",
+      },
+      {
+        name: "State binding",
+        description:
+          'Select (BindingControl). The state slot the transcript is written into. Default { mode: "name", value: "state1" }.',
+      },
+    ],
+    io: {
+      reads: "Shows the bound slot's current value as the transcript.",
+      writes: "The live recognized transcript, into the bound state slot.",
+    },
+    tips: [
+      "Recognition runs entirely client-side; voices, languages, and availability depend on the user's device/browser support (Chrome/Edge have the broadest coverage).",
+      "Pressing Record clears the slot, then streams the transcript in as the user speaks; the live-change chain re-runs as it updates.",
+      "Browsers without Speech Recognition show an inline unsupported notice.",
+      "Microphone permission is requested by the browser the first time the user records.",
+    ],
+    example:
+      "A Speech to Text node bound to slot `prompt` lets the user dictate. An AI node interpolates `{{prompt}}` and writes its reply to `answer`; a Text to Speech node bound to `answer` reads it back.",
+  },
 };
 
 /**

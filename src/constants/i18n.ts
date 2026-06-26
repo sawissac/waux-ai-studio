@@ -963,6 +963,126 @@ NOTES
   "welcome.node.input": "Input",
   "welcome.node.logic": "Logic",
   "welcome.node.output": "Output",
+
+  // --- Excel (xlsx) node ---
+  "node.xlsx.label": "Excel",
+  "node.xlsx.blurb":
+    "Upload an Excel workbook (.xlsx/.xls). The chosen sheet is parsed (typed, empty rows/columns dropped) and written to bound state as an array.",
+  "xlsx.sheet": "Sheet",
+  "xlsx.sheet.placeholder": "First sheet",
+  "xlsx.sheet.help": "Worksheet to read. Leave blank for the first sheet.",
+  "xlsx.help":
+    "Uploads parse client-side into a typed array on the bound state — like the CSV node, for Excel.",
+  "preview.xlsx.choose": "Choose Excel file…",
+  "preview.xlsx.invalid": "Invalid workbook: {msg}",
+  "preview.xlsx.summary": "{rows} rows · {cols} columns",
+  "preview.xlsx.more": "+{n} more rows",
+  "preview.xlsx.sheet": "Worksheet",
+
+  // --- Aggregate node ---
+  "node.aggregate.label": "Aggregate",
+  "node.aggregate.blurb":
+    "Group an array by columns and roll each group up — count, sum, mean, median, min, max & more — via Arquero; result writes to bound state.",
+  "aggregate.groupBy": "Group by",
+  "aggregate.groupBy.placeholder": "column",
+  "aggregate.groupBy.help":
+    "Top-level column names to group rows by. Leave empty to reduce the whole array to one row.",
+  "aggregate.addGroupBy": "Add group-by column",
+  "aggregate.removeGroupBy": "Remove group-by column",
+  "aggregate.aggregations": "Aggregations",
+  "aggregate.addAggregation": "Add aggregation",
+  "aggregate.removeAggregation": "Remove aggregation",
+  "aggregate.field.placeholder": "column",
+  "aggregate.as.placeholder": "output name (optional)",
+  "aggregate.allRows": "whole group",
+  "aggregate.help":
+    "Each group becomes one row of the chosen aggregate columns. The result writes to the bound state as an array.",
+  "aggregate.op.count": "Count",
+  "aggregate.op.sum": "Sum",
+  "aggregate.op.mean": "Mean",
+  "aggregate.op.median": "Median",
+  "aggregate.op.mode": "Mode",
+  "aggregate.op.min": "Min",
+  "aggregate.op.max": "Max",
+  "aggregate.op.distinct": "Distinct",
+  "aggregate.op.stdev": "Std dev",
+  "aggregate.op.variance": "Variance",
+
+  // --- Mermaid (Diagram) node ---
+  "node.mermaid.label": "Diagram",
+  "node.mermaid.blurb":
+    "Render a Mermaid definition from a state slot as a flowchart, sequence, pie, gantt, or class diagram.",
+  "mermaid.theme": "Theme",
+  "mermaid.theme.default": "Default",
+  "mermaid.theme.neutral": "Neutral",
+  "mermaid.theme.dark": "Dark",
+  "mermaid.theme.forest": "Forest",
+  "mermaid.help":
+    "Bind a state slot holding a Mermaid definition (e.g. from a Textarea, Code, or AI node).",
+  "mermaid.empty":
+    "Bind a state slot with a Mermaid definition to render a diagram.",
+  "mermaid.invalid": "Diagram error: {msg}",
+
+  // --- Highlight (Code View) node ---
+  "node.highlight.label": "Code View",
+  "node.highlight.blurb":
+    "Show code from a state slot as a syntax-highlighted, read-only block (Shiki) — pick the language & theme.",
+  "highlight.theme": "Theme",
+  "highlight.lineNumbers": "Line numbers",
+  "highlight.lineNumbers.desc": "Show a line-number gutter beside the code.",
+  "highlight.help":
+    "Reads code from the bound state slot and renders it read-only with Shiki syntax highlighting.",
+  "highlight.empty": "Bind a state slot with code to highlight.",
+  "highlight.copy": "Copy code",
+  "highlight.copied": "Copied",
+
+  // --- QR Code node ---
+  "node.qrcode.label": "QR Code",
+  "node.qrcode.blurb":
+    "Encode a string from a state slot as a crisp SVG QR code with adjustable size & error-correction level.",
+  "qrcode.size": "Size (px)",
+  "qrcode.level": "Error correction",
+  "qrcode.level.L": "Low (7%)",
+  "qrcode.level.M": "Medium (15%)",
+  "qrcode.level.Q": "Quartile (25%)",
+  "qrcode.level.H": "High (30%)",
+  "qrcode.help":
+    "Encodes the bound state slot's text as a QR code. Pair with a Download node (SVG/PNG) to export it.",
+  "qrcode.empty": "Bind a state slot with text or a URL to encode.",
+  "qrcode.invalid": "Could not encode: {msg}",
+
+  // --- Text to Speech node ---
+  "node.tts.label": "Text to Speech",
+  "node.tts.blurb":
+    "Speak a string from a state slot aloud with the browser voice — tune speed, pitch & volume, optionally highlight words.",
+  "tts.rate": "Speed",
+  "tts.pitch": "Pitch",
+  "tts.volume": "Volume",
+  "tts.highlight": "Highlight words",
+  "tts.highlight.desc": "Highlight each word in the preview as it is spoken.",
+  "tts.help":
+    "Reads the bound state slot aloud with the browser's speech engine. Voices depend on the user's device/browser.",
+  "tts.empty": "Bind a state slot with text to speak.",
+  "tts.play": "Play",
+  "tts.pause": "Pause",
+  "tts.resume": "Resume",
+  "tts.stop": "Stop",
+
+  // --- Speech to Text node ---
+  "node.stt.label": "Speech to Text",
+  "node.stt.blurb":
+    "Dictate into the microphone — the browser transcribes your speech and writes the live transcript to a state slot.",
+  "stt.lang": "Language (BCP-47)",
+  "stt.continuous": "Continuous",
+  "stt.continuous.desc":
+    "Keep listening after a pause instead of stopping on the first silence.",
+  "stt.help":
+    "Writes the live microphone transcript to the bound state slot. Recognition runs entirely in the user's browser.",
+  "stt.start": "Record",
+  "stt.stop": "Stop",
+  "stt.listening": "Listening…",
+  "stt.empty": "Press Record and start speaking.",
+  "stt.unsupported": "This browser does not support speech recognition.",
 } as const;
 
 /** A valid translation key. */
@@ -1878,6 +1998,128 @@ FRACTIONS & UNITS
   "welcome.node.input": "Input",
   "welcome.node.logic": "Logic",
   "welcome.node.output": "Output",
+
+  // --- Excel (xlsx) node ---
+  "node.xlsx.label": "Excel",
+  "node.xlsx.blurb":
+    "Excel workbook (.xlsx/.xls) တင်ပါ။ ရွေးထားသော sheet ကို parse လုပ်ပြီး (type ခွဲ၊ အလွတ် row/column ဖယ်) bound state သို့ array အဖြစ် ရေးသည်။",
+  "xlsx.sheet": "Sheet",
+  "xlsx.sheet.placeholder": "ပထမ sheet",
+  "xlsx.sheet.help": "ဖတ်မည့် worksheet။ ပထမ sheet အတွက် အလွတ်ထားပါ။",
+  "xlsx.help":
+    "တင်လိုက်သည်နှင့် client-side တွင် parse လုပ်ပြီး bound state ပေါ်တွင် type ခွဲထားသော array ဖြစ်လာသည် — CSV node ကဲ့သို့ Excel အတွက်။",
+  "preview.xlsx.choose": "Excel ဖိုင် ရွေးပါ…",
+  "preview.xlsx.invalid": "Workbook မမှန်ပါ — {msg}",
+  "preview.xlsx.summary": "{rows} တန်း · {cols} ကော်လံ",
+  "preview.xlsx.more": "+{n} တန်း ထပ်ရှိ",
+  "preview.xlsx.sheet": "Worksheet",
+
+  // --- Aggregate node ---
+  "node.aggregate.label": "Aggregate",
+  "node.aggregate.blurb":
+    "Array ကို column များဖြင့် အုပ်စုဖွဲ့ပြီး အုပ်စုတစ်ခုစီကို count, sum, mean, median, min, max စသဖြင့် Arquero ဖြင့် ချုပ်သည်; ရလဒ်ကို bound state သို့ ရေးသည်။",
+  "aggregate.groupBy": "အုပ်စုဖွဲ့ရန်",
+  "aggregate.groupBy.placeholder": "column",
+  "aggregate.groupBy.help":
+    "Row များကို အုပ်စုဖွဲ့မည့် အပေါ်ဆုံးအဆင့် column အမည်များ။ array တစ်ခုလုံးကို တစ်တန်းတည်း ချုပ်ရန် အလွတ်ထားပါ။",
+  "aggregate.addGroupBy": "Group-by column ထည့်ရန်",
+  "aggregate.removeGroupBy": "Group-by column ဖယ်ရန်",
+  "aggregate.aggregations": "ချုပ်တွက်မှုများ",
+  "aggregate.addAggregation": "ချုပ်တွက်မှု ထည့်ရန်",
+  "aggregate.removeAggregation": "ချုပ်တွက်မှု ဖယ်ရန်",
+  "aggregate.field.placeholder": "column",
+  "aggregate.as.placeholder": "ထွက်ရှိအမည် (ရွေးချယ်)",
+  "aggregate.allRows": "အုပ်စုတစ်ခုလုံး",
+  "aggregate.help":
+    "အုပ်စုတစ်ခုစီသည် ရွေးထားသော aggregate column များ၏ တစ်တန်းဖြစ်လာသည်။ ရလဒ်ကို bound state သို့ array အဖြစ် ရေးသည်။",
+  "aggregate.op.count": "အရေအတွက်",
+  "aggregate.op.sum": "ပေါင်းလဒ်",
+  "aggregate.op.mean": "ပျမ်းမျှ",
+  "aggregate.op.median": "အလယ်တန်ဖိုး",
+  "aggregate.op.mode": "အများဆုံးတန်ဖိုး",
+  "aggregate.op.min": "အနိမ့်ဆုံး",
+  "aggregate.op.max": "အမြင့်ဆုံး",
+  "aggregate.op.distinct": "ကွဲပြားအရေအတွက်",
+  "aggregate.op.stdev": "စံသွေဖည်",
+  "aggregate.op.variance": "ကွဲလွဲမှု",
+
+  // --- Mermaid (Diagram) node ---
+  "node.mermaid.label": "ပုံကြမ်း",
+  "node.mermaid.blurb":
+    "State slot ထဲမှ Mermaid definition ကို flowchart, sequence, pie, gantt သို့မဟုတ် class ပုံကြမ်းအဖြစ် ပြသသည်။",
+  "mermaid.theme": "Theme",
+  "mermaid.theme.default": "Default",
+  "mermaid.theme.neutral": "Neutral",
+  "mermaid.theme.dark": "Dark",
+  "mermaid.theme.forest": "Forest",
+  "mermaid.help":
+    "Mermaid definition ပါသော state slot ကို ချိတ်ပါ (ဥပမာ Textarea, Code သို့မဟုတ် AI node မှ)။",
+  "mermaid.empty":
+    "ပုံကြမ်း render ရန် Mermaid definition ပါသော state slot ကို ချိတ်ပါ။",
+  "mermaid.invalid": "ပုံကြမ်း အမှား — {msg}",
+
+  // --- Highlight (Code View) node ---
+  "node.highlight.label": "ကုဒ်ပြ",
+  "node.highlight.blurb":
+    "State slot ထဲမှ ကုဒ်ကို syntax highlight ဖြင့် ဖတ်ရှုသာ block အဖြစ် ပြသသည် (Shiki) — language နှင့် theme ရွေးပါ။",
+  "highlight.theme": "Theme",
+  "highlight.lineNumbers": "လိုင်းနံပါတ်များ",
+  "highlight.lineNumbers.desc": "ကုဒ်ဘေးတွင် လိုင်းနံပါတ် gutter ပြရန်။",
+  "highlight.help":
+    "Bound state slot မှ ကုဒ်ကို ဖတ်ပြီး Shiki syntax highlight ဖြင့် ဖတ်ရှုသာ ပြသသည်။",
+  "highlight.empty": "Highlight ပြရန် ကုဒ်ပါသော state slot ကို ချိတ်ပါ။",
+  "highlight.copy": "ကုဒ် ကူးရန်",
+  "highlight.copied": "ကူးပြီး",
+
+  // --- QR Code node ---
+  "node.qrcode.label": "QR ကုဒ်",
+  "node.qrcode.blurb":
+    "State slot ထဲမှ စာသားကို အရွယ်အစား နှင့် error-correction level ချိန်ညှိနိုင်သော SVG QR ကုဒ်အဖြစ် encode လုပ်သည်။",
+  "qrcode.size": "အရွယ် (px)",
+  "qrcode.level": "Error correction",
+  "qrcode.level.L": "နိမ့် (7%)",
+  "qrcode.level.M": "အလယ် (15%)",
+  "qrcode.level.Q": "Quartile (25%)",
+  "qrcode.level.H": "မြင့် (30%)",
+  "qrcode.help":
+    "Bound state slot ၏ စာသားကို QR ကုဒ်အဖြစ် encode လုပ်သည်။ ထုတ်ယူရန် Download node (SVG/PNG) နှင့် တွဲသုံးပါ။",
+  "qrcode.empty":
+    "Encode ရန် စာသား သို့မဟုတ် URL ပါသော state slot ကို ချိတ်ပါ။",
+  "qrcode.invalid": "Encode မလုပ်နိုင်ပါ — {msg}",
+
+  // --- Text to Speech node ---
+  "node.tts.label": "စာသား အသံထွက်",
+  "node.tts.blurb":
+    "State slot ထဲမှ စာသားကို browser အသံဖြင့် ဖတ်ပြသည် — အမြန်နှုန်း၊ pitch နှင့် အသံအတိုးအကျယ် ချိန်ညှိနိုင်ပြီး စကားလုံးများကို highlight ပြုလုပ်နိုင်သည်။",
+  "tts.rate": "အမြန်နှုန်း",
+  "tts.pitch": "Pitch",
+  "tts.volume": "အသံအတိုးအကျယ်",
+  "tts.highlight": "စကားလုံး highlight",
+  "tts.highlight.desc":
+    "Preview တွင် ဖတ်နေသော စကားလုံးတစ်ခုစီကို highlight ပြုလုပ်သည်။",
+  "tts.help":
+    "Bound state slot ၏ စာသားကို browser ၏ speech engine ဖြင့် ဖတ်ပြသည်။ အသံများသည် အသုံးပြုသူ၏ device/browser အပေါ် မူတည်သည်။",
+  "tts.empty": "ဖတ်ပြရန် စာသားပါသော state slot ကို ချိတ်ပါ။",
+  "tts.play": "ဖွင့်ရန်",
+  "tts.pause": "ခဏရပ်ရန်",
+  "tts.resume": "ဆက်ဖွင့်ရန်",
+  "tts.stop": "ရပ်ရန်",
+
+  // --- Speech to Text node ---
+  "node.stt.label": "အသံမှ စာသား",
+  "node.stt.blurb":
+    "မိုက်ခရိုဖုန်းထဲ ပြောဆိုပါ — browser က သင့်အသံကို စာသားအဖြစ် ပြောင်းပြီး live transcript ကို state slot သို့ ရေးသည်။",
+  "stt.lang": "ဘာသာစကား (BCP-47)",
+  "stt.continuous": "ဆက်တိုက်",
+  "stt.continuous.desc":
+    "ပထမဆုံး တိတ်ဆိတ်ချိန်တွင် ရပ်မည့်အစား ခဏရပ်ပြီးနောက် ဆက်လက် နားထောင်နေသည်။",
+  "stt.help":
+    "Live မိုက်ခရိုဖုန်း transcript ကို bound state slot သို့ ရေးသည်။ Recognition သည် အသုံးပြုသူ၏ browser အတွင်း၌သာ လုပ်ဆောင်သည်။",
+  "stt.start": "အသံဖမ်းရန်",
+  "stt.stop": "ရပ်ရန်",
+  "stt.listening": "နားထောင်နေသည်…",
+  "stt.empty": "အသံဖမ်းရန် နှိပ်ပြီး စတင်ပြောဆိုပါ။",
+  "stt.unsupported": "ဤ browser သည် speech recognition ကို မပံ့ပိုးပါ။",
 };
 
 /** All message catalogs keyed by locale. */

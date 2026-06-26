@@ -57,6 +57,13 @@ export type ToolNodeType =
   | "download"
   | "vault"
   | "identity"
+  | "xlsx"
+  | "aggregate"
+  | "mermaid"
+  | "highlight"
+  | "qrcode"
+  | "tts"
+  | "stt"
   | "ai";
 
 /** Languages the Code editor input node can highlight (Monaco built-ins). */
@@ -125,6 +132,34 @@ export type EncodeOperation =
   | "url_encode"
   | "url_decode"
   | "hash_sha256";
+
+/** Color theme for the Mermaid diagram node. */
+export type MermaidTheme = "default" | "neutral" | "dark" | "forest";
+
+/** Shiki color theme for the Highlight (syntax) node. */
+export type HighlightTheme =
+  | "github-dark"
+  | "github-light"
+  | "nord"
+  | "dracula"
+  | "monokai"
+  | "min-light";
+
+/** Reducer the Aggregate node applies over each group, per output column. */
+export type AggregateOp =
+  | "count"
+  | "sum"
+  | "mean"
+  | "median"
+  | "mode"
+  | "min"
+  | "max"
+  | "distinct"
+  | "stdev"
+  | "variance";
+
+/** Error-correction level for the QR Code node (higher = more redundancy). */
+export type QrLevel = "L" | "M" | "Q" | "H";
 
 /** A single named slot in the shared state store. */
 export interface StateEntry {
@@ -994,6 +1029,156 @@ export interface AiNode extends BaseNode {
   markdownOutput?: boolean;
 }
 
+/**
+ * Excel (.xlsx / .xls) file input — the spreadsheet sibling of the CSV node.
+ * The end user uploads a workbook; the chosen sheet is parsed client-side
+ * (SheetJS) into an optimized data array (empty rows/columns dropped, cells
+ * typed) and the parsed array — not the raw file — is written to the bound
+ * state slot. With `hasHeader` rows become objects keyed by column name;
+ * without, positional `unknown[][]` rows.
+ */
+export interface XlsxNode extends BaseNode {
+  type: "xlsx";
+  fieldLabel: string;
+  description: string;
+  binding: StateBinding;
+  /** Treat the first row as column names (rows become keyed objects). */
+  hasHeader: boolean;
+  /** Worksheet name to read. Blank = the workbook's first sheet. */
+  sheet: string;
+}
+
+/** One aggregate output column for the {@link AggregateNode}. */
+export interface AggregateRule {
+  /** Stable id for list keying. */
+  id: string;
+  /** Reducer applied over each group. */
+  op: AggregateOp;
+  /** Source column the reducer reads (ignored for `count`). */
+  field: string;
+  /** Output column name (blank = `<op>_<field>`). */
+  as: string;
+}
+
+/**
+ * Group an array of rows by zero or more columns and reduce each group to
+ * aggregate columns (count / sum / mean / median / mode / min / max /
+ * distinct / stdev / variance) with Arquero. Reads the array from `input` and writes
+ * the grouped result array to `output`. With no `groupBy` columns it reduces
+ * the whole array to a single summary row. Runs in the chain like a transform
+ * node and re-runs live as the input changes.
+ */
+export interface AggregateNode extends BaseNode {
+  type: "aggregate";
+  description: string;
+  /** State slot holding the source array. */
+  input: StateBinding;
+  /** State slot the grouped result array is written into. */
+  output: StateBinding;
+  /** Top-level column names to group by (empty = one summary row). */
+  groupBy: string[];
+  /** The aggregate columns to compute per group. */
+  aggregations: AggregateRule[];
+}
+
+/**
+ * Mermaid diagram viewer (preview-only). Reads a Mermaid definition string
+ * (flowchart, sequence, gantt, pie, class, …) from the bound state slot and
+ * renders it to an SVG diagram in the live preview. Invalid syntax shows an
+ * inline error; the node never writes to state.
+ */
+export interface MermaidNode extends BaseNode {
+  type: "mermaid";
+  fieldLabel: string;
+  description: string;
+  /** State slot holding the Mermaid definition source string. */
+  binding: StateBinding;
+  /** Diagram color theme. */
+  theme: MermaidTheme;
+}
+
+/**
+ * Syntax-highlighted code viewer (preview-only). Reads a code string from the
+ * bound state slot and renders it as a richly highlighted, read-only code block
+ * with Shiki (the VS Code engine). Pick the source language and color theme.
+ * The node never writes to state.
+ */
+export interface HighlightNode extends BaseNode {
+  type: "highlight";
+  fieldLabel: string;
+  description: string;
+  /** State slot holding the code source to highlight. */
+  binding: StateBinding;
+  /** Source language — drives tokenization. */
+  language: CodeInputLanguage;
+  /** Shiki color theme. */
+  theme: HighlightTheme;
+  /** Render a gutter of line numbers. */
+  lineNumbers: boolean;
+}
+
+/**
+ * QR code generator (preview-only). Encodes the string in the bound state slot
+ * as a QR code rendered to crisp SVG at the chosen module `size` and
+ * error-correction `level`. Empty input shows a placeholder; the node never
+ * writes to state.
+ */
+export interface QrCodeNode extends BaseNode {
+  type: "qrcode";
+  fieldLabel: string;
+  description: string;
+  /** State slot holding the text / URL to encode. */
+  binding: StateBinding;
+  /** Rendered SVG size in px (square). */
+  size: number;
+  /** Error-correction level. */
+  level: QrLevel;
+}
+
+/**
+ * Text-to-speech player (preview-only). Reads a string from the bound state
+ * slot and speaks it aloud with the browser Speech Synthesis engine (via
+ * `react-text-to-speech`). The author tunes `rate`, `pitch`, and `volume`; the
+ * preview renders play / pause / stop controls and, when `highlight` is on,
+ * highlights each word as it is spoken. Empty input shows a placeholder; the
+ * node never writes to state.
+ */
+export interface TtsNode extends BaseNode {
+  type: "tts";
+  fieldLabel: string;
+  description: string;
+  /** State slot holding the text to speak. */
+  binding: StateBinding;
+  /** Speaking rate (0.5 slow – 2 fast). */
+  rate: number;
+  /** Voice pitch (0 low – 2 high). */
+  pitch: number;
+  /** Playback volume (0 muted – 1 full). */
+  volume: number;
+  /** Highlight each word in the preview as it is spoken. */
+  highlight: boolean;
+}
+
+/**
+ * Speech-to-text input (preview-only capture). Listens to the microphone with
+ * the browser Speech Recognition engine (via `react-speech-recognition`) and
+ * writes the live transcript into the bound state slot, so downstream nodes
+ * (AI, Template, Code, …) can consume the dictated text. Renders a record /
+ * stop control plus the running transcript. Browsers without Speech Recognition
+ * support show an inline notice.
+ */
+export interface SttNode extends BaseNode {
+  type: "stt";
+  fieldLabel: string;
+  description: string;
+  /** State slot the recognized transcript is written into. */
+  binding: StateBinding;
+  /** BCP-47 language tag to recognize (e.g. `en-US`, `my-MM`). */
+  lang: string;
+  /** Keep listening after a pause (vs. stopping on the first silence). */
+  continuous: boolean;
+}
+
 /** Union of every concrete node kind. */
 export type ToolNode =
   | StateNode
@@ -1035,6 +1220,13 @@ export type ToolNode =
   | DownloadNode
   | VaultNode
   | IdentityNode
+  | XlsxNode
+  | AggregateNode
+  | MermaidNode
+  | HighlightNode
+  | QrCodeNode
+  | TtsNode
+  | SttNode
   | AiNode;
 
 /** A named, ordered chain of nodes. */
@@ -1110,7 +1302,13 @@ export type RenderNode =
   | CounterNode
   | DownloadNode
   | VaultNode
-  | IdentityNode;
+  | IdentityNode
+  | XlsxNode
+  | MermaidNode
+  | HighlightNode
+  | QrCodeNode
+  | TtsNode
+  | SttNode;
 
 /** Node kinds that produce visible output in the preview. */
 export const RENDER_NODE_TYPES: ReadonlySet<ToolNodeType> =
@@ -1138,6 +1336,12 @@ export const RENDER_NODE_TYPES: ReadonlySet<ToolNodeType> =
     "download",
     "vault",
     "identity",
+    "xlsx",
+    "mermaid",
+    "highlight",
+    "qrcode",
+    "tts",
+    "stt",
   ]);
 
 /** Type guard: does this node render in the preview? */

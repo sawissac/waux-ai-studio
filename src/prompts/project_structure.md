@@ -1,6 +1,6 @@
 # Project Structure — File Placement Rules
 
-Last updated: 2026-06-25
+Last updated: 2026-06-26
 
 Where each file type lives. Next.js 16 App Router + TypeScript.
 
@@ -112,6 +112,11 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
   - `components/SpriteView.tsx` — Sprite-node renderer (flip-book animation over a bound frame array / sprite sheet)
   - `components/VaultView.tsx` — Vault-node renderer (read-only key/value detail view with optional value masking)
   - `components/IdentityView.tsx` — Identity-node renderer (read-only JSON sample of the faker-generated records + a record-count badge; computes the same array as the runtime via `@/lib/generate-identity`)
+  - `components/MermaidView.tsx` — Mermaid (Diagram) node renderer (renders the bound state slot's Mermaid definition to SVG via dynamically-imported `mermaid` at `securityLevel: "strict"`; inline error/empty states)
+  - `components/HighlightView.tsx` — Highlight (Code View) node renderer (syntax-highlights the bound code string via dynamically-imported `shiki`; language/theme from the node, optional line-number gutter via the `.shiki-lines` CSS in `globals.css`, copy button)
+  - `components/QrCodeView.tsx` — QR Code node renderer (encodes the bound string to crisp SVG via dynamically-imported `qrcode`; size + error-correction level from the node)
+  - `components/TtsView.tsx` — Text to Speech node renderer (speaks the bound state string aloud via `react-text-to-speech`'s `useSpeech` browser Speech-Synthesis hook; play/pause/stop controls, rate/pitch/volume + optional word highlighting from the node; never writes to state)
+  - `components/SttView.tsx` — Speech to Text node renderer (transcribes the microphone via `react-speech-recognition`'s `useSpeechRecognition` browser Speech-Recognition hook; record/stop control + live transcript, language/continuous from the node; WRITES the transcript back to the bound state slot through an `onChange` handler supplied by `PreviewPane`)
 - `SharedToolView/` — public share view. Fetches a shared tool via `/api/shared/[toolId]` and renders only `PreviewPane`. No builder UI. Mounted by `app/(full-frame-public)/[toolId]/page.tsx`.
 - `Gallery/` — signed-in gallery manager. Configures the user's public gallery (handle, title, description, master public toggle) and lists every tool with its membership + public/private controls. All state goes through `@/hooks/useGallery` (Supabase, outside the Tool Builder save cycle). Mounted by `app/gallery/page.tsx`.
   - `components/GalleryToggle.tsx` — feature-private neobrutalist on/off switch (mirrors `Settings/components/SettingToggle`).
@@ -252,6 +257,8 @@ Rule: no React imports unless wrapper hook. No business logic.
 - `generate-identity.ts` — pure faker.js synthetic-data generator (`generateIdentities`). Parses the Identity node's JSON `@modifier` template, seeds faker deterministically per node seed, and materialises `count` records. Used by the runtime (`tool-builder-runtime`) and the `IdentityView` preview renderer. Modifier `@token` → generator map; keep in sync with `FAKER_MODIFIERS` in `@/constants/tool-builder`.
 - `html-sanitize.ts` — `sanitize-html` wrappers: `sanitizeHtmlDoc` (HTML Sanitize node, layout-preserving allowlist) and `sanitizeSvgIcon` (strict SVG-only allowlist for the per-tool sidebar icon; strips scripts, styles, `<image>`, and all URL-bearing attributes).
 - `csv.ts` — pure CSV parser (`parseCsv`, wraps PapaParse) producing an optimized rows array (typed values, empty rows/columns dropped). Used by the Tool Builder's `csv` input node in `PreviewPane`.
+- `xlsx.ts` — pure Excel-workbook parser (`parseXlsx`). Dynamically imports SheetJS (pinned to its CVE-free official CDN build, not the vulnerable npm `xlsx`), reads one worksheet, and round-trips it through `parseCsv` so the output array matches the CSV node exactly. Returns the workbook's `sheetNames` too. Used by the Tool Builder's `xlsx` input node in `PreviewPane`.
+- `aggregate.ts` — pure group-by / rollup helper (`aggregateRows`, wraps Arquero). Groups an array of object rows by columns and reduces each group to aggregate columns (count/sum/mean/median/mode/min/max/distinct/stdev/variance) built as safe Arquero string expressions (no eval). Used by the `aggregate` logic node via the runtime (`tool-builder-runtime`).
 - `gallery.ts` — pure gallery-handle helpers (`HANDLE_PATTERN`, `normalizeHandle`, `isValidHandle`). The handle is a gallery's only public key; the format mirrors the DB `galleries_handle_format` check constraint. Used by `useGallery`, the `Gallery` manager, and the public gallery route/API.
 - `table-data.ts` — pure table-data normalizer (`normalizeTableData`, `compareCells`, `formatCell`): auto-optimizes any array / JSON string into a render-ready grid (typed cells, empty rows/columns dropped) and detects per-column kinds (string/number/date) for sorting. Used by the Tool Builder's `table` input node (`PreviewPane/components/DataTable.tsx`).
 - `supabase/client.ts` — browser Supabase client factory (`createClient()`). Use in `"use client"` components/hooks.

@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- Add the `stt` (Speech to Text) node type.
+--
+-- `stt` — Input / render node (preview-only capture). Listens to the
+--         microphone with the browser Speech Recognition engine (via
+--         `react-speech-recognition`) and writes the live transcript into the
+--         bound state slot, so downstream nodes (AI, Template, Code, …) can
+--         consume the dictated text. Recognition runs entirely client-side.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'stt';

@@ -156,6 +156,32 @@ export async function GET(request: Request) {
     "",
   );
 
+  // Detect client-side-rendered pages before stripping scripts: their body is
+  // painted by JS at hydration, so the static HTML carries no content. The
+  // script-free sandbox would render an empty frame — surface an honest error
+  // instead of a silent blank. Catches the explicit Next.js CSR-bailout marker
+  // and the general case (a body that's empty once tags are removed).
+  const bodyInner = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html;
+  const visibleText = bodyInner
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, "")
+    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, "")
+    .replace(/<template\b[\s\S]*?<\/template\s*>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+  if (
+    /BAILOUT_TO_CLIENT_SIDE_RENDERING/.test(html) ||
+    visibleText.length < 20
+  ) {
+    return Response.json(
+      {
+        error:
+          "This page renders its content in the browser (client-side), so there's no static HTML to copy.",
+      },
+      { status: 422 },
+    );
+  }
+
   // Drop scripts — themed output is rendered without allow-scripts, so this
   // mostly trims weight and noscript fallbacks render instead.
   html = html

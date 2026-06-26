@@ -42,6 +42,7 @@
     "@tanstack/zod-form-adapter": "^0.42.1",
     "@types/d3": "^7.4.3",
     "@types/mdx": "^2.0.14",
+    "arquero": "^8.0.3",
     "axios": "^1.16.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -54,6 +55,7 @@
     "katex": "^0.17.0",
     "lucide-react": "^1.16.0",
     "mathjs": "^15.2.0",
+    "mermaid": "^11.16.0",
     "motion": "^12.40.0",
     "next": "16.2.6",
     "next-themes": "^0.4.6",
@@ -62,6 +64,7 @@
     "papaparse": "^5.5.3",
     "postcss": "^8.5.15",
     "postcss-value-parser": "^4.2.0",
+    "qrcode": "^1.5.4",
     "radix-ui": "^1.5.0",
     "react": "19.2.4",
     "react-day-picker": "^10.0.1",
@@ -69,6 +72,8 @@
     "react-markdown": "^10.1.0",
     "react-redux": "^9.3.0",
     "react-resizable-panels": "^4.11.1",
+    "react-speech-recognition": "^4.0.1",
+    "react-text-to-speech": "^5.1.10",
     "rehype-highlight": "^7.0.2",
     "rehype-katex": "^7.0.1",
     "rehype-raw": "^7.0.0",
@@ -78,11 +83,13 @@
     "remark-math": "^6.0.0",
     "sanitize-html": "^2.17.5",
     "shadcn": "^4.7.0",
+    "shiki": "^4.3.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "tw-animate-css": "^1.4.0",
     "use-debounce": "^10.1.1",
     "vaul": "^1.1.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -91,8 +98,10 @@
     "@types/node": "^20",
     "@types/nprogress": "^0.2.3",
     "@types/papaparse": "^5.5.2",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/react-speech-recognition": "^3.9.6",
     "@types/sanitize-html": "^2.16.1",
     "dotenv-cli": "^11.0.0",
     "eslint": "^9",
@@ -104,8 +113,13 @@
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
-    "supabase": "^2.105.0",
+    "supabase": "^2.108.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "puppeteer"
+    ]
   }
 }

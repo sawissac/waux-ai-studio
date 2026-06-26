@@ -29,27 +29,35 @@ import {
   FormInput,
   GitMerge,
   Globe,
+  Group,
   Hash,
   ImageUp,
   ListFilter,
   type LucideIcon,
+  Mic,
   MousePointerClick,
   Palette,
+  QrCode,
   Regex as RegexIcon,
   Search,
+  Sheet,
   ShieldCheck,
   Shuffle,
   Sigma,
   Sparkles,
+  SquareCode,
   Table,
   TableProperties,
   ToggleRight,
   Type as TypeIcon,
   Vault,
+  Volume2,
   Webhook,
+  Workflow,
 } from "lucide-react";
 
 import type {
+  AggregateOp,
   ChartType,
   CodeInputLanguage,
   CounterMode,
@@ -58,10 +66,13 @@ import type {
   EncodeOperation,
   FileOutputFormat,
   FilterOperator,
+  HighlightTheme,
   HttpMethod,
   HttpResponseType,
   JoinKind,
+  MermaidTheme,
   NodeAccent,
+  QrLevel,
   RegexMode,
   SchemaRule,
   SortDirection,
@@ -487,6 +498,76 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     icon: Fingerprint,
     slug: "@identity",
   },
+  xlsx: {
+    type: "xlsx",
+    label: "Excel",
+    blurb:
+      "Upload an Excel workbook (.xlsx/.xls). The chosen sheet is parsed (typed, empty rows/columns dropped) and written to bound state as an array.",
+    accent: "blue",
+    group: "Inputs",
+    icon: Sheet,
+    slug: "@xlsx",
+  },
+  aggregate: {
+    type: "aggregate",
+    label: "Aggregate",
+    blurb:
+      "Group an array by columns and roll each group up — count, sum, mean, median, min, max & more — via Arquero; result writes to bound state.",
+    accent: "amber",
+    group: "Logic",
+    icon: Group,
+    slug: "@aggregate",
+  },
+  mermaid: {
+    type: "mermaid",
+    label: "Diagram",
+    blurb:
+      "Render a Mermaid definition from a state slot as a flowchart, sequence, pie, gantt, or class diagram.",
+    accent: "blue",
+    group: "Inputs",
+    icon: Workflow,
+    slug: "@mermaid",
+  },
+  highlight: {
+    type: "highlight",
+    label: "Code View",
+    blurb:
+      "Show code from a state slot as a syntax-highlighted, read-only block (Shiki) — pick the language & theme.",
+    accent: "blue",
+    group: "Inputs",
+    icon: SquareCode,
+    slug: "@highlight",
+  },
+  qrcode: {
+    type: "qrcode",
+    label: "QR Code",
+    blurb:
+      "Encode a string from a state slot as a crisp SVG QR code with adjustable size & error-correction level.",
+    accent: "blue",
+    group: "Inputs",
+    icon: QrCode,
+    slug: "@qrcode",
+  },
+  tts: {
+    type: "tts",
+    label: "Text to Speech",
+    blurb:
+      "Speak a string from a state slot aloud with the browser voice — tune speed, pitch & volume, optionally highlight words.",
+    accent: "blue",
+    group: "Inputs",
+    icon: Volume2,
+    slug: "@tts",
+  },
+  stt: {
+    type: "stt",
+    label: "Speech to Text",
+    blurb:
+      "Dictate into the microphone — the browser transcribes your speech and writes the live transcript to a state slot.",
+    accent: "blue",
+    group: "Inputs",
+    icon: Mic,
+    slug: "@stt",
+  },
   ai: {
     type: "ai",
     label: "AI",
@@ -518,10 +599,16 @@ export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
         "markdown",
         "json",
         "csv",
+        "xlsx",
         "table",
         "chart",
+        "mermaid",
+        "qrcode",
+        "tts",
+        "stt",
         "sprite",
         "code_input",
+        "highlight",
         "counter",
         "download",
       ],
@@ -536,6 +623,7 @@ export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
         "map",
         "sort",
         "merge",
+        "aggregate",
         "template",
         "regex",
         "jsonpath",
@@ -758,6 +846,61 @@ export const DOWNLOAD_FORMATS: { value: DownloadFormat; label: string }[] = [
   { value: "png", label: ".png" },
   { value: "jpeg", label: ".jpeg" },
 ];
+
+/** Aggregate reducers for the Aggregate node, in menu order. */
+export const AGGREGATE_OPS: AggregateOp[] = [
+  "count",
+  "sum",
+  "mean",
+  "median",
+  "mode",
+  "min",
+  "max",
+  "distinct",
+  "stdev",
+  "variance",
+];
+
+/** Aggregate ops that ignore the source column (count operates on the group). */
+export const FIELDLESS_AGGREGATE_OPS: ReadonlySet<AggregateOp> =
+  new Set<AggregateOp>(["count"]);
+
+/** Color themes for the Mermaid diagram node, in menu order. */
+export const MERMAID_THEMES: MermaidTheme[] = [
+  "default",
+  "neutral",
+  "dark",
+  "forest",
+];
+
+/** Sample Mermaid source surfaced in docs / the editor hint. */
+export const MERMAID_DEFAULT_SOURCE = `flowchart TD
+  A[Start] --> B{Decision}
+  B -->|Yes| C[Do it]
+  B -->|No| D[Skip]`;
+
+/** Bundled Shiki color themes for the Highlight node, in menu order. */
+export const HIGHLIGHT_THEMES: { value: HighlightTheme; label: string }[] = [
+  { value: "github-dark", label: "GitHub Dark" },
+  { value: "github-light", label: "GitHub Light" },
+  { value: "nord", label: "Nord" },
+  { value: "dracula", label: "Dracula" },
+  { value: "monokai", label: "Monokai" },
+  { value: "min-light", label: "Min Light" },
+];
+
+/** Error-correction levels for the QR Code node, in menu order. */
+export const QR_LEVELS: QrLevel[] = ["L", "M", "Q", "H"];
+
+/** Clamp range (px) for the QR Code node's rendered-size control. */
+export const QR_SIZE_RANGE = { min: 64, max: 512 } as const;
+
+/** Clamp ranges for the Text-to-Speech node's voice controls. */
+export const TTS_RANGES = {
+  rate: { min: 0.5, max: 2, step: 0.1 },
+  pitch: { min: 0, max: 2, step: 0.1 },
+  volume: { min: 0, max: 1, step: 0.1 },
+} as const;
 
 /** Upper bound on how many records an Identity node will generate. */
 export const IDENTITY_MAX_COUNT = 1000;
@@ -1275,6 +1418,78 @@ export function createNode(type: ToolNodeType): ToolNode {
         template: IDENTITY_DEFAULT_TEMPLATE,
         seed: 1,
         binding: { mode: "name", value: "state1" },
+      };
+    case "xlsx":
+      return {
+        id,
+        type,
+        fieldLabel: "Excel file",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        hasHeader: true,
+        sheet: "",
+      };
+    case "aggregate":
+      return {
+        id,
+        type,
+        description: "",
+        input: { mode: "name", value: "state1" },
+        output: { mode: "name", value: "state1" },
+        groupBy: [],
+        aggregations: [{ id: uuid(), op: "count", field: "", as: "" }],
+      };
+    case "mermaid":
+      return {
+        id,
+        type,
+        fieldLabel: "Diagram",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        theme: "default",
+      };
+    case "highlight":
+      return {
+        id,
+        type,
+        fieldLabel: "Code",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        language: "javascript",
+        theme: "github-dark",
+        lineNumbers: true,
+      };
+    case "qrcode":
+      return {
+        id,
+        type,
+        fieldLabel: "QR Code",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        size: 200,
+        level: "M",
+      };
+    case "tts":
+      return {
+        id,
+        type,
+        fieldLabel: "Text to Speech",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        rate: 1,
+        pitch: 1,
+        volume: 1,
+        highlight: true,
+      };
+    case "stt":
+      return {
+        id,
+        type,
+        fieldLabel: "Speech to Text",
+        description: "",
+        binding: { mode: "name", value: "state1" },
+        lang: "en-US",
+        continuous: false,
       };
     case "ai":
       return {

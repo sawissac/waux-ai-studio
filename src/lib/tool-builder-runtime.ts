@@ -4,6 +4,7 @@
  * code-node chain over a plain `{ [stateName]: string }` map.
  */
 import { buildAiNodeSystemPrompt } from "@/constants/ai-prompts";
+import { aggregateRows } from "@/lib/aggregate";
 import { aiHelpers, callGemini, callOpenRouter } from "@/lib/ai-providers";
 import { generateIdentities } from "@/lib/generate-identity";
 import { sanitizeHtmlDoc } from "@/lib/html-sanitize";
@@ -19,6 +20,7 @@ import {
   getPath,
 } from "@/lib/transform";
 import type {
+  AggregateNode,
   AiNode,
   CounterMode,
   CounterNode,
@@ -708,6 +710,24 @@ function runIdentityNode(
 }
 
 /**
+ * Run an Aggregate node: group the input array by the node's columns and write
+ * the rolled-up result array to its output binding. Pure & deterministic, so it
+ * re-runs harmlessly in the live-change chain.
+ */
+function runAggregateNode(
+  node: AggregateNode,
+  state: StateMap,
+  stateNode: StateNode | null,
+): void {
+  const inName = resolveBinding(node.input, stateNode);
+  const outName = resolveBinding(node.output, stateNode);
+  if (!inName || !outName) {
+    return;
+  }
+  state[outName] = aggregateRows(node, state[inName]);
+}
+
+/**
  * Run the synchronous transform nodes (everything except code, ai,
  * http_request, encode — those are async and handled by their callers). Pure,
  * so both {@link runChain} and {@link changeChain} share it for live preview.
@@ -763,6 +783,9 @@ function runSyncTransform(
       return true;
     case "identity":
       runIdentityNode(node, state, stateNode);
+      return true;
+    case "aggregate":
+      runAggregateNode(node, state, stateNode);
       return true;
     default:
       return false;
@@ -998,6 +1021,12 @@ export function nodeSubtitle(
     case "chart":
     case "sprite":
     case "code_input":
+    case "xlsx":
+    case "mermaid":
+    case "highlight":
+    case "qrcode":
+    case "tts":
+    case "stt":
       return {
         label: "Using State",
         value: resolveBinding(node.binding, stateNode),
@@ -1056,6 +1085,11 @@ export function nodeSubtitle(
       return {
         label: "Join",
         value: `${node.leftKey} = ${node.rightKey} (${node.joinKind})`,
+      };
+    case "aggregate":
+      return {
+        label: "Group by",
+        value: `${node.groupBy.length} keys → ${resolveBinding(node.output, stateNode) || "?"}`,
       };
     case "template":
       return {

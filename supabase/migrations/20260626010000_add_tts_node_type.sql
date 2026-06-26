@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- Add the `tts` (Text to Speech) node type.
+--
+-- `tts` — Render node (preview-only). Reads a string from the bound state slot
+--         and speaks it aloud with the browser Speech Synthesis engine (via
+--         `react-text-to-speech`), exposing play / pause / stop controls and
+--         tunable rate / pitch / volume with optional word highlighting. Never
+--         writes back to state.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'tts';

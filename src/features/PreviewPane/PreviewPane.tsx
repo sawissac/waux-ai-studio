@@ -9,7 +9,7 @@ import {
   Loader2,
   Upload,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -173,9 +173,14 @@ import {
   DeviceFrame,
   DeviceToggle,
 } from "@/features/PreviewPane/components/DeviceFrame";
+import { HighlightView } from "@/features/PreviewPane/components/HighlightView";
 import { IdentityView } from "@/features/PreviewPane/components/IdentityView";
+import { MermaidView } from "@/features/PreviewPane/components/MermaidView";
+import { QrCodeView } from "@/features/PreviewPane/components/QrCodeView";
 import { SpriteView } from "@/features/PreviewPane/components/SpriteView";
+import { SttView } from "@/features/PreviewPane/components/SttView";
 import { ThemedSite } from "@/features/PreviewPane/components/ThemedSite";
+import { TtsView } from "@/features/PreviewPane/components/TtsView";
 import { VaultView } from "@/features/PreviewPane/components/VaultView";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -189,6 +194,7 @@ import {
   type StateMap,
 } from "@/lib/tool-builder-runtime";
 import { cn } from "@/lib/utils";
+import { parseXlsx } from "@/lib/xlsx";
 import type {
   CsvNode,
   DownloadNode,
@@ -199,6 +205,7 @@ import type {
   Tool,
   ViewportDevice,
   ViewportNode,
+  XlsxNode,
 } from "@/types/tool-builder";
 import { isRenderNode } from "@/types/tool-builder";
 
@@ -297,6 +304,19 @@ export function PreviewPane({
       }
     >
   >({});
+  /** Per-xlsx-node upload metadata (file name, parsed shape, sheets, error). */
+  const [xlsxMeta, setXlsxMeta] = useState<
+    Record<
+      string,
+      {
+        fileName: string;
+        rowCount: number;
+        fields: string[];
+        sheetNames: string[];
+        error: string | null;
+      }
+    >
+  >({});
 
   // Full reset when switching tools.
   useEffect(() => {
@@ -305,6 +325,7 @@ export function PreviewPane({
     setMdMode({});
     setPreviewDevice(firstWebsiteDevice(tool));
     setCsvMeta({});
+    setXlsxMeta({});
   }, [tool.id]);
 
   const debouncedChange = useDebouncedCallback(
@@ -402,6 +423,70 @@ export function PreviewPane({
         fileName: file.name,
         rowCount: result.rowCount,
         fields: result.fields,
+        error: result.error,
+      },
+    }));
+    if (result.error || !name) {
+      return;
+    }
+    const nextState = { ...runtime, [name]: result.rows };
+    setRuntime(nextState);
+    debouncedChange(nextState);
+  };
+
+  /**
+   * Retained workbook bytes per xlsx node, so switching the active sheet can
+   * re-parse without forcing the user to re-upload the same file.
+   */
+  const xlsxBuffers = useRef<Record<string, ArrayBuffer>>({});
+
+  /**
+   * Parse one sheet of an uploaded Excel workbook into the node's bound state
+   * slot (retaining the bytes for sheet switching), then run the live `change`
+   * chain. Parse errors surface inline; nothing is written on failure.
+   */
+  const loadXlsx = async (node: XlsxNode, file: File) => {
+    const name = resolveBinding(node.binding, stateNode);
+    const buf = await file.arrayBuffer();
+    xlsxBuffers.current[node.id] = buf;
+    const result = await parseXlsx(buf, node.hasHeader, node.sheet);
+    setXlsxMeta((prev) => ({
+      ...prev,
+      [node.id]: {
+        fileName: file.name,
+        rowCount: result.rowCount,
+        fields: result.fields,
+        sheetNames: result.sheetNames,
+        error: result.error,
+      },
+    }));
+    if (result.error || !name) {
+      return;
+    }
+    const nextState = { ...runtime, [name]: result.rows };
+    setRuntime(nextState);
+    debouncedChange(nextState);
+  };
+
+  /**
+   * Switch the active worksheet of an already-uploaded workbook: persist the
+   * choice on the node and re-parse from the retained bytes.
+   */
+  const selectXlsxSheet = async (node: XlsxNode, sheet: string) => {
+    updateNode(node.id, { sheet });
+    const buf = xlsxBuffers.current[node.id];
+    if (!buf) {
+      return;
+    }
+    const name = resolveBinding(node.binding, stateNode);
+    const result = await parseXlsx(buf, node.hasHeader, sheet);
+    setXlsxMeta((prev) => ({
+      ...prev,
+      [node.id]: {
+        fileName: prev[node.id]?.fileName ?? "",
+        rowCount: result.rowCount,
+        fields: result.fields,
+        sheetNames: result.sheetNames,
         error: result.error,
       },
     }));
@@ -1293,6 +1378,131 @@ export function PreviewPane({
                     );
                   }
 
+                  if (node.type === "xlsx") {
+                    const meta = xlsxMeta[node.id];
+                    const data = runtime[name];
+                    const rows = Array.isArray(data) ? data : [];
+                    const fields = (meta?.fields ?? []).slice(0, 6);
+                    const sample = rows.slice(0, 5);
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        <label className="text-sm font-semibold">
+                          {node.fieldLabel}
+                        </label>
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="relative inline-flex h-10 w-fit cursor-pointer items-center gap-2 rounded-lg border border-input bg-transparent px-3.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-within:ring-1 focus-within:ring-ring">
+                            <Upload size={14} className="shrink-0" />
+                            <span className="max-w-60 truncate">
+                              {meta?.fileName ?? t("preview.xlsx.choose")}
+                            </span>
+                            <input
+                              type="file"
+                              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                              className="sr-only"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  loadXlsx(node, file);
+                                }
+                                // Allow re-uploading the same file.
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                          {meta && meta.sheetNames.length > 1 && (
+                            <select
+                              value={node.sheet || meta.sheetNames[0]}
+                              onChange={(e) =>
+                                selectXlsxSheet(node, e.target.value)
+                              }
+                              aria-label={t("preview.xlsx.sheet")}
+                              className="h-10 rounded-lg border border-input bg-background px-2.5 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                              {meta.sheetNames.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                        {meta?.error && (
+                          <p className="flex items-start gap-1.5 text-[11px] text-destructive">
+                            <AlertTriangle
+                              size={12}
+                              className="mt-px shrink-0"
+                            />
+                            <span className="min-w-0 wrap-break-word">
+                              {t("preview.xlsx.invalid", { msg: meta.error })}
+                            </span>
+                          </p>
+                        )}
+                        {meta && !meta.error && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("preview.xlsx.summary", {
+                              rows: meta.rowCount,
+                              cols: meta.fields.length,
+                            })}
+                          </p>
+                        )}
+                        {sample.length > 0 && fields.length > 0 && (
+                          <div className="overflow-x-auto rounded-xl border border-input shadow-sm">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-border/60 bg-muted/40 text-left">
+                                  {fields.map((f) => (
+                                    <th
+                                      key={f}
+                                      className="max-w-40 truncate px-2.5 py-1.5 font-semibold"
+                                    >
+                                      {f}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {sample.map((row, ri) => (
+                                  <tr
+                                    key={ri}
+                                    className="border-b border-border/40 last:border-0"
+                                  >
+                                    {fields.map((f, ci) => {
+                                      const cell = node.hasHeader
+                                        ? (row as Record<string, unknown>)[f]
+                                        : (row as unknown[])[ci];
+                                      return (
+                                        <td
+                                          key={f}
+                                          className="max-w-40 truncate px-2.5 py-1.5 text-muted-foreground"
+                                        >
+                                          {cell === null || cell === undefined
+                                            ? ""
+                                            : String(cell)}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {rows.length > sample.length && (
+                              <div className="border-t border-border/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                                {t("preview.xlsx.more", {
+                                  n: rows.length - sample.length,
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
                   if (node.type === "download") {
                     const content = name ? runtime[name] : undefined;
                     return (
@@ -1358,6 +1568,104 @@ export function PreviewPane({
                           </p>
                         )}
                         <ChartView node={node} value={runtime[name]} />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "mermaid") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <MermaidView node={node} value={runtime[name]} />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "highlight") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <HighlightView node={node} value={runtime[name]} />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "qrcode") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <QrCodeView node={node} value={runtime[name]} />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "tts") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <TtsView node={node} value={runtime[name]} />
+                      </div>
+                    );
+                  }
+
+                  if (node.type === "stt") {
+                    return (
+                      <div key={node.id} className="flex flex-col gap-2">
+                        {node.fieldLabel && (
+                          <label className="text-sm font-semibold">
+                            {node.fieldLabel}
+                          </label>
+                        )}
+                        {node.description && (
+                          <p className="text-xs text-muted-foreground -mt-1">
+                            {node.description}
+                          </p>
+                        )}
+                        <SttView
+                          node={node}
+                          value={runtime[name]}
+                          onChange={(next) => {
+                            const nextState = { ...runtime, [name]: next };
+                            setRuntime(nextState);
+                            debouncedChange(nextState);
+                          }}
+                        />
                       </div>
                     );
                   }

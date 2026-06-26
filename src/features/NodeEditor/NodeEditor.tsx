@@ -40,6 +40,7 @@ import {
 import type { MessageKey } from "@/constants/i18n";
 import {
   ACCENT_CLASSES,
+  AGGREGATE_OPS,
   CHART_HEIGHT_RANGE,
   CHART_TYPES,
   CODE_INPUT_LANGUAGES,
@@ -49,13 +50,18 @@ import {
   EDITOR_HEIGHTS,
   ENCODE_OPERATIONS,
   FAKER_MODIFIERS,
+  FIELDLESS_AGGREGATE_OPS,
   FILE_OUTPUT_FORMATS,
   FILTER_OPERATORS,
+  HIGHLIGHT_THEMES,
   HTTP_METHODS,
   HTTP_RESPONSE_TYPES,
   IDENTITY_MAX_COUNT,
   JOIN_KINDS,
+  MERMAID_THEMES,
   NODE_META,
+  QR_LEVELS,
+  QR_SIZE_RANGE,
   REGEX_MODES,
   SCHEMA_TYPES,
   SORT_DIRECTIONS,
@@ -63,6 +69,7 @@ import {
   SPRITE_FPS_RANGE,
   SPRITE_FRAME_RANGE,
   TABLE_PAGE_SIZES,
+  TTS_RANGES,
   uuid,
   VALUELESS_FILTER_OPERATORS,
   VIEWPORT_DEVICES,
@@ -72,6 +79,9 @@ import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { useTranslation } from "@/hooks/useTranslation";
 import { cn } from "@/lib/utils";
 import type {
+  AggregateNode,
+  AggregateOp,
+  AggregateRule,
   AiNode,
   ButtonNode,
   ChartNode,
@@ -93,6 +103,8 @@ import type {
   FileOutputFormat,
   FilterNode,
   FilterOperator,
+  HighlightNode,
+  HighlightTheme,
   HtmlSanitizeNode,
   HttpMethod,
   HttpRequestNode,
@@ -106,7 +118,11 @@ import type {
   MarkdownNode,
   MathNode,
   MergeNode,
+  MermaidNode,
+  MermaidTheme,
   NumberNode,
+  QrCodeNode,
+  QrLevel,
   RegexMode,
   RegexNode,
   SchemaRule,
@@ -120,6 +136,7 @@ import type {
   SpriteNode,
   StateEntry,
   StateNode,
+  SttNode,
   TableNode,
   TablePageSize,
   TemplateNode,
@@ -130,9 +147,11 @@ import type {
   ToolNode,
   ToolNodeType,
   TsTypeNode,
+  TtsNode,
   VaultNode,
   ViewportDevice,
   ViewportNode,
+  XlsxNode,
 } from "@/types/tool-builder";
 
 const inputCls =
@@ -263,7 +282,13 @@ function BindingControl({
     | CodeInputNode
     | DownloadNode
     | VaultNode
-    | IdentityNode;
+    | IdentityNode
+    | XlsxNode
+    | MermaidNode
+    | HighlightNode
+    | QrCodeNode
+    | TtsNode
+    | SttNode;
 }) {
   const { stateNode, updateNode } = useToolBuilder();
   const { t } = useTranslation();
@@ -1398,7 +1423,8 @@ function DescriptionField({
     | EncodeNode
     | CsvToMdNode
     | CounterNode
-    | VaultNode;
+    | VaultNode
+    | AggregateNode;
 }) {
   const { updateNode } = useToolBuilder();
   const { t } = useTranslation();
@@ -1876,6 +1902,163 @@ function MergeEditor({ node }: { node: MergeNode }) {
 }
 
 /** Template editor — template text, output. */
+/** Aggregate editor — input, group-by columns, aggregate columns, output. */
+function AggregateEditor({ node }: { node: AggregateNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const setGroupBy = (groupBy: string[]) => updateNode(node.id, { groupBy });
+  const setAggs = (aggregations: AggregateRule[]) =>
+    updateNode(node.id, { aggregations });
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <InOutFields
+        inValue={node.input.value}
+        outValue={node.output.value}
+        onIn={(v) => updateNode(node.id, { input: { mode: "name", value: v } })}
+        onOut={(v) =>
+          updateNode(node.id, { output: { mode: "name", value: v } })
+        }
+      />
+      <Field label={t("aggregate.groupBy")}>
+        <div className="flex flex-col gap-1.5">
+          {node.groupBy.map((col, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <input
+                value={col}
+                placeholder={t("aggregate.groupBy.placeholder")}
+                onChange={(e) =>
+                  setGroupBy(
+                    node.groupBy.map((c, idx) =>
+                      idx === i ? e.target.value : c,
+                    ),
+                  )
+                }
+                className={cn(inputCls, "font-mono")}
+              />
+              <button
+                type="button"
+                aria-label={t("aggregate.removeGroupBy")}
+                onClick={() =>
+                  setGroupBy(node.groupBy.filter((_, idx) => idx !== i))
+                }
+                className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setGroupBy([...node.groupBy, ""])}
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+        >
+          <Plus size={14} /> {t("aggregate.addGroupBy")}
+        </button>
+        <p className="text-[11px] text-muted-foreground">
+          {t("aggregate.groupBy.help")}
+        </p>
+      </Field>
+      <Field label={t("aggregate.aggregations")}>
+        <div className="flex flex-col gap-2">
+          {node.aggregations.map((a) => {
+            const fieldless = FIELDLESS_AGGREGATE_OPS.has(a.op);
+            return (
+              <div
+                key={a.id}
+                className="flex flex-col gap-1.5 rounded-md border bg-muted/30 p-2"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Select
+                    value={a.op}
+                    onValueChange={(v) =>
+                      setAggs(
+                        node.aggregations.map((x) =>
+                          x.id === a.id ? { ...x, op: v as AggregateOp } : x,
+                        ),
+                      )
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-32 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AGGREGATE_OPS.map((op) => (
+                        <SelectItem key={op} value={op}>
+                          {t(`aggregate.op.${op}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <input
+                    value={a.field}
+                    disabled={fieldless}
+                    placeholder={
+                      fieldless
+                        ? t("aggregate.allRows")
+                        : t("aggregate.field.placeholder")
+                    }
+                    onChange={(e) =>
+                      setAggs(
+                        node.aggregations.map((x) =>
+                          x.id === a.id ? { ...x, field: e.target.value } : x,
+                        ),
+                      )
+                    }
+                    className={cn(
+                      inputCls,
+                      "font-mono",
+                      fieldless && "opacity-50",
+                    )}
+                  />
+                  <button
+                    type="button"
+                    aria-label={t("aggregate.removeAggregation")}
+                    onClick={() =>
+                      setAggs(node.aggregations.filter((x) => x.id !== a.id))
+                    }
+                    className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <input
+                  value={a.as}
+                  placeholder={t("aggregate.as.placeholder")}
+                  onChange={(e) =>
+                    setAggs(
+                      node.aggregations.map((x) =>
+                        x.id === a.id ? { ...x, as: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  className={cn(inputCls, "font-mono")}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setAggs([
+              ...node.aggregations,
+              { id: uuid(), op: "count", field: "", as: "" },
+            ])
+          }
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+        >
+          <Plus size={14} /> {t("aggregate.addAggregation")}
+        </button>
+        <p className="text-[11px] text-muted-foreground">
+          {t("aggregate.help")}
+        </p>
+      </Field>
+    </div>
+  );
+}
+
 function TemplateEditor({ node }: { node: TemplateNode }) {
   const { updateNode } = useToolBuilder();
   const { t } = useTranslation();
@@ -2650,6 +2833,8 @@ function EditorBody({
       return <SortEditor node={node} />;
     case "merge":
       return <MergeEditor node={node} />;
+    case "aggregate":
+      return <AggregateEditor node={node} />;
     case "template":
       return <TemplateEditor node={node} />;
     case "regex":
@@ -3369,6 +3554,395 @@ function EditorBody({
           <p className="text-[11px] text-muted-foreground">
             {t("codeInput.help")}
           </p>
+        </div>
+      );
+    case "xlsx":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label={t("field.fieldLabel")}>
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("field.description")}>
+            <input
+              value={node.description ?? ""}
+              placeholder={t("field.descPlaceholder")}
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <ToggleRow
+            label={t("csv.header")}
+            description={t("csv.header.desc")}
+            checked={node.hasHeader}
+            onChange={(next) => updateNode(node.id, { hasHeader: next })}
+          />
+          <Field label={t("xlsx.sheet")}>
+            <input
+              value={node.sheet}
+              placeholder={t("xlsx.sheet.placeholder")}
+              onChange={(e) => updateNode(node.id, { sheet: e.target.value })}
+              className={inputCls}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {t("xlsx.sheet.help")}
+            </p>
+          </Field>
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">{t("xlsx.help")}</p>
+        </div>
+      );
+    case "mermaid":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label={t("field.fieldLabel")}>
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("field.description")}>
+            <input
+              value={node.description ?? ""}
+              placeholder={t("field.descPlaceholder")}
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("mermaid.theme")}>
+            <Select
+              value={node.theme}
+              onValueChange={(v) =>
+                updateNode(node.id, { theme: v as MermaidTheme })
+              }
+            >
+              <SelectTrigger className="h-8 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MERMAID_THEMES.map((th) => (
+                  <SelectItem key={th} value={th}>
+                    {t(`mermaid.theme.${th}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">
+            {t("mermaid.help")}
+          </p>
+        </div>
+      );
+    case "highlight":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label={t("field.fieldLabel")}>
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("field.description")}>
+            <input
+              value={node.description ?? ""}
+              placeholder={t("field.descPlaceholder")}
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("codeInput.language")}>
+            <Select
+              value={node.language}
+              onValueChange={(v) =>
+                updateNode(node.id, { language: v as CodeInputLanguage })
+              }
+            >
+              <SelectTrigger className="h-8 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CODE_INPUT_LANGUAGES.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label={t("highlight.theme")}>
+            <Select
+              value={node.theme}
+              onValueChange={(v) =>
+                updateNode(node.id, { theme: v as HighlightTheme })
+              }
+            >
+              <SelectTrigger className="h-8 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {HIGHLIGHT_THEMES.map((th) => (
+                  <SelectItem key={th.value} value={th.value}>
+                    {th.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <ToggleRow
+            label={t("highlight.lineNumbers")}
+            description={t("highlight.lineNumbers.desc")}
+            checked={node.lineNumbers}
+            onChange={(next) => updateNode(node.id, { lineNumbers: next })}
+          />
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">
+            {t("highlight.help")}
+          </p>
+        </div>
+      );
+    case "qrcode":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label={t("field.fieldLabel")}>
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("field.description")}>
+            <input
+              value={node.description ?? ""}
+              placeholder={t("field.descPlaceholder")}
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label={t("qrcode.size")}>
+              <input
+                type="number"
+                min={QR_SIZE_RANGE.min}
+                max={QR_SIZE_RANGE.max}
+                step={8}
+                value={node.size}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) {
+                    updateNode(node.id, { size: n });
+                  }
+                }}
+                onBlur={(e) => {
+                  const n = Number(e.target.value);
+                  const clamped = Math.min(
+                    QR_SIZE_RANGE.max,
+                    Math.max(QR_SIZE_RANGE.min, Number.isFinite(n) ? n : 200),
+                  );
+                  if (clamped !== node.size) {
+                    updateNode(node.id, { size: clamped });
+                  }
+                }}
+                className={inputCls}
+              />
+            </Field>
+            <Field label={t("qrcode.level")}>
+              <Select
+                value={node.level}
+                onValueChange={(v) =>
+                  updateNode(node.id, { level: v as QrLevel })
+                }
+              >
+                <SelectTrigger className="h-8 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {QR_LEVELS.map((l) => (
+                    <SelectItem key={l} value={l}>
+                      {t(`qrcode.level.${l}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">
+            {t("qrcode.help")}
+          </p>
+        </div>
+      );
+    case "tts":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label={t("field.fieldLabel")}>
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("field.description")}>
+            <input
+              value={node.description ?? ""}
+              placeholder={t("field.descPlaceholder")}
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <div className="grid grid-cols-3 gap-2">
+            <Field label={t("tts.rate")}>
+              <input
+                type="number"
+                min={TTS_RANGES.rate.min}
+                max={TTS_RANGES.rate.max}
+                step={TTS_RANGES.rate.step}
+                value={node.rate}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) {
+                    updateNode(node.id, { rate: n });
+                  }
+                }}
+                onBlur={(e) => {
+                  const n = Number(e.target.value);
+                  const clamped = Math.min(
+                    TTS_RANGES.rate.max,
+                    Math.max(TTS_RANGES.rate.min, Number.isFinite(n) ? n : 1),
+                  );
+                  if (clamped !== node.rate) {
+                    updateNode(node.id, { rate: clamped });
+                  }
+                }}
+                className={inputCls}
+              />
+            </Field>
+            <Field label={t("tts.pitch")}>
+              <input
+                type="number"
+                min={TTS_RANGES.pitch.min}
+                max={TTS_RANGES.pitch.max}
+                step={TTS_RANGES.pitch.step}
+                value={node.pitch}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) {
+                    updateNode(node.id, { pitch: n });
+                  }
+                }}
+                onBlur={(e) => {
+                  const n = Number(e.target.value);
+                  const clamped = Math.min(
+                    TTS_RANGES.pitch.max,
+                    Math.max(TTS_RANGES.pitch.min, Number.isFinite(n) ? n : 1),
+                  );
+                  if (clamped !== node.pitch) {
+                    updateNode(node.id, { pitch: clamped });
+                  }
+                }}
+                className={inputCls}
+              />
+            </Field>
+            <Field label={t("tts.volume")}>
+              <input
+                type="number"
+                min={TTS_RANGES.volume.min}
+                max={TTS_RANGES.volume.max}
+                step={TTS_RANGES.volume.step}
+                value={node.volume}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) {
+                    updateNode(node.id, { volume: n });
+                  }
+                }}
+                onBlur={(e) => {
+                  const n = Number(e.target.value);
+                  const clamped = Math.min(
+                    TTS_RANGES.volume.max,
+                    Math.max(TTS_RANGES.volume.min, Number.isFinite(n) ? n : 1),
+                  );
+                  if (clamped !== node.volume) {
+                    updateNode(node.id, { volume: clamped });
+                  }
+                }}
+                className={inputCls}
+              />
+            </Field>
+          </div>
+          <ToggleRow
+            label={t("tts.highlight")}
+            description={t("tts.highlight.desc")}
+            checked={node.highlight}
+            onChange={(next) => updateNode(node.id, { highlight: next })}
+          />
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">{t("tts.help")}</p>
+        </div>
+      );
+    case "stt":
+      return (
+        <div className="flex flex-col gap-4">
+          <Field label={t("field.fieldLabel")}>
+            <input
+              value={node.fieldLabel}
+              onChange={(e) =>
+                updateNode(node.id, { fieldLabel: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("field.description")}>
+            <input
+              value={node.description ?? ""}
+              placeholder={t("field.descPlaceholder")}
+              onChange={(e) =>
+                updateNode(node.id, { description: e.target.value })
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("stt.lang")}>
+            <input
+              value={node.lang}
+              placeholder="en-US"
+              onChange={(e) => updateNode(node.id, { lang: e.target.value })}
+              className={inputCls}
+            />
+          </Field>
+          <ToggleRow
+            label={t("stt.continuous")}
+            description={t("stt.continuous.desc")}
+            checked={node.continuous}
+            onChange={(next) => updateNode(node.id, { continuous: next })}
+          />
+          <BindingControl node={node} />
+          <p className="text-[11px] text-muted-foreground">{t("stt.help")}</p>
         </div>
       );
   }

@@ -402,3 +402,23 @@
 .dark .border-foreground\/40 {
   border-color: color-mix(in oklab, var(--color-border) 55%, transparent);
 }
+
+/* =========================================================================
+   SHIKI LINE NUMBERS — the Highlight (Code View) node wraps the Shiki output
+   in `.shiki-lines` when line numbers are on. Shiki emits one
+   `<span class="line">` per source line; a CSS counter renders a
+   right-aligned gutter without touching the highlighted tokens themselves.
+   ========================================================================= */
+.shiki-lines code {
+  counter-reset: shiki-line;
+}
+.shiki-lines .line::before {
+  counter-increment: shiki-line;
+  content: counter(shiki-line);
+  display: inline-block;
+  width: 2.5ch;
+  margin-right: 1.25rem;
+  text-align: right;
+  color: color-mix(in oklab, currentColor 35%, transparent);
+  user-select: none;
+}
