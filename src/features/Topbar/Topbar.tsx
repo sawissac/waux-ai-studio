@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
 import { signOut } from "@/features/AuthLogin";
 import { SettingsButton } from "@/features/Settings";
+import { FullscreenButton } from "@/features/Topbar/components/FullscreenButton";
 import type { SaveState } from "@/hooks/useToolsSync";
 import { useTranslation } from "@/hooks/useTranslation";
 
@@ -116,6 +117,8 @@ export function Topbar({
             <BookText className="size-4" />
           </Link>
         </Button>
+
+        <FullscreenButton />
 
         <SettingsButton />
 

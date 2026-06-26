@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, KeyRound } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, KeyRound } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -80,6 +80,7 @@ export function SharedToolView({ toolId }: { toolId: string }) {
   const [keys, setKeys] = useState<Record<string, string>>(() =>
     Object.fromEntries(PROVIDERS.map((p) => [p, readKey(p)])),
   );
+  const [visible, setVisible] = useState<Record<string, boolean>>({});
 
   const handleKeyChange = (provider: AiProvider, value: string) => {
     writeKey(provider, value);
@@ -87,7 +88,7 @@ export function SharedToolView({ toolId }: { toolId: string }) {
   };
 
   const inputCls =
-    "h-9 w-full border-2 border-foreground bg-transparent px-3 text-sm shadow-nb-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono";
+    "h-9 w-full border-2 border-foreground bg-transparent pl-3 pr-10 text-sm shadow-nb-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono";
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -157,13 +158,32 @@ export function SharedToolView({ toolId }: { toolId: string }) {
                 <label className="text-xs font-medium text-foreground">
                   {PROVIDER_LABEL[provider]}
                 </label>
-                <input
-                  type="password"
-                  value={keys[provider]}
-                  placeholder="Paste your key here…"
-                  onChange={(e) => handleKeyChange(provider, e.target.value)}
-                  className={inputCls}
-                />
+                <div className="relative">
+                  <input
+                    type={visible[provider] ? "text" : "password"}
+                    value={keys[provider]}
+                    placeholder="Paste your key here…"
+                    onChange={(e) => handleKeyChange(provider, e.target.value)}
+                    className={inputCls}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setVisible((prev) => ({
+                        ...prev,
+                        [provider]: !prev[provider],
+                      }))
+                    }
+                    aria-label={visible[provider] ? "Hide key" : "Show key"}
+                    className="absolute inset-y-0 right-0 grid w-9 place-items-center text-muted-foreground hover:text-foreground"
+                  >
+                    {visible[provider] ? (
+                      <EyeOff size={15} />
+                    ) : (
+                      <Eye size={15} />
+                    )}
+                  </button>
+                </div>
               </div>
             ))}
             <p className="text-[11px] text-muted-foreground/70">

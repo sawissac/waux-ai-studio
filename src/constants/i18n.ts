@@ -20,6 +20,8 @@ const en = {
   "topbar.saving": "Saving…",
   "topbar.saved": "Saved",
   "topbar.error": "Error",
+  "topbar.fullscreen": "Fullscreen",
+  "topbar.exitFullscreen": "Exit fullscreen",
   "topbar.signOut": "Sign out",
 
   // Settings dialog
@@ -973,6 +975,8 @@ const my: Record<MessageKey, string> = {
   "topbar.saving": "သိမ်းနေသည်…",
   "topbar.saved": "သိမ်းပြီး",
   "topbar.error": "အမှား",
+  "topbar.fullscreen": "မျက်နှာပြင်အပြည့်",
+  "topbar.exitFullscreen": "မျက်နှာပြင်အပြည့် ထွက်ရန်",
   "topbar.signOut": "ထွက်မည်",
 
   "settings.title": "ဆက်တင်များ",
