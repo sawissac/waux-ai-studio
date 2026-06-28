@@ -59,11 +59,14 @@ export async function proxy(request: NextRequest) {
     pathname === "/forgot-password" || pathname.startsWith("/auth/");
   // Public marketing landing page — reachable by everyone, logged in or not.
   const isLanding = pathname === "/";
+  // Public legal pages — must load while unauthenticated.
+  const isLegal = pathname === "/privacy" || pathname === "/terms";
 
   if (
     !user &&
     pathname !== "/login" &&
     !isLanding &&
+    !isLegal &&
     !isSharePage &&
     !isSharedApi &&
     !isGalleryPage &&

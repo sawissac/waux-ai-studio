@@ -28,6 +28,9 @@ const en = {
   "settings.title": "Settings",
   "settings.subtitle": "Preferences are stored on this device only.",
   "settings.reset": "Reset to defaults",
+  "settings.legal": "Legal",
+  "settings.privacy": "Privacy Policy",
+  "settings.terms": "Terms & Conditions",
 
   // Appearance / theme
   "settings.theme": "Theme",
@@ -35,6 +38,9 @@ const en = {
   "theme.light": "Light",
   "theme.dark": "Dark",
   "theme.system": "System",
+  "theme.switchToLight": "Switch to light mode",
+  "theme.switchToDark": "Switch to dark mode",
+  "header.github": "View source on GitHub",
 
   // Language
   "settings.language": "Language",
@@ -1157,12 +1163,18 @@ const my: Record<MessageKey, string> = {
   "settings.title": "ဆက်တင်များ",
   "settings.subtitle": "ဦးစားပေးချက်များကို ဤစက်ပစ္စည်းတွင်သာ သိမ်းဆည်းသည်။",
   "settings.reset": "မူလအတိုင်း ပြန်ထားမည်",
+  "settings.legal": "ဥပဒေဆိုင်ရာ",
+  "settings.privacy": "ကိုယ်ရေးအချက်အလက် မူဝါဒ",
+  "settings.terms": "စည်းမျဉ်းနှင့် သတ်မှတ်ချက်များ",
 
   "settings.theme": "အသွင်အပြင်",
   "settings.theme.desc": "အက်ပ်အတွက် အရောင်စနစ်။",
   "theme.light": "အလင်း",
   "theme.dark": "အမှောင်",
   "theme.system": "စနစ်အလိုက်",
+  "theme.switchToLight": "အလင်းမုဒ်သို့ ပြောင်းရန်",
+  "theme.switchToDark": "အမှောင်မုဒ်သို့ ပြောင်းရန်",
+  "header.github": "GitHub တွင် source ကြည့်ရန်",
 
   "settings.language": "ဘာသာစကား",
   "settings.language.desc": "မျက်နှာပြင် ပြသမည့်ဘာသာစကား။",

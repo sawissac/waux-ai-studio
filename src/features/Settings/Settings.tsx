@@ -1,6 +1,7 @@
 "use client";
 
 import { RotateCcw, Settings as SettingsIcon } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -137,7 +138,31 @@ export function SettingsButton() {
           ))}
         </div>
 
-        <div className="mt-1 flex justify-end">
+        <div className="mt-1 flex items-center justify-between gap-3">
+          {/* Legal — links to the public Privacy / Terms pages (open in a new
+              tab so the user doesn't lose their workspace). Labels localize;
+              the destination pages are English-only. */}
+          <nav
+            aria-label={t("settings.legal")}
+            className="flex items-center gap-3 text-xs text-muted-foreground"
+          >
+            <Link
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline-offset-4 hover:text-foreground hover:underline"
+            >
+              {t("settings.privacy")}
+            </Link>
+            <Link
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline-offset-4 hover:text-foreground hover:underline"
+            >
+              {t("settings.terms")}
+            </Link>
+          </nav>
           <Button
             variant="outline"
             size="sm"

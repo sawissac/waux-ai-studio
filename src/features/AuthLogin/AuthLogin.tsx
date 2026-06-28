@@ -247,6 +247,37 @@ export function AuthLogin() {
             </p>
           </>
         )}
+
+        {/* Legal — sign-in/up implies acceptance. Links open the public
+            Privacy / Terms pages in a new tab so the form state is preserved. */}
+        <p className="text-center text-xs leading-relaxed text-muted-foreground">
+          By continuing, you agree to our
+          <br />
+          <Link
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "font-medium text-foreground underline-offset-4 hover:underline",
+              "rounded outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+            )}
+          >
+            Terms &amp; Conditions
+          </Link>{" "}
+          and{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "font-medium text-foreground underline-offset-4 hover:underline",
+              "rounded outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+            )}
+          >
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 # Project Structure — File Placement Rules
 
-Last updated: 2026-06-28
+Last updated: 2026-06-29
 
 Where each file type lives. Next.js 16 App Router + TypeScript.
 
@@ -52,6 +52,8 @@ Rule: `page.tsx` is a thin shell that mounts one feature. No markup, no fetching
 - `app/favicon.ico`
 
 - `app/(full-frame-public)/login/page.tsx` — `/login` route (thin shell, mounts `AuthLogin` feature)
+- `app/(full-frame-public)/privacy/page.tsx` — `/privacy` route (thin shell, mounts `Legal` with `doc="privacy"`; public, no auth — the proxy whitelists `/privacy`)
+- `app/(full-frame-public)/terms/page.tsx` — `/terms` route (thin shell, mounts `Legal` with `doc="terms"`; public, no auth — the proxy whitelists `/terms`)
 - `app/(full-frame-public)/[toolId]/page.tsx` — `/<uuid>` share route (thin shell, mounts `SharedToolView` feature; public, no auth required)
 - `app/(full-frame-public)/g/[handle]/page.tsx` — `/g/<handle>` public gallery route (+ `loading.tsx`; thin shell + `generateMetadata`, mounts `PublicGallery`; public, no auth — the proxy whitelists `/g/*`). The static `g` segment takes priority over the `[toolId]` dynamic at the same level.
 - `app/gallery/page.tsx` — `/gallery` private route (thin shell, mounts the `Gallery` manager; auth-gated by the proxy)
@@ -127,6 +129,9 @@ catalog, runtime) lives in the shared dirs and is imported via `@/...` aliases.
 - `NodeDocs/` — docs section. `NodeDocs` renders the node-type reference catalogue from `@/lib/node-catalog` (`getNodeCatalog()`) + `@/constants/tool-builder` (icons/accents), localized via `useTranslation` so it stays in lockstep with the in-app palette. Mounted by `app/docs/nodes/page.mdx`. Each card is a button that opens the detail dialog; the selected node is mirrored to the URL hash (`#node-<type>`) for deep-linking.
   - `components/DocsShell.tsx` — feature-private `/docs` topbar + `prose` wrapper; mounted by `app/docs/layout.tsx`. The `Topbar` "Docs" link points here.
   - `components/NodeDetailDialog.tsx` — feature-private modal showing one node's full reference (summary, config, state I/O, tips, example) from `@/constants/node-docs`; chrome localized, body is the English content layer.
+- `Legal/` — public legal pages. `Legal` (entry) takes a `doc: "privacy" | "terms"` prop and renders the matching document inside the shared `LegalShell` (own header/footer, reachable logged-out). Mounted by the thin shells at `app/(full-frame-public)/privacy/page.tsx` and `.../terms/page.tsx`. English-only (matches the marketing landing page; no `t()`), no governing-law clause. Cross-linked from the landing footer + the login form + the studio Settings dialog.
+  - `components/LegalShell.tsx` — feature-private chrome: sticky topbar (brand → home, theme toggle, GitHub, back-to-Studio) + `prose` column + footer that cross-links both documents.
+  - `components/PrivacyContent.tsx` / `components/TermsContent.tsx` — feature-private English prose bodies (semantic HTML only; styled by the shell's `prose` wrapper). Keep `PrivacyContent` in sync with how the app stores data (Supabase account/tools, browser-local prefs + AI keys).
 
 Tool Builder shared domain (consumed by the features above):
 `@/stores/slices/toolBuilderSlice` (state), `@/hooks/useToolBuilder` (state/actions
