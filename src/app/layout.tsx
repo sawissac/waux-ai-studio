@@ -29,14 +29,14 @@ const siteUrl =
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Toolkit Studio — Build tools as visual node chains",
-    template: "%s · Toolkit Studio",
+    default: "WauxAiStudio — Build tools as visual node chains",
+    template: "%s · WauxAiStudio",
   },
   description:
-    "Toolkit Studio lets you compose tools as a top-to-bottom chain of input, logic, and output nodes with a live, interactive preview — no backend required.",
-  applicationName: "Toolkit Studio",
+    "WauxAiStudio lets you compose tools as a top-to-bottom chain of input, logic, and output nodes with a live, interactive preview — no backend required.",
+  applicationName: "WauxAiStudio",
   keywords: [
-    "Toolkit Studio",
+    "WauxAiStudio",
     "tool builder",
     "no-code",
     "visual programming",
@@ -45,20 +45,20 @@ export const metadata: Metadata = {
     "live preview",
     "AI tools",
   ],
-  authors: [{ name: "Toolkit Studio" }],
-  creator: "Toolkit Studio",
+  authors: [{ name: "WauxAiStudio" }],
+  creator: "WauxAiStudio",
   category: "technology",
   openGraph: {
     type: "website",
-    siteName: "Toolkit Studio",
+    siteName: "WauxAiStudio",
     url: siteUrl,
-    title: "Toolkit Studio — Build tools as visual node chains",
+    title: "WauxAiStudio — Build tools as visual node chains",
     description:
       "Compose tools as a chain of input, logic, and output nodes with a live preview.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Toolkit Studio",
+    title: "WauxAiStudio",
     description:
       "Compose tools as a chain of input, logic, and output nodes with a live preview.",
   },

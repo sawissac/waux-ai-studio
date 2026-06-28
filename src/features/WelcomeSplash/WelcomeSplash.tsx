@@ -43,7 +43,7 @@ export function WelcomeSplash() {
       <header className="relative z-10 flex items-center gap-2 p-6">
         <Logo size={32} />
         <span className="font-display text-lg font-semibold text-foreground">
-          Toolkit Studio
+          WauxAiStudio
         </span>
       </header>
 
@@ -54,7 +54,7 @@ export function WelcomeSplash() {
           <div className="flex flex-col items-start gap-6">
             <span
               className={cn(
-                "nb-surface inline-flex items-center gap-2 rounded-none bg-primary px-3 py-1",
+                "nb-surface inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1",
                 "text-xs font-bold uppercase tracking-wider text-primary-foreground",
                 "animate-in fade-in slide-in-from-bottom-2 duration-[--motion-duration-slow]",
               )}
@@ -137,7 +137,7 @@ function NodeChain() {
         <div
           key={node.key}
           className={cn(
-            "node-card nb-surface relative z-10 flex w-full items-center gap-3 rounded-none bg-card px-4 py-3.5",
+            "node-card nb-surface relative z-10 flex w-full items-center gap-3 rounded-md bg-card px-4 py-3.5",
             "motion-safe:animate-[wfloat_4s_ease-in-out_infinite]",
           )}
           style={

@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = data.title?.trim() || `@${handle}`;
   const description =
     data.description?.trim() ||
-    `Interactive tools by @${handle} — built with Toolkit Studio.`;
+    `Interactive tools by @${handle} — built with WauxAiStudio.`;
   return {
     title,
     description,

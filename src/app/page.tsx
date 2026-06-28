@@ -16,7 +16,7 @@ import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Toolkit Studio — Build tools as visual node chains",
+  title: "WauxAiStudio — Build tools as visual node chains",
   description:
     "Compose tools as a top-to-bottom chain of input, logic, and output nodes with a live, interactive preview. No backend required.",
 };
@@ -49,7 +49,7 @@ function SiteHeader() {
       <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-6 py-3.5">
         <Link href="/" className="flex items-center gap-2">
           <Logo size={28} />
-          <span className="font-display text-lg font-bold">Toolkit Studio</span>
+          <span className="font-display text-lg font-bold">WauxAiStudio</span>
         </Link>
         <nav className="ml-auto flex items-center gap-2">
           <Button asChild variant="ghost" size="sm">
@@ -85,7 +85,7 @@ function Hero() {
           </h1>
 
           <p className="max-w-md text-base leading-relaxed text-muted-foreground">
-            Toolkit Studio lets you compose tools as a top-to-bottom chain of
+            WauxAiStudio lets you compose tools as a top-to-bottom chain of
             input, logic, and output nodes — with a live, interactive preview.
             No backend, no boilerplate.
           </p>
@@ -204,7 +204,7 @@ function Features() {
             Everything you need to ship a tool.
           </h2>
           <p className="max-w-2xl text-muted-foreground">
-            From the first input to the shared link, Toolkit Studio keeps the
+            From the first input to the shared link, WauxAiStudio keeps the
             whole loop in one place.
           </p>
         </div>
@@ -321,7 +321,7 @@ function SiteFooter() {
       <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
         <div className="flex items-center gap-2">
           <Logo size={22} />
-          <span className="font-display text-sm font-bold">Toolkit Studio</span>
+          <span className="font-display text-sm font-bold">WauxAiStudio</span>
         </div>
         <p className="text-sm text-muted-foreground">
           Build tools as visual node chains.

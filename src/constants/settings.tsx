@@ -28,7 +28,14 @@ import type {
  */
 
 /** localStorage key the persisted settings are mirrored to. */
-export const SETTINGS_STORAGE_KEY = "toolkit:app-config";
+export const SETTINGS_STORAGE_KEY = "wauxaistudio:app-config";
+
+/**
+ * Pre-rebrand storage key. Read once on hydrate so existing users keep their
+ * settings, then renamed to {@link SETTINGS_STORAGE_KEY} (see
+ * `AppConfigProvider`). Safe to delete once no active user is on the old key.
+ */
+export const LEGACY_SETTINGS_STORAGE_KEY = "toolkit:app-config";
 
 /** A selectable option whose label comes from the i18n catalog. */
 export interface ChoiceOption<T extends string> {

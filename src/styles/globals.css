@@ -6,128 +6,135 @@
 @custom-variant dark (&:is(.dark *));
 
 /* =========================================================================
-   NEUBRUTALISM DESIGN SYSTEM — Toolkits
+   FLAT MINIMAL MODERN DESIGN SYSTEM — Toolkits
    -------------------------------------------------------------------------
-   Principles: hard black borders, flat saturated pop colours, no gradients,
-   sharp corners, hard offset shadows (no blur), bold type, tactile "press"
-   interactions. See design-system/toolkits/MASTER.md for the spec.
+   Principles: neutral surfaces with one indigo accent, soft hairline borders,
+   gentle blurred elevation (no hard offsets), rounded corners, calm type,
+   quiet "lift" interactions. Replaces the former neubrutalism system; the
+   `--nb-*` token names are kept so existing `shadow-nb` / `.nb-surface`
+   consumers retheme automatically.
 
    Signature primitives:
-     • border:  2px (default) / 3px (emphasis) solid foreground
-     • shadow:  Npx Npx 0 0 var(--nb-shadow-color)  — zero blur, hard offset
-     • radius:  0 (crisp blocks)
-     • press:   hover lifts (bigger shadow), active sinks (no shadow)
+     • border:  1px hairline in the soft `border` tone (never near-black)
+     • shadow:  soft blurred, low-alpha elevation (0 Y blur, no hard offset)
+     • radius:  0.625rem rounded blocks
+     • press:   hover lifts 1px (soft shadow), active settles back
    ========================================================================= */
 
 :root {
-  /* Crisp blocks — neubrutalism uses sharp corners. */
-  --radius: 0rem;
+  /* Rounded blocks — modern minimal corners. */
+  --radius: 0.625rem;
 
-  /* --- Surfaces ---------------------------------------------------------- */
-  --background: #fffdf4; /* warm paper */
-  --foreground: #111111;
+  /* --- Surfaces (clean neutral, subtle elevation) ----------------------- */
+  --background: #f8fafc; /* slate-50 ground */
+  --foreground: #0f172a; /* slate-900 text */
   --card: #ffffff;
-  --card-foreground: #111111;
+  --card-foreground: #0f172a;
   --popover: #ffffff;
-  --popover-foreground: #111111;
+  --popover-foreground: #0f172a;
 
-  /* --- Pop colours ------------------------------------------------------- */
-  --primary: #ffd23f; /* signal yellow */
-  --primary-foreground: #111111;
-  --secondary: #ffffff;
-  --secondary-foreground: #111111;
-  --muted: #f4f1e8;
-  --muted-foreground: #57534e;
-  --accent: #ffe066; /* soft yellow hover wash */
-  --accent-foreground: #111111;
-  --destructive: #ff5a5f;
+  /* --- Accent (single indigo voice) ------------------------------------- */
+  --primary: #4f46e5; /* indigo-600 */
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9; /* slate-100 */
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b; /* slate-500 */
+  --accent: #eef2ff; /* indigo-50 hover wash */
+  --accent-foreground: #4338ca; /* indigo-700 */
+  --destructive: #ef4444;
 
   /* --- Lines & focus ----------------------------------------------------- */
-  --border: #111111;
-  --input: #111111;
-  --ring: #2d6bff; /* electric blue focus */
+  /* Borders are a soft hairline tone, decoupled from text. */
+  --border: #e2e8f0; /* slate-200 */
+  --input: #e2e8f0;
+  --ring: #4f46e5; /* indigo focus */
 
-  /* --- Data viz (flat saturated) ---------------------------------------- */
-  --chart-1: #ffd23f;
-  --chart-2: #ff5a5f;
-  --chart-3: #2d6bff;
-  --chart-4: #4ecdc4;
-  --chart-5: #b388ff;
+  /* --- Data viz (modern, harmonious) ------------------------------------ */
+  --chart-1: #6366f1; /* indigo */
+  --chart-2: #06b6d4; /* cyan */
+  --chart-3: #f59e0b; /* amber */
+  --chart-4: #10b981; /* emerald */
+  --chart-5: #ec4899; /* pink */
 
   /* --- Sidebar ----------------------------------------------------------- */
-  --sidebar: #fffdf4;
-  --sidebar-foreground: #111111;
-  --sidebar-primary: #ffd23f;
-  --sidebar-primary-foreground: #111111;
-  --sidebar-accent: #ffe066;
-  --sidebar-accent-foreground: #111111;
-  --sidebar-border: #111111;
-  --sidebar-ring: #2d6bff;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #4f46e5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef2ff;
+  --sidebar-accent-foreground: #4338ca;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #4f46e5;
 
-  /* --- Neubrutalism primitives ------------------------------------------ */
-  --nb-border-width: 2px;
-  --nb-border-width-lg: 3px;
-  --nb-shadow-color: #111111;
-  --nb-shadow-sm: 2px 2px 0 0 var(--nb-shadow-color);
-  --nb-shadow: 4px 4px 0 0 var(--nb-shadow-color);
-  --nb-shadow-lg: 6px 6px 0 0 var(--nb-shadow-color);
+  /* --- Elevation primitives (soft, blurred — no hard offset) ------------ */
+  --nb-border-width: 1px;
+  --nb-border-width-lg: 1px;
+  --nb-shadow-sm:
+    0 1px 2px 0 rgb(15 23 42 / 0.06), 0 1px 1px 0 rgb(15 23 42 / 0.04);
+  --nb-shadow:
+    0 4px 12px -2px rgb(15 23 42 / 0.1), 0 2px 6px -2px rgb(15 23 42 / 0.06);
+  --nb-shadow-lg:
+    0 12px 28px -6px rgb(15 23 42 / 0.16), 0 6px 12px -4px rgb(15 23 42 / 0.08);
 }
 
 .dark {
-  /* NIGHT DARK BLUE — midnight navy surfaces in 3 elevation steps
-     (bg < card < muted), night-blue pop, deep indigo hover wash. Border ink
-     stays a soft night line (never near-white). Neubrutalism unchanged. */
+  /* NEUTRAL MODERN DARK — calm zinc/slate surfaces in 3 elevation steps
+     (bg < card < muted), bright indigo accent, soft hairline borders, soft
+     blurred elevation. No saturated brand tint; the indigo carries the voice. */
 
-  /* --- Surfaces (midnight navy, 3 elevation steps) ---------------------- */
-  --background: #060c1a; /* midnight */
-  --foreground: #e6ecf7; /* moonlight white */
-  --card: #0c1530;
-  --card-foreground: #e6ecf7;
-  --popover: #0c1530;
-  --popover-foreground: #e6ecf7;
+  /* --- Surfaces (neutral, 3 elevation steps) ---------------------------- */
+  --background: #0b0d12; /* near-black ground */
+  --foreground: #e5e7eb; /* zinc-200 text */
+  --card: #14171f;
+  --card-foreground: #e5e7eb;
+  --popover: #14171f;
+  --popover-foreground: #e5e7eb;
 
-  /* --- Pop colours ------------------------------------------------------- */
-  --primary: #5b8cff; /* night-blue pop */
-  --primary-foreground: #050a18;
-  --secondary: #0c1530;
-  --secondary-foreground: #e6ecf7;
-  --muted: #14213f; /* top elevation step */
-  --muted-foreground: #8b9bc4; /* muted periwinkle */
-  --accent: #1d2c57; /* deep indigo hover wash */
-  --accent-foreground: #9bb4ff; /* periwinkle glow on hover */
-  --destructive: #ff6b70; /* coral — pops against navy */
+  /* --- Accent (single indigo voice) ------------------------------------- */
+  --primary: #6366f1; /* indigo-500 — bright on dark */
+  --primary-foreground: #ffffff;
+  --secondary: #14171f;
+  --secondary-foreground: #e5e7eb;
+  --muted: #1c2030; /* top elevation step */
+  --muted-foreground: #9aa3b5; /* muted slate */
+  --accent: #1e1b4b; /* deep indigo hover wash */
+  --accent-foreground: #c7d2fe; /* indigo-200 glow */
+  --destructive: #f87171;
 
   /* --- Lines & focus ----------------------------------------------------- */
-  /* Border ink decoupled from text: text is near-white, lines are a soft
-     night tone so blocks read without glaring white edges. */
-  --border: #28386a;
-  --input: #28386a;
-  --ring: #6f9bff; /* bright periwinkle focus */
+  --border: #262b38; /* soft hairline */
+  --input: #262b38;
+  --ring: #818cf8; /* indigo-400 focus */
 
-  --chart-1: #5b8cff;
-  --chart-2: #38bdf8;
-  --chart-3: #818cf8;
-  --chart-4: #fbbf24;
+  --chart-1: #818cf8;
+  --chart-2: #22d3ee;
+  --chart-3: #fbbf24;
+  --chart-4: #34d399;
   --chart-5: #f472b6;
 
-  --sidebar: #060c1a;
-  --sidebar-foreground: #e6ecf7;
-  --sidebar-primary: #5b8cff;
-  --sidebar-primary-foreground: #050a18;
-  --sidebar-accent: #1d2c57;
-  --sidebar-accent-foreground: #9bb4ff;
-  --sidebar-border: #28386a;
-  --sidebar-ring: #6f9bff;
+  --sidebar: #0b0d12;
+  --sidebar-foreground: #e5e7eb;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e1b4b;
+  --sidebar-accent-foreground: #c7d2fe;
+  --sidebar-border: #262b38;
+  --sidebar-ring: #818cf8;
 
-  /* Hard shadow near-black for depth on the midnight ground. */
-  --nb-shadow-color: #020512;
+  /* Deeper, softer elevation on the dark ground. */
+  --nb-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --nb-shadow:
+    0 4px 14px -2px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --nb-shadow-lg:
+    0 14px 32px -6px rgb(0 0 0 / 0.6), 0 6px 14px -4px rgb(0 0 0 / 0.45);
 }
 
 @theme inline {
-  --radius-sm: var(--radius);
-  --radius-md: var(--radius);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -186,12 +193,12 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
-    /* Custom neo-brutalist cursor — hotspot at arrow tip (3,3). */
+    /* Custom brand cursor — hotspot at arrow tip (3,3). */
     cursor:
       url("/cursor-default.svg") 3 3,
       auto;
   }
-  /* Interactive elements get the blue pointer variant. */
+  /* Interactive elements get the pointer variant. */
   a,
   button,
   [role="button"],
@@ -242,49 +249,68 @@
   h6 {
     @apply font-display font-bold;
   }
+  /* Rounded by default — any full-box bordered element (the `border` or
+     `border-2` width token applies to all sides) gets the theme radius, so
+     blocks built with raw `border-2 border-foreground` round without per-file
+     edits. Explicit `rounded-*` utilities sit in the utilities layer and
+     still win (pills stay `rounded-full`, the tabs underline stays
+     `rounded-none`). Single-side dividers (`border-r`, `border-b`) don't carry
+     the `border`/`border-2` token, so they're untouched. Table parts are
+     excluded — rounding cells looks wrong. */
+  :where([class~="border"], [class~="border-2"]):not(
+    table,
+    thead,
+    tbody,
+    tr,
+    th,
+    td
+  ) {
+    border-radius: var(--radius);
+  }
 }
 
 @layer components {
-  /* nb-surface — the canonical block: hard border + hard offset shadow.
-     Border uses the `border` token (= foreground in light, soft warm grey in
-     dark) so dark mode never gets glaring white edges. */
+  /* nb-surface — the canonical block: hairline border + soft elevation +
+     rounded corners. Border uses the soft `border` token in both modes. */
   .nb-surface {
     border: var(--nb-border-width) solid var(--color-border);
     box-shadow: var(--nb-shadow);
     background-color: var(--color-card);
+    border-radius: var(--radius);
   }
   .nb-surface-lg {
     border: var(--nb-border-width-lg) solid var(--color-border);
     box-shadow: var(--nb-shadow-lg);
     background-color: var(--color-card);
+    border-radius: var(--radius);
   }
 
-  /* node-card — hero chain card. Rests at a slight tilt (--r); on hover it
-     straightens, lifts up-left, and grows its shadow. */
+  /* node-card — chain card. Flat (no tilt); on hover it lifts gently and
+     deepens its soft shadow. */
   .node-card {
-    transform: rotate(var(--r, 0deg));
     transition:
-      transform var(--motion-duration-base) var(--motion-ease-spring),
+      transform var(--motion-duration-base) var(--motion-ease-standard),
       box-shadow var(--motion-duration-base) var(--motion-ease-standard);
   }
   .node-card:hover {
-    transform: rotate(0deg) translate(-4px, -4px);
+    transform: translateY(-2px);
     box-shadow: var(--nb-shadow-lg);
     z-index: 20;
   }
 
-  /* nb-press — tactile interaction: hover lifts, active sinks into shadow. */
+  /* nb-press — quiet interaction: hover lifts 1px (soft shadow), active
+     settles back. No hard offset jumps. */
   .nb-press {
     transition:
       transform var(--motion-duration-fast) var(--motion-ease-standard),
       box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
   }
   .nb-press:hover:not(:disabled) {
-    transform: translate(-2px, -2px);
+    transform: translateY(-1px);
     box-shadow: var(--nb-shadow-lg);
   }
   .nb-press:active:not(:disabled) {
-    transform: translate(2px, 2px);
+    transform: translateY(0);
     box-shadow: var(--nb-shadow-sm);
   }
 }
@@ -344,62 +370,59 @@
 }
 
 /* =========================================================================
-   NEUBRUTALISM SCROLLBAR — hard border, sharp corners, flat fill, no blur.
+   MINIMAL SCROLLBAR — thin, rounded, soft fill, no borders.
    Firefox uses scrollbar-color/width; WebKit/Blink use ::-webkit-scrollbar.
    ========================================================================= */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--foreground) transparent;
+  scrollbar-color: var(--muted-foreground) transparent;
 }
 
 ::-webkit-scrollbar {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--muted);
-  border-left: var(--nb-border-width) solid var(--foreground);
-}
-
-::-webkit-scrollbar-track:horizontal {
-  border-left: none;
-  border-top: var(--nb-border-width) solid var(--foreground);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--foreground);
-  border: var(--nb-border-width) solid var(--foreground);
-  /* Sharp blocks — no rounding. */
-  border-radius: 0;
+  background: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--primary);
+  background: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: var(--ring);
+  background: var(--primary);
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-corner {
-  background: var(--muted);
+  background: transparent;
 }
 
 /* =========================================================================
-   DARK BORDER INK — neubrutalism uses `foreground` as border ink, which is
-   near-white in dark mode (glaring white edges on every block). In dark we
-   retarget the `border-foreground` utilities to the soft warm `border` tone
-   so lines read as definition, not as bright outlines. Light theme is
-   untouched (its foreground and border are both #111). Placed outside any
-   @layer so it overrides the Tailwind utilities regardless of source order.
+   SOFT BORDER INK — the former neubrutalism system used `foreground` as
+   border ink (near-black blocks everywhere). For the flat/minimal look we
+   retarget every `border-foreground` utility to the soft hairline `border`
+   tone in BOTH light and dark, so lines read as quiet definition rather than
+   heavy outlines. Text `foreground` is untouched (it keeps full contrast).
+   Placed outside any @layer so it overrides the Tailwind utilities
+   regardless of source order.
    ========================================================================= */
-.dark .border-foreground {
+.border-foreground {
   border-color: var(--color-border);
 }
-.dark .border-foreground\/15,
-.dark .border-foreground\/30,
-.dark .border-foreground\/40 {
+.border-foreground\/15,
+.border-foreground\/30,
+.border-foreground\/40 {
   border-color: color-mix(in oklab, var(--color-border) 55%, transparent);
 }
 

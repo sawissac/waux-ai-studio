@@ -11,7 +11,7 @@ import { useTranslation } from "@/hooks/useTranslation";
  * MDX. Mounted by `src/app/docs/layout.tsx`; `children` is the rendered MDX.
  *
  * All user-facing copy resolves through `t()` so the docs shell is bilingual
- * like the rest of the app. "Toolkit Studio" is a brand name and stays as-is.
+ * like the rest of the app. "WauxAiStudio" is a brand name and stays as-is.
  */
 export function DocsShell({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -21,7 +21,7 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-10 flex h-12 items-center justify-between border-b-2 border-foreground bg-background px-4">
         <div className="flex items-center gap-2 font-semibold">
           <BookText size={16} />
-          <span className="font-poppins">Toolkit Studio</span>
+          <span className="font-poppins">WauxAiStudio</span>
           <span className="text-muted-foreground">/ {t("docs.title")}</span>
         </div>
         <Link

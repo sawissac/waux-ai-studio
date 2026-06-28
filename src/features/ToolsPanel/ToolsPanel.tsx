@@ -190,8 +190,10 @@ function SortableToolItem({
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             className={cn(
-              "grid size-7 place-items-center rounded-md text-muted-foreground transition-[opacity,background-color] duration-(--motion-duration-fast) hover:bg-background active:scale-95",
-              "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100",
+              "grid size-7 shrink-0 place-items-center rounded-md transition-colors duration-(--motion-duration-fast) active:scale-95",
+              selected
+                ? "text-primary-foreground hover:bg-white/20"
+                : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
             )}
           >
             <MoreHorizontal size={15} />

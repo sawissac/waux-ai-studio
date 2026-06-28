@@ -2,7 +2,10 @@
 
 import { type ReactNode, useEffect, useRef } from "react";
 
-import { SETTINGS_STORAGE_KEY } from "@/constants/settings";
+import {
+  LEGACY_SETTINGS_STORAGE_KEY,
+  SETTINGS_STORAGE_KEY,
+} from "@/constants/settings";
 import { useAppConfig } from "@/hooks/useAppConfig";
 import type { PersistedAppConfig } from "@/stores/slices/appConfigSlice";
 
@@ -12,7 +15,17 @@ import type { PersistedAppConfig } from "@/stores/slices/appConfigSlice";
  */
 function readStoredConfig(): Partial<PersistedAppConfig> | null {
   try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    let raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) {
+      // One-time migration from the pre-rebrand key, so existing users keep
+      // their saved settings: copy the blob onto the new key and drop the old.
+      const legacy = window.localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
+      if (legacy) {
+        window.localStorage.setItem(SETTINGS_STORAGE_KEY, legacy);
+        window.localStorage.removeItem(LEGACY_SETTINGS_STORAGE_KEY);
+        raw = legacy;
+      }
+    }
     if (!raw) {
       return null;
     }

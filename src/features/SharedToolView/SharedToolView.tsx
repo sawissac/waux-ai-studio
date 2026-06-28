@@ -93,7 +93,7 @@ export function SharedToolView({ toolId }: { toolId: string }) {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b-2 border-foreground bg-card px-4">
-        <Logo size={24} title="Toolkit Studio" className="shrink-0" />
+        <Logo size={24} title="WauxAiStudio" className="shrink-0" />
         <span className="flex-1 truncate text-sm font-bold">
           {isLoading ? (
             <Skeleton className="inline-block h-4 w-32 border-0" />
@@ -140,7 +140,7 @@ export function SharedToolView({ toolId }: { toolId: string }) {
 
       <footer className="flex h-10 shrink-0 items-center justify-center border-t-2 border-foreground bg-card">
         <span className="text-xs text-muted-foreground/50">
-          Built with Toolkits
+          Built with WauxAiStudio
         </span>
       </footer>
 

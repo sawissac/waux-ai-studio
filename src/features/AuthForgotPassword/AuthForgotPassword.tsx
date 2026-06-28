@@ -55,7 +55,7 @@ export function AuthForgotPassword() {
           <div className="flex items-center justify-center gap-2">
             <Logo size={32} />
             <span className="font-display text-lg font-semibold">
-              Toolkit Studio
+              WauxAiStudio
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -66,11 +66,11 @@ export function AuthForgotPassword() {
         {view === "sent" ? (
           <div
             className={cn(
-              "nb-surface space-y-4 rounded-none bg-card p-6 text-center",
+              "nb-surface space-y-4 rounded-md bg-card p-6 text-center",
               "animate-in fade-in slide-in-from-bottom-1 duration-[--motion-duration-base]",
             )}
           >
-            <div className="mx-auto grid size-12 place-items-center rounded-none border-2 border-foreground bg-primary">
+            <div className="mx-auto grid size-12 place-items-center rounded-md border-2 border-foreground bg-primary">
               <MailCheck className="size-5 text-primary-foreground" />
             </div>
             <div className="space-y-1">
@@ -88,7 +88,7 @@ export function AuthForgotPassword() {
           <>
             <form
               onSubmit={handleSubmit}
-              className="nb-surface space-y-4 rounded-none bg-card p-6"
+              className="nb-surface space-y-4 rounded-md bg-card p-6"
             >
               <div className="space-y-1.5">
                 <label
@@ -106,7 +106,7 @@ export function AuthForgotPassword() {
                   autoFocus
                   placeholder="you@gmail.com"
                   className={cn(
-                    "h-10 w-full rounded-none border-2 border-foreground bg-background px-3 text-sm text-foreground",
+                    "h-10 w-full rounded-md border-2 border-foreground bg-background px-3 text-sm text-foreground",
                     "placeholder:text-muted-foreground",
                     "transition-shadow duration-[--motion-duration-fast]",
                     "outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
@@ -121,7 +121,7 @@ export function AuthForgotPassword() {
                   role="alert"
                   aria-live="polite"
                   className={cn(
-                    "rounded-none border-2 border-destructive bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive",
+                    "rounded-md border-2 border-destructive bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive",
                     "animate-in fade-in slide-in-from-top-1 duration-[--motion-duration-base]",
                   )}
                 >
@@ -149,7 +149,7 @@ export function AuthForgotPassword() {
                   "font-medium text-foreground underline-offset-4",
                   "hover:underline",
                   "transition-colors duration-[--motion-duration-fast]",
-                  "rounded-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                  "rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                 )}
               >
                 Sign in

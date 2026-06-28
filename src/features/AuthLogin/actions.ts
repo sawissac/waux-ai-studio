@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
  * Resolve the public site origin used to build auth-email links.
  *
  * Prefers `NEXT_PUBLIC_SITE_URL` (set this to the deployed URL,
- * e.g. https://toolkits-black.vercel.app) so confirmation/reset links always
+ * e.g. https://wauxaistudio.vercel.app) so confirmation/reset links always
  * point at the real site instead of whatever host the request came in on.
  * Falls back to request headers for local dev.
  */

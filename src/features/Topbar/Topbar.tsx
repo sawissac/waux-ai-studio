@@ -54,7 +54,7 @@ export function Topbar({
     <div className="flex items-center gap-2 border-b-2 border-foreground bg-card px-4 py-2.5">
       <div className="flex items-center gap-2 text-sm font-bold">
         <Logo size={24} />
-        Toolkit Studio
+        WauxAiStudio
       </div>
       {toolName && (
         <span className="truncate text-sm text-muted-foreground">

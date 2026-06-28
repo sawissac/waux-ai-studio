@@ -134,7 +134,7 @@ export function NodeCard({
               e.stopPropagation();
               onDuplicate();
             }}
-            className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color] duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground group-hover:opacity-100 active:scale-95"
+            className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground active:scale-95"
           >
             <Copy size={14} />
           </button>
@@ -146,7 +146,7 @@ export function NodeCard({
             e.stopPropagation();
             onDelete();
           }}
-          className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color] duration-[var(--motion-duration-fast)] hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 active:scale-95"
+          className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
         >
           <Trash2 size={14} />
         </button>

@@ -8,7 +8,7 @@ export default function Loading() {
       <div className="flex items-center gap-2 border-b-2 border-foreground bg-card px-4 py-2.5">
         <div className="flex items-center gap-2 text-sm font-bold">
           <Skeleton className="size-6" />
-          Toolkit Studio
+          WauxAiStudio
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Skeleton className="h-5 w-16" />

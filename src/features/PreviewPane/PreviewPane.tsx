@@ -556,21 +556,6 @@ export function PreviewPane({
 
   return (
     <div className="mt-10 font-display">
-      <div className="mb-5 flex items-center gap-3 border-2 border-foreground bg-card px-3 py-2.5 shadow-nb">
-        <span className="grid size-8 shrink-0 place-items-center border-2 border-foreground bg-primary text-primary-foreground shadow-nb-sm">
-          <Eye size={16} aria-hidden />
-        </span>
-        <div className="flex min-w-0 flex-col leading-tight">
-          <span className="text-sm font-bold">{t("preview.title")}</span>
-          <span className="truncate text-[11px] text-muted-foreground">
-            {t("preview.subtitle")}
-          </span>
-        </div>
-        <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 border-2 border-foreground bg-background px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow-nb-sm">
-          <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden />
-          {t("preview.live")}
-        </span>
-      </div>
       {running && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <Loader2 size={13} className="animate-spin" />

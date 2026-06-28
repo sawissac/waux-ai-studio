@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const title = data.name;
-  const description = `Use “${data.name}” — an interactive tool built with Toolkit Studio.`;
+  const description = `Use “${data.name}” — an interactive tool built with WauxAiStudio.`;
   return {
     title,
     description,

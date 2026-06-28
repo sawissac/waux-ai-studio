@@ -117,7 +117,7 @@ const en = {
   "gallery.handleInvalid": "Use 3–32 lowercase letters, numbers, or hyphens.",
   "gallery.handleRequired": "Claim a handle to publish your gallery.",
   "gallery.titleLabel": "Title",
-  "gallery.titlePlaceholder": "My Toolkit Gallery",
+  "gallery.titlePlaceholder": "My WauxAiStudio Gallery",
   "gallery.description": "Description",
   "gallery.descriptionPlaceholder": "A short blurb about your tools…",
   "gallery.public": "Public",
@@ -141,7 +141,7 @@ const en = {
   // Gallery — public page
   "gallery.publicEmpty": "This gallery has no public tools yet.",
   "gallery.notFound": "This gallery is not available.",
-  "gallery.builtWith": "Built with Toolkits",
+  "gallery.builtWith": "Built with WauxAiStudio",
   "gallery.openTool": "Open tool",
 
   // Builder panel
@@ -287,9 +287,6 @@ const en = {
   "node.close": "Close editor",
 
   // Live preview pane
-  "preview.title": "Live Preview",
-  "preview.subtitle": "What your tool’s users will see",
-  "preview.live": "Live",
   "preview.running": "Running chain…",
   "preview.empty": "Add an input node to render a preview.",
   "preview.off": "Live preview off",
@@ -1272,7 +1269,7 @@ const my: Record<MessageKey, string> = {
   // Gallery — public page
   "gallery.publicEmpty": "ဤပြခန်းတွင် အများမြင် ကိရိယာ မရှိသေးပါ။",
   "gallery.notFound": "ဤပြခန်းကို မရရှိနိုင်ပါ။",
-  "gallery.builtWith": "Toolkits ဖြင့် တည်ဆောက်ထား",
+  "gallery.builtWith": "WauxAiStudio ဖြင့် တည်ဆောက်ထား",
   "gallery.openTool": "ကိရိယာ ဖွင့်",
 
   "builder.title": "တည်ဆောက်ရေး",
@@ -1417,9 +1414,6 @@ const my: Record<MessageKey, string> = {
   "node.back": "Palette သို့ ပြန်",
   "node.close": "တည်းဖြတ်မှု ပိတ်",
 
-  "preview.title": "တိုက်ရိုက် အစမ်းကြည့်ရှု",
-  "preview.subtitle": "သင့်ကိရိယာ၏ အသုံးပြုသူများ မြင်ရမည့်အရာ",
-  "preview.live": "တိုက်ရိုက်",
   "preview.running": "ကွင်းဆက် လုပ်ဆောင်နေသည်…",
   "preview.empty": "အစမ်းကြည့်ရန် input node တစ်ခု ထည့်ပါ။",
   "preview.off": "တိုက်ရိုက် အစမ်းကြည့်ခြင်း ပိတ်ထားသည်",
