@@ -66,6 +66,7 @@ const en = {
   "tools.generateError": "Could not generate a name.",
   "tools.generateEmpty": "Add a node first — there's nothing to name yet.",
   "tools.share": "Share",
+  "tools.duplicate": "Duplicate",
   "tools.delete": "Delete",
   "tools.empty": "No tools yet — create one to get started.",
   "tools.noMatch": "No tools match “{q}”.",
@@ -145,16 +146,21 @@ const en = {
 
   // Builder panel
   "builder.title": "Builder",
-  "builder.placement.panel": "panel",
-  "builder.placement.inline": "inline",
   "builder.emptyTitle": "This tool is empty",
   "builder.emptyBody":
     "Add nodes from the Node panel. Start with a State Control.",
   "builder.addInput": "Add input",
+  "builder.addNode": "Add node",
+  "builder.emptyAdd": "Add first node",
+  "builder.insertHere": "Insert node here",
   "builder.dropToAdd": "Drop to add node",
+  "builder.tab.build": "build",
   "builder.tab.chat": "chat",
   "builder.toggleTools": "Toggle tools panel",
   "builder.toggleNode": "Toggle node panel",
+  // Inline quick-add picker (builder canvas inserters)
+  "quickAdd.search": "Search nodes…",
+  "quickAdd.empty": "No nodes match",
 
   // Chat panel (UI-only preview chat)
   "chat.greeting": "How can I help you today?",
@@ -275,6 +281,7 @@ const en = {
   "docs.detail.close": "Close",
 
   // Node card + editor chrome
+  "node.duplicate": "Duplicate node",
   "node.delete": "Delete node",
   "node.back": "Back to palette",
   "node.close": "Close editor",
@@ -374,6 +381,9 @@ const en = {
   "node.http_request.label": "HTTP Request",
   "node.http_request.blurb":
     "Call a real API through a server proxy. Method, URL, headers & body interpolate state; response writes to bound state.",
+  "node.playwright_scrape.label": "Playwright Scraper",
+  "node.playwright_scrape.blurb":
+    "Scrape a JS-rendered page with a real browser via the LOCAL Playwright server — log in, wait, extract by CSS selectors. Output writes to bound state.",
   "node.filter.label": "Filter",
   "node.filter.blurb":
     "Keep array rows whose field matches a condition; output writes to bound state.",
@@ -682,6 +692,54 @@ const en = {
     "The parsed response is written here. JSON responses land as a parsed value.",
   "http.footer":
     "Runs only when the chain runs — never live as you type. Auth headers stay server-side.",
+
+  // Playwright Scraper node
+  "scrape.serverUrl": "Server URL (local)",
+  "scrape.serverUrl.help":
+    "Base URL of the LOCAL Playwright scrape server in this repo, e.g. http://localhost:3001/scrape. Run it with `pnpm --dir playwright serve` — there is no hosted default.",
+  "scrape.url": "Page URL",
+  "scrape.url.help":
+    "The page (or login page) to open first. Supports {{state}} interpolation.",
+  "scrape.waitUntil": "Wait until",
+  "scrape.waitForSelector": "Wait for selector",
+  "scrape.waitForSelector.help":
+    "Optional CSS selector to wait for after navigation/actions, before extracting (e.g. a known element on a JS-rendered page).",
+  "scrape.timeout": "Timeout (ms)",
+  "scrape.selectors": "Selectors",
+  "scrape.selectors.help":
+    "One rule per output key. Default returns the first match's text; toggle All for an array, or pick HTML / Metadata, or enter an attribute. Selector & attribute support {{state}} interpolation.",
+  "scrape.sel.key": "Output key (e.g. title)",
+  "scrape.sel.selector": "CSS selector (e.g. h1)",
+  "scrape.sel.attr": "Attribute (e.g. href) — blank = text",
+  "scrape.sel.all": "All",
+  "scrape.sel.html": "HTML",
+  "scrape.sel.meta": "Metadata",
+  "scrape.sel.excludeClass": "No class",
+  "scrape.sel.add": "Add selector",
+  "scrape.sel.remove": "Remove selector",
+  "scrape.actions": "Actions",
+  "scrape.actions.help":
+    "Optional ordered steps run before extraction — use them to log in, then navigate. String fields support {{state}} interpolation.",
+  "scrape.act.selector": "Selector",
+  "scrape.act.value": "Value",
+  "scrape.act.key": "Key (e.g. Enter)",
+  "scrape.act.url": "URL (glob/regex for waitForURL)",
+  "scrape.act.ms": "Milliseconds",
+  "scrape.act.add": "Add action",
+  "scrape.act.remove": "Remove action",
+  "scrape.session": "Reuse session",
+  "scrape.session.help":
+    "Optional saved-session name to reuse on the server (skips the login actions). Leave blank for none.",
+  "scrape.saveSession": "Save session as",
+  "scrape.saveSession.help":
+    "Optional name to store the logged-in session under after a successful run, so later runs can reuse it. Leave blank to not save.",
+  "scrape.input": "Input state",
+  "scrape.input.help":
+    "Optional: bind a state slot to reference as {{input}} in the URL, selectors, or actions.",
+  "scrape.output.help":
+    "The full response is written here: { url, finalUrl, data, tookMs } — extracted values live under `data`.",
+  "scrape.footer":
+    "Runs only when the chain runs — never live as you type. Requires the local Playwright server to be running (see playwright/SCRAPE.md).",
 
   // Filter node
   "filter.operator": "Operator",
@@ -1137,6 +1195,7 @@ const my: Record<MessageKey, string> = {
   "tools.generateError": "အမည် ထုတ်၍ မရပါ။",
   "tools.generateEmpty": "node အရင် ထည့်ပါ — အမည်ပေးစရာ မရှိသေးပါ။",
   "tools.share": "မျှဝေ",
+  "tools.duplicate": "ပွားယူ",
   "tools.delete": "ဖျက်",
   "tools.empty": "ကိရိယာ မရှိသေးပါ — တစ်ခု ဖန်တီး၍ စတင်ပါ။",
   "tools.noMatch": "“{q}” နှင့် ကိုက်ညီသော ကိရိယာ မရှိပါ။",
@@ -1217,16 +1276,21 @@ const my: Record<MessageKey, string> = {
   "gallery.openTool": "ကိရိယာ ဖွင့်",
 
   "builder.title": "တည်ဆောက်ရေး",
-  "builder.placement.panel": "ဘေးတန်း",
-  "builder.placement.inline": "အတွင်း",
   "builder.emptyTitle": "ဤကိရိယာသည် ဗလာဖြစ်နေသည်",
   "builder.emptyBody":
     "Node panel မှ node များ ထည့်ပါ။ State Control ဖြင့် စတင်ပါ။",
   "builder.addInput": "Input ထည့်",
+  "builder.addNode": "Node ထည့်ပါ",
+  "builder.emptyAdd": "ပထမ Node ထည့်ပါ",
+  "builder.insertHere": "ဤနေရာတွင် Node ထည့်ပါ",
   "builder.dropToAdd": "Node ထည့်ရန် ချပါ",
+  "builder.tab.build": "တည်ဆောက်",
   "builder.tab.chat": "ချတ်",
   "builder.toggleTools": "ကိရိယာ panel ပြ/ဖျောက်",
   "builder.toggleNode": "Node panel ပြ/ဖျောက်",
+  // Inline quick-add picker (builder canvas inserters)
+  "quickAdd.search": "Node ရှာဖွေပါ…",
+  "quickAdd.empty": "ကိုက်ညီသော Node မရှိပါ",
 
   "chat.greeting": "ဘာများ ကူညီပေးရမလဲ။",
   "chat.subtitle": "စကားစမြည် စတင်ပါ — ဤသည် preview မျက်နှာပြင် ဖြစ်သည်။",
@@ -1348,6 +1412,7 @@ const my: Record<MessageKey, string> = {
   "docs.detail.example": "ဥပမာ",
   "docs.detail.close": "ပိတ်",
 
+  "node.duplicate": "Node ပွားယူ",
   "node.delete": "Node ဖျက်",
   "node.back": "Palette သို့ ပြန်",
   "node.close": "တည်းဖြတ်မှု ပိတ်",
@@ -1446,6 +1511,9 @@ const my: Record<MessageKey, string> = {
   "node.http_request.label": "HTTP Request",
   "node.http_request.blurb":
     "Server proxy မှတစ်ဆင့် တကယ့် API ကို ခေါ်သည်။ Method, URL, header & body များ state ကို interpolate လုပ်; တုံ့ပြန်ချက်ကို bound state သို့ ရေးသည်။",
+  "node.playwright_scrape.label": "Playwright Scraper",
+  "node.playwright_scrape.blurb":
+    "တကယ့် browser ဖြင့် JS-render စာမျက်နှာကို LOCAL Playwright server မှတစ်ဆင့် scrape လုပ်သည် — login ဝင်၊ စောင့်၊ CSS selector ဖြင့် ထုတ်ယူ။ Output ကို bound state သို့ ရေးသည်။",
   "node.filter.label": "စစ်ထုတ်",
   "node.filter.blurb":
     "Field သည် အခြေအနေနှင့် ကိုက်သော array တန်းများကို ထား; output ကို bound state သို့ ရေးသည်။",
@@ -1732,6 +1800,54 @@ const my: Record<MessageKey, string> = {
     "Parse လုပ်ထားသော တုံ့ပြန်ချက်ကို ဤနေရာ ရေးသည်။ JSON ဆိုလျှင် parse လုပ်ထားသော value။",
   "http.footer":
     "ကွင်းဆက် run မှသာ run သည် — ရိုက်နေစဉ် live မဟုတ်။ Auth header များ server-side ၌ ရှိနေသည်။",
+
+  // Playwright Scraper node
+  "scrape.serverUrl": "Server URL (local)",
+  "scrape.serverUrl.help":
+    "ဤ repo ထဲက LOCAL Playwright scrape server ၏ base URL၊ ဥပမာ http://localhost:3001/scrape။ `pnpm --dir playwright serve` ဖြင့် run ပါ — hosted default မရှိ။",
+  "scrape.url": "Page URL",
+  "scrape.url.help":
+    "ဦးစွာ ဖွင့်မည့် စာမျက်နှာ (သို့) login စာမျက်နှာ။ {{state}} interpolation ကို ထောက်ပံ့သည်။",
+  "scrape.waitUntil": "Wait until",
+  "scrape.waitForSelector": "Selector ကို စောင့်",
+  "scrape.waitForSelector.help":
+    "Navigation/actions ပြီးနောက်၊ ထုတ်ယူခြင်းမတိုင်မီ စောင့်ရန် CSS selector (optional) — ဥပမာ JS-render စာမျက်နှာက သိထားသော element။",
+  "scrape.timeout": "Timeout (ms)",
+  "scrape.selectors": "Selectors",
+  "scrape.selectors.help":
+    "Output key တစ်ခုစီအတွက် rule တစ်ခု။ ပုံမှန်က ပထမ match ၏ text ပြန်ပေး; All ဖွင့်လျှင် array၊ (သို့) HTML / Metadata ရွေး၊ (သို့) attribute ရိုက်။ Selector & attribute တွင် {{state}} interpolation ထောက်ပံ့သည်။",
+  "scrape.sel.key": "Output key (ဥပမာ title)",
+  "scrape.sel.selector": "CSS selector (ဥပမာ h1)",
+  "scrape.sel.attr": "Attribute (ဥပမာ href) — ကွက်လပ် = text",
+  "scrape.sel.all": "All",
+  "scrape.sel.html": "HTML",
+  "scrape.sel.meta": "Metadata",
+  "scrape.sel.excludeClass": "class မပါ",
+  "scrape.sel.add": "Selector ထည့်",
+  "scrape.sel.remove": "Selector ဖယ်",
+  "scrape.actions": "Actions",
+  "scrape.actions.help":
+    "ထုတ်ယူခြင်းမတိုင်မီ run မည့် အစဉ်လိုက် step များ (optional) — login ဝင်ပြီး navigate ရန် သုံးပါ။ String field များတွင် {{state}} interpolation ထောက်ပံ့သည်။",
+  "scrape.act.selector": "Selector",
+  "scrape.act.value": "တန်ဖိုး",
+  "scrape.act.key": "Key (ဥပမာ Enter)",
+  "scrape.act.url": "URL (waitForURL အတွက် glob/regex)",
+  "scrape.act.ms": "Milliseconds",
+  "scrape.act.add": "Action ထည့်",
+  "scrape.act.remove": "Action ဖယ်",
+  "scrape.session": "Session ပြန်သုံး",
+  "scrape.session.help":
+    "Server ပေါ်ရှိ သိမ်းထားသော session အမည်ကို ပြန်သုံးရန် (login actions ကို ကျော်) — optional။ မလိုလျှင် ကွက်လပ်ထား။",
+  "scrape.saveSession": "Session သိမ်းမည့်အမည်",
+  "scrape.saveSession.help":
+    "အောင်မြင်စွာ run ပြီးနောက် login session ကို သိမ်းမည့်အမည် — နောက် run များ ပြန်သုံးနိုင်ရန်။ မသိမ်းလျှင် ကွက်လပ်ထား။",
+  "scrape.input": "Input state",
+  "scrape.input.help":
+    "Optional: URL, selectors (သို့) actions ထဲတွင် {{input}} အဖြစ် ကိုးကားရန် state slot တစ်ခု ချိတ်ပါ။",
+  "scrape.output.help":
+    "တုံ့ပြန်ချက် အပြည့် { url, finalUrl, data, tookMs } ကို ဤနေရာ ရေးသည် — ထုတ်ယူထားသော တန်ဖိုးများ `data` အောက်တွင်။",
+  "scrape.footer":
+    "ကွင်းဆက် run မှသာ run သည် — ရိုက်နေစဉ် live မဟုတ်။ Local Playwright server run နေရန် လို (playwright/SCRAPE.md ကြည့်ပါ)။",
 
   "filter.operator": "Operator",
   "filter.value": "တန်ဖိုး",

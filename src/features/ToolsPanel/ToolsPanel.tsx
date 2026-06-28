@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  Copy,
   Eye,
   Globe,
   LayoutGrid,
@@ -80,6 +81,7 @@ function SortableToolItem({
   previewTool,
   toggleGallery,
   toggleShared,
+  duplicateTool,
   deleteTool,
   draftName,
   setDraftName,
@@ -101,6 +103,7 @@ function SortableToolItem({
   previewTool: (id: string) => void;
   toggleGallery: (id: string) => void;
   toggleShared: (id: string) => void;
+  duplicateTool: (id: string) => void;
   deleteTool: (id: string) => void;
   draftName: string;
   setDraftName: (val: string) => void;
@@ -235,6 +238,10 @@ function SortableToolItem({
               ? translate("gallery.makePrivate")
               : translate("gallery.makePublic")}
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => duplicateTool(t.id)}>
+            <Copy />
+            {translate("tools.duplicate")}
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onSelect={() => deleteTool(t.id)}
@@ -265,6 +272,7 @@ export function ToolsPanel({ onHide }: { onHide: () => void }) {
     renameTool,
     setToolIcon,
     deleteTool,
+    duplicateTool,
     reorderTools,
   } = useToolBuilder();
   const { t } = useTranslation();
@@ -576,6 +584,7 @@ export function ToolsPanel({ onHide }: { onHide: () => void }) {
                     previewTool={handlePreview}
                     toggleGallery={handleToggleGallery}
                     toggleShared={handleTogglePublic}
+                    duplicateTool={duplicateTool}
                     deleteTool={setDeleteConfirmId}
                     draftName={draftName}
                     setDraftName={setDraftName}

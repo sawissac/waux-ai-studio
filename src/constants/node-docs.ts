@@ -1269,6 +1269,91 @@ export const NODE_DETAILS: Record<ToolNodeType, NodeDetail> = {
     example:
       "A tool has a Text Input bound to state `userId` and an HTTP Request node configured: Method GET, URL `https://api.github.com/users/{{userId}}`, one header `Accept: application/vnd.github+json`, Response = JSON, Output state = `profile`. When the chain runs, {{userId}} is interpolated from state, the proxy fetches the user, and the parsed JSON object lands in `profile` — a downstream JSONPath or Template node can then read `profile.name`.",
   },
+  playwright_scrape: {
+    summary:
+      'The Playwright Scraper node (type "playwright_scrape", label "Playwright Scraper", slug @playwright_scrape, group Logic, amber accent) scrapes a JavaScript-rendered web page using a REAL Chromium browser and writes the extracted data object into a bound state slot. Unlike the HTTP Request node (which fetches raw bytes through a same-origin SSRF-guarded proxy), this node POSTs to a LOCAL companion server that ships in this repo at playwright/server/scrape-server.mjs — that server launches headless Chromium, optionally drives the page (log in, click, navigate), waits for content to render, and pulls values out with CSS selectors. Mental model: an in-chain transform node like HTTP Request, but backed by a full browser so SPA/React pages, login flows, and post-render DOM all work.',
+    whenToUse:
+      "Reach for it when the target page needs a real browser: content rendered by JavaScript (React/Vue SPAs), data behind a login, or extraction that depends on the live DOM (attributes, repeated elements, tag/attribute metadata). Use the plain HTTP Request node instead when a normal HTTP fetch of JSON/HTML is enough. IMPORTANT — this node only works when the local scrape server in THIS repo is running and reachable from the browser; there is no hosted/default endpoint. Start it with `pnpm --dir playwright install` (once), `pnpm --dir playwright exec playwright install chromium` (once), then `pnpm --dir playwright serve` (defaults to http://localhost:3001). See playwright/SCRAPE.md for the full contract.",
+    config: [
+      {
+        name: "Description",
+        description:
+          'Optional free-text helper note (placeholder "Optional helper text shown below the label"). Stored in config.description; does not affect execution.',
+      },
+      {
+        name: "Server URL (local)",
+        description:
+          'Mono text input for the base URL of the LOCAL scrape server endpoint (default "http://localhost:3001/scrape", config.serverUrl). REQUIRED and author-supplied — you must enter it manually because the server runs locally in this repo and there is no remote fallback. Help text: "Base URL of the LOCAL Playwright scrape server in this repo, e.g. http://localhost:3001/scrape. Run it with `pnpm --dir playwright serve` — there is no hosted default." A blank server URL throws "Playwright Scraper: server URL is required" at runtime.',
+      },
+      {
+        name: "Page URL",
+        description:
+          'Mono text input for the page (or login page) to open first (default "https://example.com", placeholder "https://example.com/{{page}}", config.url). Supports {{stateName}} interpolation (and {{input}} when Input state is bound). This is the server\'s `url` field — it must be http(s).',
+      },
+      {
+        name: "Wait until",
+        description:
+          "Select for when navigation is considered finished (Playwright waitUntil). Options in menu order: load, domcontentloaded, networkidle, commit. Default networkidle (best for SPAs / lazy-loaded content). Maps to the server's `waitUntil`.",
+      },
+      {
+        name: "Wait for selector",
+        description:
+          'Mono text input (config.waitForSelector, default empty, placeholder "[data-test=page-title]") for an optional CSS selector to wait for AFTER navigation and actions, BEFORE extraction. Critical for SPAs: content often renders after `networkidle` fires, so wait on a known post-render element. Sent as the server\'s `waitForSelector`; omitted when blank. Only set it to an element that really exists or the request waits out the timeout and fails.',
+      },
+      {
+        name: "Timeout (ms)",
+        description:
+          "Number input (config.timeout, default 30000) — the per-step timeout in ms applied to navigation and to each wait/action. The server caps it at its own MAX_TIMEOUT (default 60000). Sent as the server's `timeout`.",
+      },
+      {
+        name: "Selectors",
+        description:
+          'Repeatable form rows (config.selectors: ScrapeSelector[]) — NO JSON to write. Each row: Output key (the key in the returned data object), CSS selector (supports {{state}} interpolation), and option chips — All (array over every match), HTML (innerHTML), Metadata (return { tag, attrs, text } per element) and, when Metadata is on, No class (drop the class attr); plus an Attribute text input shown unless HTML/Metadata is active (blank = text). At runtime each row compiles to the server\'s selector contract: a row with no options collapses to the shorthand string form, otherwise the object form, precedence meta > attr > html > text. Rows with a blank key or selector are skipped. Default node seeds one row: key "title", selector "h1".',
+      },
+      {
+        name: "Actions",
+        description:
+          "Repeatable, ordered form rows (config.actions: ScrapeAction[]) run AFTER goto and BEFORE extraction — NO JSON to write. Each row picks a type from a dropdown and shows only the fields it needs: fill (selector + value), click (selector), press (selector + key), goto (url), waitForSelector (selector), waitForLoadState (state dropdown: load/domcontentloaded/networkidle/commit), waitForURL (url glob/regex e.g. **/dashboard**), waitForTimeout (ms). Use them to log in then navigate to a guarded page. String fields support {{state}} interpolation; compiled to the server's actions contract keeping only the relevant keys. Default empty (no actions).",
+      },
+      {
+        name: "Reuse session",
+        description:
+          'Mono text input (config.session, default empty, placeholder "mysession") naming a previously saved server session to reuse — it skips the login actions by restoring cookies + localStorage. Sent as the server\'s `session`; omitted when blank. The server returns 404 if the named session is unknown (e.g. after a server restart, which clears in-memory sessions).',
+      },
+      {
+        name: "Save session as",
+        description:
+          'Mono text input (config.saveSession, default empty, placeholder "mysession") — after a successful run the server stores the logged-in session under this name so later runs can set "Reuse session" to it and skip logging in. Sent as the server\'s `saveSession`; omitted when blank. Sessions live in the server\'s memory and are cleared on restart.',
+      },
+      {
+        name: "Input state",
+        description:
+          'Optional StateSelect (with a "— none —" clear option) binding config.input to a state slot. When bound, that slot\'s value is exposed as the {{input}} token usable in the Page URL, Selectors, and Actions alongside any other {{stateName}}. Default binding { mode: "name", value: "" } (unbound). Help text: "Optional: bind a state slot to reference as {{input}} in the URL, selectors, or actions."',
+      },
+      {
+        name: "Output state",
+        description:
+          'StateSelect choosing which state slot receives the result. Default binding { mode: "name", value: "state1" }; the editor always writes mode "name". The node writes the FULL server response object — { url, finalUrl, data, tookMs } — here; the extracted selector values live under `data` (e.g. output.data.elements), and `finalUrl` is the page URL after navigation/actions (handy to confirm a login redirect). Help text: "The full response is written here: { url, finalUrl, data, tookMs } — extracted values live under `data`."',
+      },
+    ],
+    io: {
+      reads:
+        "Pulls from state via interpolation: every {{stateName}} token in the Page URL, the Selectors JSON, and the Actions JSON is replaced via interpolate() against the shared state (token regex {{ name }}, name chars [\\w$]; a null/undefined or missing value resolves to an empty string). The optional `input` binding adds the {{input}} token (the resolved slot's value) in all three places. Does NOT read the bound output slot.",
+      writes:
+        'The FULL server response object — { url, finalUrl, data, tookMs } — into the slot named by the output binding (resolved by name, or by positional index for mode "index"). The extracted selector values are under `data` (a map mirroring your selectors keys); `url` is the requested page and `finalUrl` is where it ended up after navigation/actions (e.g. after a login redirect). Written structured so downstream JSONPath/Filter/Map/Table nodes can read e.g. `data.elements` or `finalUrl` directly. If the output binding resolves to an empty name the node returns and writes nothing. The savedSession field is not written to state.',
+    },
+    tips: [
+      'REQUIRES the local scrape server in this repo to be running AND reachable from the browser. Start it: `pnpm --dir playwright install` then `pnpm --dir playwright exec playwright install chromium` (both once), then `pnpm --dir playwright serve`. If it is not running you get a thrown error: "Could not reach the Playwright scrape server at <url>. Is it running locally?" The server enables permissive CORS so the builder (a different port) can POST to it.',
+      'Runs only when the chain runs, never live as you type (like HTTP Request, unlike input nodes). Subtitle on the node card shows label "Scrape" with the page URL.',
+      "SPA gotcha: content frequently renders AFTER waitUntil=networkidle resolves. If you get empty results, add a Wait for selector on a known post-render element (e.g. [data-test=page-title]) — that is the #1 cause of empty data.",
+      'Login flow: the target site may render inputs lazily or as custom widgets — drive them with Actions (e.g. click a field to reveal its real <input>, then fill). After clicking sign-in, wait for the redirect with waitForURL "**/your-page**" rather than a bare waitForLoadState, or you race back to the login page.',
+      "Avoid re-logging-in every run: set Save session as on the login run, then set Reuse session to that name on subsequent runs and point Page URL straight at the guarded route (omit the login actions). Sessions are in-memory on the server and clear on restart.",
+      "Selectors that match nothing return null (or [] when all:true) rather than erroring — eyeball the output keys if something is missing. Use meta:true (optionally excludeClass:true) to capture tag name + all attributes + text per element.",
+      "Errors (server unreachable, invalid selectors/actions JSON, navigation/extraction failure, action step failure) are caught by the chain runner, logged, and surfaced via onError — they do NOT write to the output slot, so the prior value remains. Credentials placed in Actions are sent in the request body to your LOCAL server; keep the server local (or behind API_KEY + HTTPS if exposed).",
+    ],
+    example:
+      'Scrape a login-guarded dashboard. State slots: email, password, result. Playwright Scraper config — Server URL http://localhost:3001/scrape, Page URL https://app.example.com/login, Wait until networkidle, Save session as "mysession", Actions = [ {"type":"click","selector":"[data-test=input-email]"}, {"type":"fill","selector":"[data-test=input-email]","value":"{{email}}"}, {"type":"click","selector":"[data-test=input-password]"}, {"type":"fill","selector":"[data-test=input-password]","value":"{{password}}"}, {"type":"click","selector":"[data-test=button-sign-in]"}, {"type":"waitForURL","url":"**/dashboard**"}, {"type":"waitForSelector","selector":"[data-test=page-title]"} ], Selectors = { "ids": { "selector": "[data-test]", "attr": "data-test", "all": true } }, Output state = result. When the chain runs, {{email}}/{{password}} interpolate, the browser logs in, waits for the dashboard, and the response lands in `result` as { url, finalUrl, data: { ids: [...] }, tookMs } — read the ids at `result.data.ids` and confirm the redirect at `result.finalUrl`. A later run can set Reuse session = "mysession", Page URL = https://app.example.com/reports, and drop the login actions.',
+  },
   filter: {
     summary:
       "The Filter node is a Logic-group transform that keeps only the rows of an input array whose chosen field satisfies a comparison, writing the surviving rows as a new array to an output state slot. Mental model: a row-keep gate — read array from one state key, test each row against operator+value, write the filtered array to another state key.",

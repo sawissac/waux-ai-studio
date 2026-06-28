@@ -2,48 +2,40 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Trash2 } from "lucide-react";
+import { Copy, GripVertical, Trash2 } from "lucide-react";
 
 import { ACCENT_CLASSES, NODE_META } from "@/constants/tool-builder";
-import { NodeEditor } from "@/features/NodeEditor";
 import { useTranslation } from "@/hooks/useTranslation";
 import { nodeSubtitle } from "@/lib/tool-builder-runtime";
 import { cn } from "@/lib/utils";
-import type {
-  EditorPlacement,
-  StateNode,
-  ToolNode,
-} from "@/types/tool-builder";
+import type { StateNode, ToolNode } from "@/types/tool-builder";
 
 /**
  * One node in the builder chain.
  *
- * Shows the node's icon, title, and resolved state subtitle.
- * When selected with `inline` placement, surfaces its editor inline
- * (the `panel` placement is rendered by the right panel instead).
+ * Shows the node's icon, title, and resolved state subtitle. Selecting a card
+ * surfaces its editor in the right panel (the editor is never rendered inline).
  *
  * @param props.node - Node to render.
  * @param props.stateNode - Tool state node, for resolving the subtitle.
  * @param props.selected - Whether this node is the active selection.
- * @param props.placement - Active editor placement mode.
  * @param props.onSelect - Toggle selection of this node.
+ * @param props.onDuplicate - Insert a copy of this node after it in the chain.
  * @param props.onDelete - Remove this node from the chain.
  */
 export function NodeCard({
   node,
-  orderIndex,
   stateNode,
   selected,
-  placement,
   onSelect,
+  onDuplicate,
   onDelete,
 }: {
   node: ToolNode;
-  orderIndex: number;
   stateNode: StateNode | null;
   selected: boolean;
-  placement: EditorPlacement;
   onSelect: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
@@ -60,16 +52,11 @@ export function NodeCard({
     isDragging,
   } = useSortable({ id: node.id });
 
-  // Don't render the inline Monaco editor while this card is mid-drag — no
-  // point laying it out under a dnd-kit transform. (CodeEditor also guards its
-  // own layout against disposal, so this is just an optimization.)
-  const showInline = selected && placement === "inline" && !isDragging;
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 10 : showInline ? 20 : 1,
+    zIndex: isDragging ? 10 : 1,
   };
 
   return (
@@ -91,7 +78,12 @@ export function NodeCard({
         )}
       >
         <span
-          className="hidden shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 sm:block"
+          className={cn(
+            "hidden shrink-0 cursor-grab active:cursor-grabbing sm:block",
+            selected
+              ? "text-primary-foreground/70"
+              : "text-muted-foreground/60",
+          )}
           {...attributes}
           {...listeners}
         >
@@ -110,16 +102,43 @@ export function NodeCard({
             @{t(`node.${node.type}.label`)}
           </div>
           {subtitle && (
-            <div className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+            <div
+              className={cn(
+                "flex items-center gap-1 truncate text-[11px]",
+                selected
+                  ? "text-primary-foreground/80"
+                  : "text-muted-foreground",
+              )}
+            >
               <span>{subtitle.label}</span>
               {subtitle.value !== undefined && (
-                <span className="rounded bg-muted px-1 py-px font-mono text-[10px]">
+                <span
+                  className={cn(
+                    "rounded px-1 py-px font-mono text-[10px]",
+                    selected
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-muted",
+                  )}
+                >
                   {subtitle.value}
                 </span>
               )}
             </div>
           )}
         </div>
+        {node.type !== "state" && (
+          <button
+            type="button"
+            aria-label={t("node.duplicate")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate();
+            }}
+            className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-[opacity,background-color] duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground group-hover:opacity-100 active:scale-95"
+          >
+            <Copy size={14} />
+          </button>
+        )}
         <button
           type="button"
           aria-label={t("node.delete")}
@@ -132,15 +151,6 @@ export function NodeCard({
           <Trash2 size={14} />
         </button>
       </div>
-
-      {showInline && (
-        <div className="nb-surface mt-2 p-3 duration-(--motion-duration-base) animate-in fade-in slide-in-from-top-1">
-          {/* Key by position: remount the inline Monaco on reorder rather than
-              letting React reparent its live DOM (stale scheduled render →
-              "domNode" undefined crash). */}
-          <NodeEditor key={orderIndex} node={node} placement="inline" />
-        </div>
-      )}
     </div>
   );
 }

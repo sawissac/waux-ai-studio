@@ -4,6 +4,8 @@ import {
   closestCenter,
   DndContext,
   DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -14,41 +16,46 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import {
-  FlaskConical,
-  type LucideIcon,
-  MessageSquare,
-  PanelRight,
-  Plus,
-  Rows3,
-} from "lucide-react";
+import { FlaskConical, MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ACCENT_CLASSES, NODE_META } from "@/constants/tool-builder";
 import { ChatView } from "@/features/BuilderPanel/components/ChatView";
+import { NodeInserter } from "@/features/BuilderPanel/components/NodeInserter";
 import { NodeCard } from "@/features/NodeCard";
 import { NODE_DND_MIME } from "@/features/PalettePanel";
 import { PreviewPane } from "@/features/PreviewPane";
 import { useToolBuilder } from "@/hooks/useToolBuilder";
 import { useTranslation } from "@/hooks/useTranslation";
 import { cn } from "@/lib/utils";
-import type { EditorPlacement, Tool, ToolNodeType } from "@/types/tool-builder";
+import type { Tool, ToolNode, ToolNodeType } from "@/types/tool-builder";
 
-const PLACEMENTS: EditorPlacement[] = ["panel", "inline"];
-
-/** Icon shown beside each placement tab's label, keyed by placement. */
-const PLACEMENT_ICONS: Record<EditorPlacement, LucideIcon> = {
-  panel: PanelRight,
-  inline: Rows3,
-};
+/**
+ * True when a keyboard event originates from a text-editing surface (a form
+ * field, a code editor, etc.), so the canvas shortcuts below stay out of the
+ * way while the author is typing.
+ */
+function isEditableTarget(el: EventTarget | null): boolean {
+  if (!(el instanceof HTMLElement)) {
+    return false;
+  }
+  return (
+    el.isContentEditable ||
+    el.closest(
+      "input, textarea, select, [contenteditable='true'], .monaco-editor",
+    ) !== null
+  );
+}
 
 /**
  * Center panel — the node chain plus the live preview.
  *
- * Renders each node as a {@link NodeCard} (connected top-to-bottom), an
- * "Add input" affordance that returns focus to the palette, and the
- * {@link PreviewPane}. Empty tools show guidance instead of a chain. A
- * segmented control switches the global editor placement.
+ * Renders each node as a {@link NodeCard} (connected top-to-bottom) with inline
+ * {@link NodeInserter}s in every gap, and the {@link PreviewPane}. Empty tools
+ * show guidance instead of a chain. A header segmented control toggles the
+ * center view between the builder and the chat surface; the selected node's
+ * editor always opens in the right panel.
  *
  * @param props.tool - The open tool to build.
  * @param props.view - Center view: the node builder or the chat surface.
@@ -66,17 +73,19 @@ export function BuilderPanel({
   const {
     stateNode,
     selectedNodeId,
-    editorPlacement,
     addNode,
     selectNode,
     deleteNode,
-    clearNodeSelection,
-    setEditorPlacement,
+    duplicateNode,
     reorderNodes,
   } = useToolBuilder();
   const { t } = useTranslation();
 
   const [dropActive, setDropActive] = useState(false);
+  // The node currently being dragged, mirrored into a floating DragOverlay so
+  // the picked card follows the cursor (the in-chain card dims as a placeholder).
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeNode = tool.nodes.find((n) => n.id === activeId) ?? null;
   // Unread badge on the Chat tab: set when a reply finishes while another tab
   // is open, cleared whenever the chat view is shown.
   const [chatUnread, setChatUnread] = useState(false);
@@ -85,21 +94,6 @@ export function BuilderPanel({
       setChatUnread(false);
     }
   }, [view]);
-
-  /**
-   * The header segmented control multiplexes two concerns: "chat" swaps the
-   * center view (the parent auto-hides both side panels); "panel" / "inline"
-   * stay editor-placement values and switch back to the builder (panels back).
-   */
-  const tabValue = view === "chat" ? "chat" : editorPlacement;
-  function handleTabChange(value: string) {
-    if (value === "chat") {
-      onViewChange("chat");
-      return;
-    }
-    onViewChange("build");
-    setEditorPlacement(value as EditorPlacement);
-  }
 
   /** Accept a node-type drag originating from the palette. */
   function handleDragOver(e: React.DragEvent) {
@@ -132,10 +126,60 @@ export function BuilderPanel({
     }),
   );
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(event.active.id as string);
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null);
     const { active, over } = event;
     if (over && active.id !== over.id) {
       reorderNodes(active.id as string, over.id as string);
+    }
+  }
+
+  /**
+   * Canvas keyboard shortcuts (active when focus is on a node card, not a text
+   * field): ↑/↓ move the selection through the chain, Backspace/Delete removes
+   * the selected node, and ⌘/Ctrl+D duplicates it. The State Control is never
+   * deleted or duplicated (a tool keeps exactly one).
+   */
+  function handleCanvasKeyDown(e: React.KeyboardEvent) {
+    if (empty || isEditableTarget(e.target)) {
+      return;
+    }
+    const nodes = tool.nodes;
+    const idx = nodes.findIndex((n) => n.id === selectedNodeId);
+
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const dir = e.key === "ArrowDown" ? 1 : -1;
+      const nextIdx =
+        idx === -1
+          ? dir === 1
+            ? 0
+            : nodes.length - 1
+          : Math.min(nodes.length - 1, Math.max(0, idx + dir));
+      const next = nodes[nextIdx];
+      if (next && next.id !== selectedNodeId) {
+        selectNode(next.id);
+      }
+      return;
+    }
+
+    if (idx === -1) {
+      return;
+    }
+    const node = nodes[idx];
+    if (node.type === "state") {
+      return;
+    }
+    if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      deleteNode(node.id);
+    } else if ((e.metaKey || e.ctrlKey) && (e.key === "d" || e.key === "D")) {
+      e.preventDefault();
+      duplicateNode(node.id);
     }
   }
 
@@ -150,30 +194,24 @@ export function BuilderPanel({
         </span>
         <div className="ml-auto flex items-center gap-2">
           <Tabs
-            value={tabValue}
-            onValueChange={handleTabChange}
+            value={view}
+            onValueChange={(v) => onViewChange(v as "build" | "chat")}
             className="hidden sm:block"
           >
             <TabsList className="h-7">
-              {PLACEMENTS.map((p) => {
-                const Icon = PLACEMENT_ICONS[p];
-                return (
-                  <TabsTrigger
-                    key={p}
-                    value={p}
-                    className="gap-1 text-[11px] capitalize"
-                  >
-                    <Icon />
-                    {tabValue === p && t(`builder.placement.${p}`)}
-                  </TabsTrigger>
-                );
-              })}
+              <TabsTrigger
+                value="build"
+                className="gap-1 text-[11px] capitalize"
+              >
+                <FlaskConical />
+                {view === "build" && t("builder.tab.build")}
+              </TabsTrigger>
               <TabsTrigger
                 value="chat"
                 className="relative gap-1 text-[11px] capitalize"
               >
                 <MessageSquare />
-                {tabValue === "chat" && t("builder.tab.chat")}
+                {view === "chat" && t("builder.tab.chat")}
                 {chatUnread && view !== "chat" && (
                   <span
                     className="absolute -right-0.5 -top-0.5 size-2 rounded-full border border-foreground bg-primary"
@@ -212,6 +250,7 @@ export function BuilderPanel({
         onDragOver={handleDragOver}
         onDragLeave={() => setDropActive(false)}
         onDrop={handleDrop}
+        onKeyDown={handleCanvasKeyDown}
       >
         <div className="mx-auto max-w-2xl">
           {empty ? (
@@ -228,6 +267,9 @@ export function BuilderPanel({
               <div className="max-w-xs text-xs text-muted-foreground">
                 {t("builder.emptyBody")}
               </div>
+              <div className="mt-1">
+                <NodeInserter variant="empty" index={0} />
+              </div>
             </div>
           ) : (
             <div className="flex flex-col">
@@ -235,7 +277,9 @@ export function BuilderPanel({
                 id="builder-dnd"
                 sensors={sensors}
                 collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
+                onDragCancel={() => setActiveId(null)}
               >
                 <SortableContext
                   items={tool.nodes.map((n) => n.id)}
@@ -243,46 +287,67 @@ export function BuilderPanel({
                 >
                   {tool.nodes.map((node, i) => (
                     <div key={node.id} className="flex flex-col">
-                      {i > 0 && (
-                        <span
-                          className="mx-auto h-5 w-0 border-l-2 border-foreground"
-                          aria-hidden
-                        />
-                      )}
+                      {/* Inline inserter sitting on the connector into this node. */}
+                      {i > 0 && <NodeInserter variant="gap" index={i} />}
                       <NodeCard
                         node={node}
-                        orderIndex={i}
                         stateNode={stateNode}
                         selected={node.id === selectedNodeId}
-                        placement={editorPlacement}
                         onSelect={() => selectNode(node.id)}
+                        onDuplicate={() => duplicateNode(node.id)}
                         onDelete={() => deleteNode(node.id)}
                       />
                     </div>
                   ))}
                 </SortableContext>
+                <DragOverlay dropAnimation={null}>
+                  {activeNode ? <DragPreview node={activeNode} /> : null}
+                </DragOverlay>
               </DndContext>
               <span
-                className="mx-auto h-5 w-0 border-l border-dashed border-border"
+                className="mx-auto h-5 w-0 border-l-2 border-foreground"
                 aria-hidden
               />
-              <button
-                type="button"
-                onClick={clearNodeSelection}
-                className={cn(
-                  "inline-flex h-14 items-center justify-center gap-1.5 border-2 border-dashed border-foreground text-sm font-bold text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground",
-                  dropActive && "border-primary bg-accent text-foreground",
-                )}
-              >
-                <Plus size={15} />{" "}
-                {dropActive ? t("builder.dropToAdd") : t("builder.addInput")}
-              </button>
+              <NodeInserter
+                variant="end"
+                index={tool.nodes.length}
+                dropActive={dropActive}
+              />
             </div>
           )}
 
           <PreviewPane tool={tool} stateNode={stateNode} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Floating snapshot of the node being dragged, rendered inside the dnd-kit
+ * {@link DragOverlay} so the card tracks the cursor while its in-chain twin dims
+ * as a placeholder. Deliberately static (no `useSortable`) to avoid registering
+ * the dragged node's id twice.
+ *
+ * @param props.node - The node currently under the pointer.
+ */
+function DragPreview({ node }: { node: ToolNode }) {
+  const { t } = useTranslation();
+  const meta = NODE_META[node.type];
+  const Icon = meta.icon;
+  return (
+    <div className="flex h-14 cursor-grabbing items-center gap-2.5 border-2 border-foreground bg-card p-2.5 font-display shadow-nb-lg">
+      <span
+        className={cn(
+          "grid size-8 shrink-0 place-items-center border-2 border-foreground",
+          ACCENT_CLASSES[meta.accent],
+        )}
+      >
+        <Icon size={16} />
+      </span>
+      <span className="truncate text-sm font-semibold">
+        @{t(`node.${node.type}.label`)}
+      </span>
     </div>
   );
 }

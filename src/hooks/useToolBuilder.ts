@@ -11,20 +11,21 @@ import {
   clearNodeSelection,
   deleteNode,
   deleteTool,
+  duplicateNode,
+  duplicateTool,
+  insertNode,
   renameStateSlot,
   renameTool,
   reorderNodes,
   reorderTools,
   selectNode,
   selectTool,
-  setEditorPlacement,
   setSearch,
   setToolIcon,
   updateNode,
 } from "@/stores/slices/toolBuilderSlice";
 import type {
   BuildSpec,
-  EditorPlacement,
   StateNode,
   Tool,
   ToolNode,
@@ -47,7 +48,6 @@ export function useToolBuilder() {
   const tools = useAppSelector((s) => s.toolBuilder.tools);
   const selectedToolId = useAppSelector((s) => s.toolBuilder.selectedToolId);
   const selectedNodeId = useAppSelector((s) => s.toolBuilder.selectedNodeId);
-  const editorPlacement = useAppSelector((s) => s.toolBuilder.editorPlacement);
   const search = useAppSelector((s) => s.toolBuilder.search);
 
   const tool: Tool | null = useMemo(
@@ -80,7 +80,6 @@ export function useToolBuilder() {
     selectedNode,
     selectedNodeId,
     stateNode,
-    editorPlacement,
     search,
     // actions
     selectTool: (id: string) => dispatch(selectTool(id)),
@@ -90,8 +89,12 @@ export function useToolBuilder() {
     setToolIcon: (id: string, icon: string) =>
       dispatch(setToolIcon({ id, icon })),
     deleteTool: (id: string) => dispatch(deleteTool(id)),
+    duplicateTool: (id: string) => dispatch(duplicateTool(id)),
     addNode: (type: ToolNodeType) => dispatch(addNode(type)),
+    insertNode: (type: ToolNodeType, index: number) =>
+      dispatch(insertNode({ type, index })),
     deleteNode: (id: string) => dispatch(deleteNode(id)),
+    duplicateNode: (id: string) => dispatch(duplicateNode(id)),
     updateNode: (id: string, changes: Partial<ToolNode>) =>
       dispatch(updateNode({ id, changes })),
     selectNode: (id: string) => dispatch(selectNode(id)),
@@ -101,7 +104,6 @@ export function useToolBuilder() {
       dispatch(addStateSlot({ name, value })),
     applyBuildSpec: (spec: BuildSpec) => dispatch(applyBuildSpec(spec)),
     clearNodeSelection: () => dispatch(clearNodeSelection()),
-    setEditorPlacement: (p: EditorPlacement) => dispatch(setEditorPlacement(p)),
     setSearch: (q: string) => dispatch(setSearch(q)),
     reorderTools: (activeId: string, overId: string) =>
       dispatch(reorderTools({ activeId, overId })),

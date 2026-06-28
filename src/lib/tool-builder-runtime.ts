@@ -10,6 +10,7 @@ import { generateIdentities } from "@/lib/generate-identity";
 import { sanitizeHtmlDoc } from "@/lib/html-sanitize";
 import { httpRequest } from "@/lib/http-request";
 import { jsonToTs } from "@/lib/json-to-ts";
+import { playwrightScrape } from "@/lib/playwright-scrape";
 import {
   asArray,
   asJson,
@@ -34,6 +35,7 @@ import type {
   MapNode,
   MathNode,
   MergeNode,
+  PlaywrightScrapeNode,
   RegexNode,
   SchemaValidateNode,
   SortNode,
@@ -243,6 +245,109 @@ async function runHttpRequestNode(
     node.responseType,
   );
   state[outName] = toStateValue(result.body);
+}
+
+/**
+ * Run a Playwright Scraper node: POST to the local scrape server, then write the
+ * returned `data` object to its output binding. The `url` and the `selectors` /
+ * `actions` JSON are interpolated against state (plus the optional `{{input}}`
+ * token) before the `selectors` / `actions` are parsed. Invalid `selectors`
+ * JSON throws (surfaced by the caller); blank/invalid `actions` is treated as
+ * none.
+ */
+async function runPlaywrightScrapeNode(
+  node: PlaywrightScrapeNode,
+  state: StateMap,
+  stateNode: StateNode | null,
+): Promise<void> {
+  const outName = resolveBinding(node.output, stateNode);
+  if (!outName) {
+    return;
+  }
+  if (!node.serverUrl?.trim()) {
+    throw new Error("Playwright Scraper: server URL is required");
+  }
+  // A bound `input` slot is exposed as the `{{input}}` token.
+  const inName = resolveBinding(node.input, stateNode);
+  const interpState: StateMap = inName
+    ? { ...state, input: state[inName] }
+    : state;
+  const interp = (s: string) => interpolate(s ?? "", interpState);
+
+  // Compile the form rows into the server's `selectors` map. A rule with no
+  // options collapses to the shorthand string form; otherwise the object form.
+  const selectors: Record<string, unknown> = {};
+  for (const rule of node.selectors ?? []) {
+    const key = rule.key.trim();
+    const selector = interp(rule.selector).trim();
+    if (!key || !selector) {
+      continue;
+    }
+    const attr = interp(rule.attr).trim();
+    if (!rule.all && !attr && !rule.html && !rule.meta) {
+      selectors[key] = selector;
+      continue;
+    }
+    const compiled: Record<string, unknown> = { selector };
+    if (rule.all) {
+      compiled.all = true;
+    }
+    if (rule.meta) {
+      compiled.meta = true;
+      if (rule.excludeClass) {
+        compiled.excludeClass = true;
+      }
+    } else if (attr) {
+      compiled.attr = attr;
+    } else if (rule.html) {
+      compiled.html = true;
+    }
+    selectors[key] = compiled;
+  }
+
+  // Compile the action rows, keeping only the fields each `type` uses.
+  const actions = (node.actions ?? []).map((a) => {
+    switch (a.type) {
+      case "fill":
+        return {
+          type: a.type,
+          selector: interp(a.selector),
+          value: interp(a.value),
+        };
+      case "press":
+        return { type: a.type, selector: interp(a.selector), key: a.key };
+      case "click":
+      case "waitForSelector":
+        return { type: a.type, selector: interp(a.selector) };
+      case "goto":
+      case "waitForURL":
+        return { type: a.type, url: interp(a.url) };
+      case "waitForLoadState":
+        return { type: a.type, state: a.state || "load" };
+      case "waitForTimeout":
+        return { type: a.type, ms: a.ms || 0 };
+    }
+  });
+
+  const result = await playwrightScrape({
+    serverUrl: node.serverUrl.trim(),
+    url: interpolate(node.url ?? "", interpState),
+    waitUntil: node.waitUntil,
+    waitForSelector: node.waitForSelector?.trim() || undefined,
+    timeout: node.timeout || undefined,
+    selectors,
+    actions: actions.length > 0 ? actions : undefined,
+    session: node.session?.trim() || undefined,
+    saveSession: node.saveSession?.trim() || undefined,
+  });
+  // Write the full response so downstream nodes can read `url` / `finalUrl`
+  // (e.g. confirm a login redirect landed) alongside the extracted `data`.
+  state[outName] = toStateValue({
+    url: result.url,
+    finalUrl: result.finalUrl,
+    data: result.data,
+    tookMs: result.tookMs,
+  });
 }
 
 /** Run a Filter node: keep rows whose field satisfies the operator. */
@@ -865,6 +970,17 @@ export async function runChain(
         );
         onError?.(msg);
       }
+    } else if (node.type === "playwright_scrape") {
+      try {
+        await runPlaywrightScrapeNode(node, next, stateNode);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[ToolBuilder] playwright_scrape node "${node.id}" failed:`,
+          msg,
+        );
+        onError?.(msg);
+      }
     } else if (node.type === "encode") {
       try {
         await runEncodeNode(node, next, stateNode);
@@ -1069,6 +1185,8 @@ export function nodeSubtitle(
       };
     case "http_request":
       return { label: node.method, value: node.url || "—" };
+    case "playwright_scrape":
+      return { label: "Scrape", value: node.url || "—" };
     case "filter":
       return {
         label: "Filter",

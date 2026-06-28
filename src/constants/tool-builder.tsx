@@ -16,6 +16,7 @@ import {
   CalendarClock,
   ChevronsLeftRight,
   CodeXml,
+  Crosshair,
   Database,
   Download,
   FileCode2,
@@ -75,6 +76,8 @@ import type {
   QrLevel,
   RegexMode,
   SchemaRule,
+  ScrapeActionType,
+  ScrapeWaitUntil,
   SortDirection,
   SortType,
   SpriteAction,
@@ -348,6 +351,16 @@ export const NODE_META: Record<ToolNodeType, NodeMeta> = {
     icon: Webhook,
     slug: "@http_request",
   },
+  playwright_scrape: {
+    type: "playwright_scrape",
+    label: "Playwright Scraper",
+    blurb:
+      "Scrape a JS-rendered page with a real browser via the LOCAL Playwright server — log in, wait, extract by CSS selectors. Output writes to bound state.",
+    accent: "amber",
+    group: "Logic",
+    icon: Crosshair,
+    slug: "@playwright_scrape",
+  },
   filter: {
     type: "filter",
     label: "Filter",
@@ -619,6 +632,7 @@ export const PALETTE_GROUPS: { group: PaletteGroup; types: ToolNodeType[] }[] =
         "code",
         "ts_type",
         "http_request",
+        "playwright_scrape",
         "filter",
         "map",
         "sort",
@@ -756,6 +770,26 @@ export const HTTP_METHODS: HttpMethod[] = [
   "PUT",
   "PATCH",
   "DELETE",
+];
+
+/** Navigation-finished modes for the Playwright Scraper node, in menu order. */
+export const SCRAPE_WAIT_UNTIL: { value: ScrapeWaitUntil; label: string }[] = [
+  { value: "load", label: "load" },
+  { value: "domcontentloaded", label: "domcontentloaded" },
+  { value: "networkidle", label: "networkidle" },
+  { value: "commit", label: "commit" },
+];
+
+/** Pre-extraction action kinds for the Playwright Scraper node, in menu order. */
+export const SCRAPE_ACTION_TYPES: ScrapeActionType[] = [
+  "fill",
+  "click",
+  "press",
+  "goto",
+  "waitForSelector",
+  "waitForLoadState",
+  "waitForURL",
+  "waitForTimeout",
 ];
 
 /** Response parse modes for the HTTP Request node, in menu order. */
@@ -1268,6 +1302,34 @@ export function createNode(type: ToolNodeType): ToolNode {
         input: { mode: "name", value: "" },
         body: "",
         responseType: "json",
+        output: { mode: "name", value: "state1" },
+      };
+    case "playwright_scrape":
+      return {
+        id,
+        type,
+        description: "",
+        serverUrl: "http://localhost:3001/scrape",
+        url: "https://example.com",
+        waitUntil: "networkidle",
+        waitForSelector: "",
+        timeout: 30000,
+        selectors: [
+          {
+            id: uuid(),
+            key: "title",
+            selector: "h1",
+            all: false,
+            attr: "",
+            html: false,
+            meta: false,
+            excludeClass: false,
+          },
+        ],
+        actions: [],
+        session: "",
+        saveSession: "",
+        input: { mode: "name", value: "" },
         output: { mode: "name", value: "state1" },
       };
     case "filter":

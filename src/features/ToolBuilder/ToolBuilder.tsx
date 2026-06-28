@@ -31,13 +31,13 @@ import { useAppSelector } from "@/stores/hooks";
  *
  * Composes the three-panel workspace: tools list (left), node-chain builder +
  * live preview (center), and the contextual right panel. The right panel shows
- * the node editor when a node is selected in `panel` placement, the
- * "Node" panel when a tool is open, otherwise nothing. Tool/node state flows
- * through {@link useToolBuilder}; the only local UI state here is the center
- * view (builder vs chat) and side-panel visibility — switching to chat hides
- * both side panels, and a build view (panel / inline) restores them. Each panel
- * has a collapse button in its own header; a slim {@link CollapsedRail} with an
- * expand button shows in place of a hidden panel.
+ * the node editor when a node is selected, the "Node" panel when a tool is
+ * open, otherwise nothing. Tool/node state flows through {@link useToolBuilder};
+ * the only local UI state here is the center view (builder vs chat) and
+ * side-panel visibility — switching to chat hides both side panels, and the
+ * build view restores them. Each panel has a collapse button in its own header;
+ * a slim {@link CollapsedRail} with an expand button shows in place of a hidden
+ * panel.
  *
  * {@link useToolsSync} hydrates the Redux slice from Supabase on mount.
  */
@@ -45,13 +45,12 @@ export function ToolBuilder() {
   // Hydrate tools from Supabase into the Redux slice on mount.
   const { saveTools, saveState } = useToolsSync();
 
-  const { tool, tools, selectedNode, editorPlacement } = useToolBuilder();
+  const { tool, tools, selectedNode } = useToolBuilder();
   const loadState = useAppSelector((s) => s.toolBuilder.loadState);
   const isLoading = loadState === "loading";
   const { t } = useTranslation();
 
-  const showEditorInPanel =
-    editorPlacement === "panel" && selectedNode !== null;
+  const showEditorInPanel = selectedNode !== null;
 
   // Center view + side-panel visibility, persisted in the URL so a reload or a
   // shared link reopens the same builder tab and panel layout. Switching to
@@ -145,7 +144,7 @@ export function ToolBuilder() {
                     <PaletteSkeleton />
                   ) : showEditorInPanel && selectedNode ? (
                     <div className="h-full overflow-auto p-4">
-                      <NodeEditor node={selectedNode} placement="panel" />
+                      <NodeEditor node={selectedNode} />
                     </div>
                   ) : tool ? (
                     <PalettePanel onHide={() => setRightHidden(true)} />

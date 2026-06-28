@@ -42,6 +42,7 @@ export type ToolNodeType =
   | "code"
   | "ts_type"
   | "http_request"
+  | "playwright_scrape"
   | "filter"
   | "map"
   | "sort"
@@ -664,6 +665,134 @@ export interface HttpRequestNode extends BaseNode {
   output: StateBinding;
 }
 
+/** When a Playwright Scraper considers a navigation finished (Playwright `waitUntil`). */
+export type ScrapeWaitUntil =
+  | "load"
+  | "domcontentloaded"
+  | "networkidle"
+  | "commit";
+
+/**
+ * One extraction rule for a Playwright Scraper, edited as a form row. Compiled
+ * to the server's selector contract: `text` (default), or `attr` / `html` /
+ * `meta`, optionally `all` (array over every match) — precedence meta > attr >
+ * html > text. `key` is the output key in the returned `data` object.
+ */
+export interface ScrapeSelector {
+  /** Stable id for list keying. */
+  id: string;
+  /** Output key in the `data` object. */
+  key: string;
+  /** CSS selector. Supports `{{stateName}}` interpolation. */
+  selector: string;
+  /** Return an array over every match (vs. the first only). */
+  all: boolean;
+  /** Return this attribute instead of text (blank = text). */
+  attr: string;
+  /** Return `innerHTML` instead of text. */
+  html: boolean;
+  /** Return `{ tag, attrs, text }` per element (overrides attr/html). */
+  meta: boolean;
+  /** With `meta`, drop the noisy `class` attribute. */
+  excludeClass: boolean;
+}
+
+/** The kind of a Playwright Scraper pre-extraction action. */
+export type ScrapeActionType =
+  | "fill"
+  | "click"
+  | "press"
+  | "goto"
+  | "waitForSelector"
+  | "waitForLoadState"
+  | "waitForURL"
+  | "waitForTimeout";
+
+/**
+ * One pre-extraction step for a Playwright Scraper, edited as a form row. Only
+ * the fields relevant to `type` are used when compiling the server's `actions`
+ * contract (e.g. `fill` uses selector + value; `goto`/`waitForURL` use url;
+ * `press` uses selector + key; `waitForLoadState` uses state; `waitForTimeout`
+ * uses ms). String fields support `{{stateName}}` interpolation.
+ */
+export interface ScrapeAction {
+  /** Stable id for list keying. */
+  id: string;
+  type: ScrapeActionType;
+  /** Target element (fill / click / press / waitForSelector). */
+  selector: string;
+  /** Text to type (fill). */
+  value: string;
+  /** Key to press, e.g. `Enter` (press). */
+  key: string;
+  /** Navigation / match URL (goto / waitForURL — glob/regex for the latter). */
+  url: string;
+  /** Load state to await, e.g. `networkidle` (waitForLoadState). */
+  state: string;
+  /** Milliseconds to sleep (waitForTimeout). */
+  ms: number;
+}
+
+/**
+ * Scrape a JavaScript-rendered page with a real Chromium browser, driven by the
+ * **local** Playwright scrape server in this repo (`playwright/server/scrape-server.mjs`).
+ *
+ * This node POSTs to that server's `/scrape` endpoint — whose base URL the
+ * author supplies manually in `serverUrl` (there is no hosted default; the
+ * server must be running locally, see `playwright/SCRAPE.md`). It optionally
+ * drives the page first (log in, click, navigate) via `actions`, waits for the
+ * content to render, extracts values with the CSS-selector `selectors` map, and
+ * writes the returned `data` object into the bound `output` slot.
+ *
+ * `url`, and the `selectors` / `actions` JSON, support `{{stateName}}`
+ * interpolation (plus the optional `{{input}}` token), so an upstream node can
+ * drive the target page, credentials, or selectors. Runs in the chain like a
+ * transform node (only on a run, never live as you type), exactly like
+ * {@link HttpRequestNode}.
+ */
+export interface PlaywrightScrapeNode extends BaseNode {
+  type: "playwright_scrape";
+  description: string;
+  /**
+   * Base URL of the LOCAL scrape server's endpoint, e.g.
+   * `http://localhost:3001/scrape`. Required and author-supplied — the server
+   * runs locally in this repo (`pnpm --dir playwright serve`); there is no
+   * remote fallback.
+   */
+  serverUrl: string;
+  /** Page (or login page) to open first. Supports `{{stateName}}` interpolation. */
+  url: string;
+  /** When `goto` is considered finished. */
+  waitUntil: ScrapeWaitUntil;
+  /** Optional CSS selector to wait for after navigation/actions, before extraction. */
+  waitForSelector: string;
+  /** Per-step timeout in ms (navigation + each wait/action), capped by the server's `MAX_TIMEOUT`. */
+  timeout: number;
+  /**
+   * Extraction rules (form rows), compiled to the server's `selectors` map by
+   * output key. Each rule's `selector` (and `attr`) support `{{stateName}}`
+   * interpolation.
+   */
+  selectors: ScrapeSelector[];
+  /**
+   * Pre-extraction steps (form rows) run after `goto` and before extraction,
+   * compiled to the server's `actions` contract. String fields support
+   * `{{stateName}}` interpolation.
+   */
+  actions: ScrapeAction[];
+  /** Reuse a saved server session by name (skip the login actions). Blank = none. */
+  session: string;
+  /** After a successful run, store the logged-in session under this name on the server. Blank = don't save. */
+  saveSession: string;
+  /**
+   * Optional state slot exposed as the `{{input}}` token when interpolating the
+   * `url`, `selectors`, and `actions`. Leave unbound to omit it.
+   */
+  input: StateBinding;
+  /** State slot the returned `data` object (your `selectors` map, resolved) is written into. */
+  output: StateBinding;
+}
+
 /**
  * Keep only the array rows from `input` whose `field` satisfies `operator`
  * against `value`, writing the filtered array to `output`. `field` reads a
@@ -1205,6 +1334,7 @@ export type ToolNode =
   | CodeNode
   | TsTypeNode
   | HttpRequestNode
+  | PlaywrightScrapeNode
   | FilterNode
   | MapNode
   | SortNode
@@ -1274,9 +1404,6 @@ export interface BuildSpec {
   /** Ordered nodes, top-to-bottom (excluding the State Control). */
   nodes: BuildSpecNode[];
 }
-
-/** Where a selected node's editor is surfaced. */
-export type EditorPlacement = "panel" | "inline";
 
 /** Nodes that produce visible output in the preview. */
 export type RenderNode =

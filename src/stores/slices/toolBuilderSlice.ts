@@ -3,7 +3,6 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { createNode, uuid } from "@/constants/tool-builder";
 import type {
   BuildSpec,
-  EditorPlacement,
   StateNode,
   Tool,
   ToolNode,
@@ -69,6 +68,37 @@ function collectBoundSlots(value: unknown, out: Set<string>): void {
   }
 }
 
+/**
+ * Regenerate the ids of every nested array-item object in a config (in place),
+ * mirroring {@link ensureIds}' traversal but FORCING a fresh id where one
+ * already exists. Used when duplicating a node/tool so the copy's inner items
+ * (select options, vault entries, scrape selectors, sprite animations, …) get
+ * their own ids instead of sharing the original's. The walked value's own
+ * top-level `id` is a plain string property (not an array item), so it is left
+ * untouched — callers set the node/tool id explicitly.
+ *
+ * @param value - Any config value to walk in place.
+ */
+function regenNestedIds(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const obj = item as Record<string, unknown>;
+        if (typeof obj.id === "string") {
+          obj.id = uuid();
+        }
+      }
+      regenNestedIds(item);
+    }
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const v of Object.values(value as Record<string, unknown>)) {
+      regenNestedIds(v);
+    }
+  }
+}
+
 /** Load state for the tools list hydrated from the server. */
 export type ToolsLoadState = "idle" | "loading" | "ready";
 
@@ -88,8 +118,6 @@ export interface ToolBuilderState {
   selectedToolId: string | null;
   /** Currently selected node within the open tool, or `null`. */
   selectedNodeId: string | null;
-  /** Where the selected node's editor renders. */
-  editorPlacement: EditorPlacement;
   /** Tools-list search query. */
   search: string;
   /** Whether the tools list has been hydrated from the server. */
@@ -100,7 +128,6 @@ const initialState: ToolBuilderState = {
   tools: [],
   selectedToolId: null,
   selectedNodeId: null,
-  editorPlacement: "panel",
   search: "",
   // Start in "loading" so the first client paint shows the skeleton,
   // continuous with the route-level loading.tsx fallback (no empty-state flash).
@@ -173,6 +200,46 @@ const toolBuilderSlice = createSlice({
       }
     },
     /**
+     * Duplicate a tool, inserting the copy right after the original and opening
+     * it. Every node gets a fresh id, nested item ids are regenerated, and run
+     * `targets`/`resetTargets` are remapped to the cloned node ids so the copy's
+     * Buttons/Text run the copy's chain — not the source tool's nodes.
+     */
+    duplicateTool(state, action: PayloadAction<string>) {
+      const idx = state.tools.findIndex((t) => t.id === action.payload);
+      if (idx === -1) {
+        return;
+      }
+      const src = state.tools[idx];
+      const clone: Tool = structuredClone(src);
+      clone.id = uuid();
+      clone.name = `${src.name} copy`;
+
+      // Fresh node ids, keyed old → new so run targets can be remapped below.
+      const idMap = new Map<string, string>();
+      for (const node of clone.nodes) {
+        const newId = uuid();
+        idMap.set(node.id, newId);
+        node.id = newId;
+      }
+      for (const node of clone.nodes) {
+        regenNestedIds(node);
+        const rec = node as unknown as Record<string, unknown>;
+        for (const key of ["targets", "resetTargets"] as const) {
+          const arr = rec[key];
+          if (Array.isArray(arr)) {
+            rec[key] = arr.map((id) =>
+              typeof id === "string" ? (idMap.get(id) ?? id) : id,
+            );
+          }
+        }
+      }
+
+      state.tools.splice(idx + 1, 0, clone);
+      state.selectedToolId = clone.id;
+      state.selectedNodeId = null;
+    },
+    /**
      * Append a node of `type` to the open tool and select it. A tool has at
      * most one State Control: adding a second `state` node instead selects the
      * existing one (slots are managed there), keeping the shared store single.
@@ -193,6 +260,38 @@ const toolBuilderSlice = createSlice({
       tool.nodes.push(node);
       state.selectedNodeId = node.id;
     },
+    /**
+     * Insert a node of `type` into the open tool at `index` (clamped to the
+     * chain bounds) and select it — the precise-placement counterpart to
+     * {@link addNode} (which always appends). Used by the builder canvas' inline
+     * gap inserters so authors drop a node exactly where they want it instead of
+     * appending then dragging it up.
+     *
+     * Mirrors `addNode`'s single-State-Control rule: requesting a second `state`
+     * node instead selects the existing one (slots are managed there), ignoring
+     * the index, so the shared store stays single.
+     */
+    insertNode(
+      state,
+      action: PayloadAction<{ type: ToolNodeType; index: number }>,
+    ) {
+      const tool = state.tools.find((t) => t.id === state.selectedToolId);
+      if (!tool) {
+        return;
+      }
+      const { type, index } = action.payload;
+      if (type === "state") {
+        const existing = tool.nodes.find((n) => n.type === "state");
+        if (existing) {
+          state.selectedNodeId = existing.id;
+          return;
+        }
+      }
+      const node = createNode(type);
+      const at = Math.max(0, Math.min(index, tool.nodes.length));
+      tool.nodes.splice(at, 0, node);
+      state.selectedNodeId = node.id;
+    },
     /** Remove a node from the open tool; clear selection if it was selected. */
     deleteNode(state, action: PayloadAction<string>) {
       const tool = state.tools.find((t) => t.id === state.selectedToolId);
@@ -203,6 +302,32 @@ const toolBuilderSlice = createSlice({
       if (state.selectedNodeId === action.payload) {
         state.selectedNodeId = null;
       }
+    },
+    /**
+     * Duplicate a node in the open tool, inserting the copy right after the
+     * original and selecting it. The copy gets a fresh id and regenerated nested
+     * item ids; any run `targets`/`resetTargets` are kept as-is (the duplicate
+     * runs the same existing chain). The single State Control is never
+     * duplicated — a tool has at most one.
+     */
+    duplicateNode(state, action: PayloadAction<string>) {
+      const tool = state.tools.find((t) => t.id === state.selectedToolId);
+      if (!tool) {
+        return;
+      }
+      const idx = tool.nodes.findIndex((n) => n.id === action.payload);
+      if (idx === -1) {
+        return;
+      }
+      const src = tool.nodes[idx];
+      if (src.type === "state") {
+        return;
+      }
+      const clone = structuredClone(src);
+      clone.id = uuid();
+      regenNestedIds(clone);
+      tool.nodes.splice(idx + 1, 0, clone);
+      state.selectedNodeId = clone.id;
     },
     /**
      * Patch a node's config in the open tool. Caller passes the node id plus a
@@ -403,10 +528,6 @@ const toolBuilderSlice = createSlice({
     clearNodeSelection(state) {
       state.selectedNodeId = null;
     },
-    /** Set where the node editor renders. */
-    setEditorPlacement(state, action: PayloadAction<EditorPlacement>) {
-      state.editorPlacement = action.payload;
-    },
     /** Set the tools-list search query. */
     setSearch(state, action: PayloadAction<string>) {
       state.search = action.payload;
@@ -463,15 +584,17 @@ export const {
   renameTool,
   setToolIcon,
   deleteTool,
+  duplicateTool,
   addNode,
+  insertNode,
   deleteNode,
+  duplicateNode,
   updateNode,
   selectNode,
   renameStateSlot,
   addStateSlot,
   applyBuildSpec,
   clearNodeSelection,
-  setEditorPlacement,
   setSearch,
   reorderTools,
   reorderNodes,

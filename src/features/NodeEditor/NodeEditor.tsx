@@ -9,7 +9,6 @@ import {
   Plus,
   RefreshCw,
   Trash2,
-  X,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -64,6 +63,8 @@ import {
   QR_SIZE_RANGE,
   REGEX_MODES,
   SCHEMA_TYPES,
+  SCRAPE_ACTION_TYPES,
+  SCRAPE_WAIT_UNTIL,
   SORT_DIRECTIONS,
   SORT_TYPES,
   SPRITE_FPS_RANGE,
@@ -96,7 +97,6 @@ import type {
   DateTimeMode,
   DownloadFormat,
   DownloadNode,
-  EditorPlacement,
   EncodeNode,
   EncodeOperation,
   FileNode,
@@ -121,12 +121,17 @@ import type {
   MermaidNode,
   MermaidTheme,
   NumberNode,
+  PlaywrightScrapeNode,
   QrCodeNode,
   QrLevel,
   RegexMode,
   RegexNode,
   SchemaRule,
   SchemaValidateNode,
+  ScrapeAction,
+  ScrapeActionType,
+  ScrapeSelector,
+  ScrapeWaitUntil,
   SelectNode,
   SelectOption,
   SortDirection,
@@ -707,19 +712,12 @@ function StateEditor({ node }: { node: StateNode }) {
 }
 
 /** AI node editor — provider, model, prompt, output binding, key. */
-function AiEditor({
-  node,
-  placement,
-}: {
-  node: AiNode;
-  placement: EditorPlacement;
-}) {
+function AiEditor({ node }: { node: AiNode }) {
   const { updateNode } = useToolBuilder();
   const { t } = useTranslation();
   const models = useProviderModels(node.provider);
-  const isPanel = placement === "panel";
   return (
-    <div className={cn("flex flex-col gap-4", isPanel && "flex-1 min-h-0")}>
+    <div className="flex flex-1 flex-col gap-4 min-h-0">
       <Field label={t("ai.provider")}>
         <Select
           value={node.provider}
@@ -752,14 +750,11 @@ function AiEditor({
           {t("ai.model.help")}
         </p>
       </Field>
-      <Field
-        label={t("ai.prompt")}
-        className={isPanel ? "flex-1 min-h-0" : undefined}
-      >
+      <Field label={t("ai.prompt")} className="flex-1 min-h-0">
         <textarea
           value={node.prompt}
           onChange={(e) => updateNode(node.id, { prompt: e.target.value })}
-          rows={isPanel ? 8 : 5}
+          rows={8}
           className={cn(inputCls, "h-auto min-h-24 resize-y py-2 font-mono")}
         />
         <p className="text-[11px] text-muted-foreground">
@@ -1411,6 +1406,7 @@ function DescriptionField({
 }: {
   node:
     | HttpRequestNode
+    | PlaywrightScrapeNode
     | FilterNode
     | MapNode
     | SortNode
@@ -1621,6 +1617,435 @@ function HttpRequestEditor({ node }: { node: HttpRequestNode }) {
         </p>
       </Field>
       <p className="text-[11px] text-muted-foreground">{t("http.footer")}</p>
+    </div>
+  );
+}
+
+/** Compact inline on/off chip used by the scraper selector rows. */
+function Chip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors duration-(--motion-duration-fast) active:scale-95",
+        active
+          ? "border-foreground bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-accent",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Repeatable selector-rule rows for the Playwright Scraper node. */
+function ScrapeSelectorsField({ node }: { node: PlaywrightScrapeNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const set = (rules: ScrapeSelector[]) =>
+    updateNode(node.id, { selectors: rules });
+  const patch = (id: string, p: Partial<ScrapeSelector>) =>
+    set(node.selectors.map((r) => (r.id === id ? { ...r, ...p } : r)));
+  return (
+    <Field label={t("scrape.selectors")}>
+      <div className="flex flex-col gap-2">
+        {node.selectors.map((r) => (
+          <div
+            key={r.id}
+            className="flex flex-col gap-1.5 rounded-md border bg-muted/30 p-2"
+          >
+            <div className="flex items-center gap-1.5">
+              <input
+                value={r.key}
+                placeholder={t("scrape.sel.key")}
+                onChange={(e) => patch(r.id, { key: e.target.value })}
+                className={cn(inputCls, "font-mono")}
+              />
+              <button
+                type="button"
+                aria-label={t("scrape.sel.remove")}
+                onClick={() => set(node.selectors.filter((x) => x.id !== r.id))}
+                className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+            <input
+              value={r.selector}
+              placeholder={t("scrape.sel.selector")}
+              onChange={(e) => patch(r.id, { selector: e.target.value })}
+              className={cn(inputCls, "font-mono")}
+            />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Chip
+                label={t("scrape.sel.all")}
+                active={r.all}
+                onClick={() => patch(r.id, { all: !r.all })}
+              />
+              <Chip
+                label={t("scrape.sel.html")}
+                active={r.html}
+                onClick={() =>
+                  patch(r.id, { html: !r.html, meta: false, attr: "" })
+                }
+              />
+              <Chip
+                label={t("scrape.sel.meta")}
+                active={r.meta}
+                onClick={() =>
+                  patch(r.id, { meta: !r.meta, html: false, attr: "" })
+                }
+              />
+              {r.meta && (
+                <Chip
+                  label={t("scrape.sel.excludeClass")}
+                  active={r.excludeClass}
+                  onClick={() => patch(r.id, { excludeClass: !r.excludeClass })}
+                />
+              )}
+            </div>
+            {!r.meta && !r.html && (
+              <input
+                value={r.attr}
+                placeholder={t("scrape.sel.attr")}
+                onChange={(e) => patch(r.id, { attr: e.target.value })}
+                className={cn(inputCls, "font-mono")}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() =>
+          set([
+            ...node.selectors,
+            {
+              id: uuid(),
+              key: "",
+              selector: "",
+              all: false,
+              attr: "",
+              html: false,
+              meta: false,
+              excludeClass: false,
+            },
+          ])
+        }
+        className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+      >
+        <Plus size={14} /> {t("scrape.sel.add")}
+      </button>
+      <p className="text-[11px] text-muted-foreground">
+        {t("scrape.selectors.help")}
+      </p>
+    </Field>
+  );
+}
+
+/** The per-action fields rendered for the chosen action type. */
+function ScrapeActionFields({
+  action,
+  patch,
+}: {
+  action: ScrapeAction;
+  patch: (p: Partial<ScrapeAction>) => void;
+}) {
+  const { t } = useTranslation();
+  switch (action.type) {
+    case "fill":
+      return (
+        <>
+          <input
+            value={action.selector}
+            placeholder={t("scrape.act.selector")}
+            onChange={(e) => patch({ selector: e.target.value })}
+            className={cn(inputCls, "font-mono")}
+          />
+          <input
+            value={action.value}
+            placeholder={t("scrape.act.value")}
+            onChange={(e) => patch({ value: e.target.value })}
+            className={cn(inputCls, "font-mono")}
+          />
+        </>
+      );
+    case "click":
+    case "waitForSelector":
+      return (
+        <input
+          value={action.selector}
+          placeholder={t("scrape.act.selector")}
+          onChange={(e) => patch({ selector: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+      );
+    case "press":
+      return (
+        <>
+          <input
+            value={action.selector}
+            placeholder={t("scrape.act.selector")}
+            onChange={(e) => patch({ selector: e.target.value })}
+            className={cn(inputCls, "font-mono")}
+          />
+          <input
+            value={action.key}
+            placeholder={t("scrape.act.key")}
+            onChange={(e) => patch({ key: e.target.value })}
+            className={cn(inputCls, "font-mono")}
+          />
+        </>
+      );
+    case "goto":
+    case "waitForURL":
+      return (
+        <input
+          value={action.url}
+          placeholder={t("scrape.act.url")}
+          onChange={(e) => patch({ url: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+      );
+    case "waitForLoadState":
+      return (
+        <Select
+          value={action.state || "load"}
+          onValueChange={(v) => patch({ state: v })}
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SCRAPE_WAIT_UNTIL.map((w) => (
+              <SelectItem key={w.value} value={w.value}>
+                {w.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    case "waitForTimeout":
+      return (
+        <input
+          type="number"
+          min={0}
+          value={action.ms}
+          placeholder={t("scrape.act.ms")}
+          onChange={(e) => patch({ ms: Number(e.target.value) || 0 })}
+          className={cn(inputCls, "font-mono")}
+        />
+      );
+  }
+}
+
+/** Repeatable, ordered action rows for the Playwright Scraper node. */
+function ScrapeActionsField({ node }: { node: PlaywrightScrapeNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  const set = (actions: ScrapeAction[]) => updateNode(node.id, { actions });
+  const patch = (id: string, p: Partial<ScrapeAction>) =>
+    set(node.actions.map((a) => (a.id === id ? { ...a, ...p } : a)));
+  return (
+    <Field label={t("scrape.actions")}>
+      <div className="flex flex-col gap-2">
+        {node.actions.map((a) => (
+          <div
+            key={a.id}
+            className="flex flex-col gap-1.5 rounded-md border bg-muted/30 p-2"
+          >
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={a.type}
+                onValueChange={(v) =>
+                  patch(a.id, { type: v as ScrapeActionType })
+                }
+              >
+                <SelectTrigger className="h-8 w-full font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SCRAPE_ACTION_TYPES.map((ty) => (
+                    <SelectItem key={ty} value={ty} className="font-mono">
+                      {ty}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                aria-label={t("scrape.act.remove")}
+                onClick={() => set(node.actions.filter((x) => x.id !== a.id))}
+                className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-destructive/10 hover:text-destructive active:scale-95"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+            <ScrapeActionFields action={a} patch={(p) => patch(a.id, p)} />
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() =>
+          set([
+            ...node.actions,
+            {
+              id: uuid(),
+              type: "click",
+              selector: "",
+              value: "",
+              key: "",
+              url: "",
+              state: "",
+              ms: 0,
+            },
+          ])
+        }
+        className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-[0.98]"
+      >
+        <Plus size={14} /> {t("scrape.act.add")}
+      </button>
+      <p className="text-[11px] text-muted-foreground">
+        {t("scrape.actions.help")}
+      </p>
+    </Field>
+  );
+}
+
+/**
+ * Playwright Scraper editor — local server URL, target page, wait options,
+ * selector rules + action steps (form rows), session reuse, input/output state.
+ */
+function PlaywrightScrapeEditor({ node }: { node: PlaywrightScrapeNode }) {
+  const { updateNode } = useToolBuilder();
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-4">
+      <DescriptionField node={node} />
+      <Field label={t("scrape.serverUrl")}>
+        <input
+          value={node.serverUrl}
+          placeholder="http://localhost:3001/scrape"
+          onChange={(e) => updateNode(node.id, { serverUrl: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("scrape.serverUrl.help")}
+        </p>
+      </Field>
+      <Field label={t("scrape.url")}>
+        <input
+          value={node.url}
+          placeholder="https://example.com/{{page}}"
+          onChange={(e) => updateNode(node.id, { url: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("scrape.url.help")}
+        </p>
+      </Field>
+      <Field label={t("scrape.waitUntil")}>
+        <Select
+          value={node.waitUntil}
+          onValueChange={(v) =>
+            updateNode(node.id, { waitUntil: v as ScrapeWaitUntil })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SCRAPE_WAIT_UNTIL.map((w) => (
+              <SelectItem key={w.value} value={w.value}>
+                {w.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={t("scrape.waitForSelector")}>
+        <input
+          value={node.waitForSelector}
+          placeholder="[data-test=page-title]"
+          onChange={(e) =>
+            updateNode(node.id, { waitForSelector: e.target.value })
+          }
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("scrape.waitForSelector.help")}
+        </p>
+      </Field>
+      <Field label={t("scrape.timeout")}>
+        <input
+          type="number"
+          value={node.timeout}
+          min={0}
+          onChange={(e) =>
+            updateNode(node.id, { timeout: Number(e.target.value) || 0 })
+          }
+          className={cn(inputCls, "font-mono")}
+        />
+      </Field>
+      <ScrapeSelectorsField node={node} />
+      <ScrapeActionsField node={node} />
+      <Field label={t("scrape.session")}>
+        <input
+          value={node.session}
+          placeholder="mysession"
+          onChange={(e) => updateNode(node.id, { session: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("scrape.session.help")}
+        </p>
+      </Field>
+      <Field label={t("scrape.saveSession")}>
+        <input
+          value={node.saveSession}
+          placeholder="mysession"
+          onChange={(e) => updateNode(node.id, { saveSession: e.target.value })}
+          className={cn(inputCls, "font-mono")}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("scrape.saveSession.help")}
+        </p>
+      </Field>
+      <Field label={t("scrape.input")}>
+        <StateSelect
+          value={node.input.value}
+          onChange={(v) =>
+            updateNode(node.id, { input: { mode: "name", value: v } })
+          }
+          allowEmpty
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("scrape.input.help")}
+        </p>
+      </Field>
+      <Field label={t("logic.output")}>
+        <StateSelect
+          value={node.output.value}
+          onChange={(v) =>
+            updateNode(node.id, { output: { mode: "name", value: v } })
+          }
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {t("scrape.output.help")}
+        </p>
+      </Field>
+      <p className="text-[11px] text-muted-foreground">{t("scrape.footer")}</p>
     </div>
   );
 }
@@ -2759,13 +3184,7 @@ function IdentityEditor({ node }: { node: IdentityNode }) {
 }
 
 /** Per-type editor body. */
-function EditorBody({
-  node,
-  placement,
-}: {
-  node: ToolNode;
-  placement: EditorPlacement;
-}) {
+function EditorBody({ node }: { node: ToolNode }) {
   const { updateNode, stateNode } = useToolBuilder();
   const { t } = useTranslation();
 
@@ -2773,11 +3192,10 @@ function EditorBody({
     case "state":
       return <StateEditor node={node} />;
     case "ai":
-      return <AiEditor node={node} placement={placement} />;
+      return <AiEditor node={node} />;
     case "code": {
-      const isPanel = placement === "panel";
       return (
-        <div className={cn("flex flex-col gap-4", isPanel && "flex-1 min-h-0")}>
+        <div className="flex flex-1 flex-col gap-4 min-h-0">
           <Field label={t("field.description")}>
             <input
               value={node.description ?? ""}
@@ -2788,14 +3206,11 @@ function EditorBody({
               className={inputCls}
             />
           </Field>
-          <Field
-            label={t("code.code")}
-            className={isPanel ? "flex-1 min-h-0" : undefined}
-          >
+          <Field label={t("code.code")} className="flex-1 min-h-0">
             <CodeEditor
               language="javascript"
-              height={isPanel ? "100%" : 320}
-              className={isPanel ? "flex-1 min-h-0" : undefined}
+              height="100%"
+              className="flex-1 min-h-0"
               value={node.code}
               onChange={(code) => updateNode(node.id, { code })}
               aiProvider={node.aiProvider}
@@ -2825,6 +3240,8 @@ function EditorBody({
       return <ThemedEditor node={node} />;
     case "http_request":
       return <HttpRequestEditor node={node} />;
+    case "playwright_scrape":
+      return <PlaywrightScrapeEditor node={node} />;
     case "filter":
       return <FilterEditor node={node} />;
     case "map":
@@ -3949,42 +4366,28 @@ function EditorBody({
 }
 
 /**
- * Node configuration editor. Renders the right header (with a back chevron in
- * `panel` placement, a close button otherwise) and the per-type body.
+ * Node configuration editor. Renders the right-panel header (node identity, a
+ * back chevron, duplicate + delete actions) and the per-type body.
  *
  * @param props.node - Node being edited.
- * @param props.placement - Where this editor is surfaced (drives chrome).
  */
-export function NodeEditor({
-  node,
-  placement,
-}: {
-  node: ToolNode;
-  placement: EditorPlacement;
-}) {
-  const { clearNodeSelection, deleteNode } = useToolBuilder();
+export function NodeEditor({ node }: { node: ToolNode }) {
+  const { clearNodeSelection, deleteNode, duplicateNode } = useToolBuilder();
   const { t } = useTranslation();
   const meta = NODE_META[node.type];
   const Icon = meta.icon;
 
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-3",
-        placement === "panel" && "h-full min-h-0",
-      )}
-    >
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex items-center gap-2">
-        {placement === "panel" && (
-          <button
-            type="button"
-            aria-label={t("node.back")}
-            onClick={clearNodeSelection}
-            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-95"
-          >
-            <ChevronLeft size={16} />
-          </button>
-        )}
+        <button
+          type="button"
+          aria-label={t("node.back")}
+          onClick={clearNodeSelection}
+          className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent active:scale-95"
+        >
+          <ChevronLeft size={16} />
+        </button>
         <span
           className={cn(
             "grid size-7 shrink-0 place-items-center rounded-md",
@@ -4001,6 +4404,16 @@ export function NodeEditor({
             {meta.slug}
           </div>
         </div>
+        {node.type !== "state" && (
+          <button
+            type="button"
+            aria-label={t("node.duplicate")}
+            onClick={() => duplicateNode(node.id)}
+            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-(--motion-duration-fast) hover:bg-accent hover:text-foreground active:scale-95"
+          >
+            <Copy size={14} />
+          </button>
+        )}
         <button
           type="button"
           aria-label={t("node.delete")}
@@ -4009,22 +4422,12 @@ export function NodeEditor({
         >
           <Trash2 size={14} />
         </button>
-        {placement !== "panel" && (
-          <button
-            type="button"
-            aria-label={t("node.close")}
-            onClick={clearNodeSelection}
-            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-[var(--motion-duration-fast)] hover:bg-accent active:scale-95"
-          >
-            <X size={15} />
-          </button>
-        )}
       </div>
       <p className="text-xs text-muted-foreground">
         {t(`node.${node.type}.blurb`)}
       </p>
       <hr className="border-border" />
-      <EditorBody node={node} placement={placement} />
+      <EditorBody node={node} />
     </div>
   );
 }

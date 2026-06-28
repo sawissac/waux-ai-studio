@@ -1,0 +1,11 @@
+-- ---------------------------------------------------------------------------
+-- Add the `playwright_scrape` node type.
+--
+-- `playwright_scrape` — Scrape a JS-rendered page with a real Chromium browser
+-- via the LOCAL Playwright scrape server in this repo (log in, wait, extract by
+-- CSS selectors); the returned data object writes to bound state.
+--
+-- ADD VALUE IF NOT EXISTS is idempotent and cannot run inside a txn that also
+-- uses the new value, so keep this as a standalone statement.
+-- ---------------------------------------------------------------------------
+alter type public.tool_node_type add value if not exists 'playwright_scrape';

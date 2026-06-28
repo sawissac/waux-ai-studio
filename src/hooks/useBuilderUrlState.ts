@@ -3,18 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useAppDispatch, useAppSelector } from "@/stores/hooks";
-import {
-  selectTool,
-  setEditorPlacement,
-} from "@/stores/slices/toolBuilderSlice";
-import type { EditorPlacement } from "@/types/tool-builder";
+import { selectTool } from "@/stores/slices/toolBuilderSlice";
 
 /** Center view of the builder: the node editor or the chat surface. */
 export type BuilderView = "build" | "chat";
 
 /**
  * Search-param keys the builder view state is mirrored to. Kept short so the
- * shared URL stays readable, e.g. `/studio?tool=<id>&tab=inline&left=hidden`.
+ * shared URL stays readable, e.g. `/studio?tool=<id>&tab=chat&left=hidden`.
  */
 const PARAM_TOOL = "tool";
 const PARAM_TAB = "tab";
@@ -23,11 +19,6 @@ const PARAM_RIGHT = "right";
 
 /** Marker value for a collapsed side panel (absence = visible). */
 const HIDDEN = "hidden";
-
-/** Narrow a raw `tab` param to an editor placement. */
-function isPlacement(value: string | null): value is EditorPlacement {
-  return value === "panel" || value === "inline";
-}
 
 /**
  * Returned shape from {@link useBuilderUrlState} — the URL-synced view state
@@ -53,8 +44,8 @@ export interface BuilderUrlState {
  * a shared link reopens the same tool, builder tab, and panel layout.
  *
  * Owns the center view and side-panel visibility (lifted out of
- * {@link ToolBuilder}); the selected tool and editor placement live in the
- * `toolBuilder` slice and are read/dispatched here.
+ * {@link ToolBuilder}); the selected tool lives in the `toolBuilder` slice and
+ * is read/dispatched here.
  *
  * The URL is read **once on mount** from `window.location` rather than via
  * `useSearchParams`, so this stays out of the static-prerender Suspense bailout
@@ -72,7 +63,6 @@ export interface BuilderUrlState {
 export function useBuilderUrlState(): BuilderUrlState {
   const dispatch = useAppDispatch();
   const selectedToolId = useAppSelector((s) => s.toolBuilder.selectedToolId);
-  const editorPlacement = useAppSelector((s) => s.toolBuilder.editorPlacement);
 
   // Defaults mirror the slice/SSR state so the first client render matches the
   // server; the URL is applied in the mount effect below.
@@ -101,11 +91,8 @@ export function useBuilderUrlState(): BuilderUrlState {
       dispatch(selectTool(tool));
     }
 
-    const tab = params.get(PARAM_TAB);
-    if (tab === "chat") {
+    if (params.get(PARAM_TAB) === "chat") {
       setView("chat");
-    } else if (isPlacement(tab)) {
-      dispatch(setEditorPlacement(tab));
     }
 
     setLeftHidden(params.get(PARAM_LEFT) === HIDDEN);
@@ -128,13 +115,12 @@ export function useBuilderUrlState(): BuilderUrlState {
       params.delete(PARAM_TOOL);
     }
 
-    // One control multiplexes view + placement: "chat" is the chat view;
-    // "panel" (the default) is omitted to keep the URL clean; "inline" is set.
-    const tab: string = view === "chat" ? "chat" : editorPlacement;
-    if (tab === "panel") {
-      params.delete(PARAM_TAB);
+    // Only the chat view is mirrored; "build" (the default) is omitted to keep
+    // the URL clean.
+    if (view === "chat") {
+      params.set(PARAM_TAB, "chat");
     } else {
-      params.set(PARAM_TAB, tab);
+      params.delete(PARAM_TAB);
     }
 
     if (leftHidden) {
@@ -153,7 +139,7 @@ export function useBuilderUrlState(): BuilderUrlState {
       ? `${window.location.pathname}?${qs}`
       : window.location.pathname;
     window.history.replaceState(null, "", url);
-  }, [ready, selectedToolId, editorPlacement, view, leftHidden, rightHidden]);
+  }, [ready, selectedToolId, view, leftHidden, rightHidden]);
 
   /** Switch center view; chat hides both side panels, build restores them. */
   function handleViewChange(next: BuilderView) {
